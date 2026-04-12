@@ -1,0 +1,31 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // ─── Check-in photos: checkIns/{userId}/** ────────────
+    // • Users can only write to their own folder
+    // • Files must be images and max 10 MB
+    // • Any authenticated user can read (URLs are already token-protected)
+    match /checkIns/{userId}/{allPaths=**} {
+
+      // Any logged-in user can read (download URLs include a security token)
+      allow read: if request.auth != null;
+
+      // Only the owning user can upload/overwrite their own photos
+      allow write: if request.auth != null
+                   && request.auth.uid == userId
+                   && request.resource != null
+                   && request.resource.contentType.matches('image/.*')
+                   && request.resource.size <= 10 * 1024 * 1024; // 10 MB
+
+      // Allow delete of own files (no resource size/type check needed)
+      allow delete: if request.auth != null
+                    && request.auth.uid == userId;
+    }
+
+    // ─── Catch-all: deny everything else ──────────────────
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

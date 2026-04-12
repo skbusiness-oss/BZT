@@ -1,4 +1,4 @@
-export type Role = 'community' | 'coaching' | 'coach';
+export type Role = 'community' | 'coaching' | 'coach' | 'admin';
 
 export interface User {
     id: string;
@@ -102,15 +102,23 @@ export interface Exercise {
 
 export type WorkoutGoal = 'fat_loss' | 'muscle_gain' | 'strength' | 'recomp' | 'maintenance' | 'endurance';
 
+export interface WorkoutDay {
+    dayIndex: number; // 0 = Monday … 6 = Sunday
+    label: string;   // "Monday", "Tuesday", …
+    type: 'training' | 'rest';
+    exercises: Exercise[];
+}
+
 export interface Workout {
     id: string;
     name: string;
     description: string;
     category: string;
     goal: WorkoutGoal;
-    exercises: Exercise[];
+    exercises: Exercise[];    // flat list for single-session; all-day exercises flattened for weekly
     estimatedMinutes: number;
     createdAt: string;
+    days?: WorkoutDay[];      // present only for weekly-plan workouts
 }
 
 // --- Training Programs ---
@@ -176,4 +184,5 @@ export interface Post {
     timestamp: string;
     likes: string[]; // user IDs who liked
     comments: Comment[];
+    commentCount?: number;
 }

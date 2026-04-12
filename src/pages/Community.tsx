@@ -39,7 +39,7 @@ export const Community = () => {
     };
 
     const roleColor = (role: string) => {
-        if (role === 'coach') return 'text-gold-400 bg-gold-500/10';
+        if (role === 'coach' || role === 'admin') return 'text-gold-400 bg-gold-500/10';
         if (role === 'coaching') return 'text-navy-300 bg-navy-400/10';
         return 'text-navy-200 bg-navy-400/10';
     };

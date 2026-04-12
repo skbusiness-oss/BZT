@@ -132,14 +132,14 @@ export const Layout = () => {
                             <SidebarItem to="/checkin" icon={ClipboardCheck} label={t('navCheckIns')} onClick={closeSidebar} />
                         )}
 
-                        {user.role === 'coach' && (
+                        {(user.role === 'coach' || user.role === 'admin') && (
                             <SidebarItem to="/clients" icon={Users} label={t('navClients')} onClick={closeSidebar} />
                         )}
 
                         <SidebarItem to="/library" icon={PlaySquare} label={t('navVideoLibrary')} onClick={closeSidebar} />
                         <SidebarItem to="/workouts" icon={Dumbbell} label={t('navWorkouts')} onClick={closeSidebar} />
 
-                        {(user.role === 'coach' || user.role === 'coaching') && (
+                        {(user.role === 'coach' || user.role === 'admin' || user.role === 'coaching') && (
                             <NavLink
                                 to="/messages"
                                 onClick={closeSidebar}

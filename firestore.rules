@@ -1,0 +1,143 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─── Helper: read the caller's role from their Firestore profile ───
+    function role() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function isCoach() {
+      return role() == 'coach' || role() == 'admin';
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return request.auth.uid == uid;
+    }
+
+    // ─── users/{uid} ──────────────────────────────────────
+    // • Any user can read their own profile
+    // • Coach can read/write any user doc
+    // • Users can update their own doc BUT cannot change the role field
+    match /users/{uid} {
+      allow read: if isSignedIn() && (isOwner(uid) || isCoach());
+
+      // Coach can create/delete any user doc.
+      // Users can create their OWN doc (first login auto-create in AuthContext).
+      allow create: if isSignedIn() && (isOwner(uid) || isCoach());
+      allow delete: if isSignedIn() && isCoach();
+
+      // Coach can update anything; users can update own doc BUT cannot change 'role'
+      allow update: if isSignedIn()
+                    && (isCoach()
+                        || (isOwner(uid)
+                            && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role'])));
+    }
+
+    // ─── clients/{clientId} ───────────────────────────────
+    // Legacy collection — client reads own, coach reads/writes all
+    match /clients/{clientId} {
+      allow read: if isSignedIn()
+                  && (resource.data.userId == request.auth.uid || isCoach());
+      allow write: if isSignedIn() && isCoach();
+    }
+
+    // ─── weeks/{weekId} ───────────────────────────────────
+    // • Client can read and update their own weeks
+    // • Client CANNOT change coachFeedback or newMacros (coach-only fields)
+    // • Coach can read/write all weeks
+    match /weeks/{weekId} {
+      allow read: if isSignedIn()
+                  && (resource.data.clientId == request.auth.uid || isCoach());
+
+      // Coach full write
+      allow create, delete: if isSignedIn() && isCoach();
+
+      // Coach can update anything; client can update own weeks minus protected fields
+      allow update: if isSignedIn()
+                    && (isCoach()
+                        || (resource.data.clientId == request.auth.uid
+                            && !request.resource.data.diff(resource.data).affectedKeys()
+                                 .hasAny(['coachFeedback', 'newMacros', 'newTargets'])));
+    }
+
+    // ─── videos/{videoId} ─────────────────────────────────
+    // • Community users can only read videos where isLocked == false
+    // • coaching (VIP) + coach can read all
+    // • Only coach can write
+    match /videos/{videoId} {
+      allow read: if isSignedIn()
+                  && (isCoach()
+                      || role() == 'coaching'
+                      || resource.data.isLocked == false);
+      allow write: if isSignedIn() && isCoach();
+    }
+
+    // ─── workouts/{workoutId} ─────────────────────────────
+    // • All logged-in users can read
+    // • Only coach can write
+    match /workouts/{workoutId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && isCoach();
+    }
+
+    // ─── messages/{messageId} ─────────────────────────────
+    // • Read only if you are the sender or receiver
+    // • Create only if senderId matches your uid
+    // • Update (mark read) only if you are the receiver
+    // • Delete: coach only
+    match /messages/{messageId} {
+      allow read: if isSignedIn()
+                  && (resource.data.senderId == request.auth.uid
+                      || resource.data.receiverId == request.auth.uid);
+
+      allow create: if isSignedIn()
+                    && request.resource.data.senderId == request.auth.uid;
+
+      allow update: if isSignedIn()
+                    && resource.data.receiverId == request.auth.uid;
+
+      allow delete: if isSignedIn() && isCoach();
+    }
+
+    // ─── posts/{postId} ───────────────────────────────────
+    // • All logged-in users can read
+    // • Create if authorId matches your uid
+    // • Update (like/comment) by any logged-in user
+    // • Delete by coach only
+    match /posts/{postId} {
+      allow read: if isSignedIn();
+
+      allow create: if isSignedIn()
+                    && request.resource.data.authorId == request.auth.uid;
+
+      allow update: if isSignedIn();
+
+      allow delete: if isSignedIn() && isCoach();
+
+      // Subcollection: comments
+      match /comments/{commentId} {
+        allow read: if isSignedIn();
+
+        allow create: if isSignedIn()
+                      && request.resource.data.authorId == request.auth.uid;
+
+        allow update: if isSignedIn();
+
+        allow delete: if isSignedIn() && isCoach();
+      }
+    }
+
+    // ─── settings/{docId} ─────────────────────────────────
+    // • All logged-in users can read (categories, config, etc.)
+    // • Only coach can write
+    match /settings/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && isCoach();
+    }
+  }
+}

@@ -11,7 +11,7 @@ export const Messages = () => {
     const [text, setText] = useState('');
     const chatEndRef = useRef<HTMLDivElement>(null);
 
-    const isCoach = user?.role === 'coach';
+    const isCoach = user?.role === 'coach' || user?.role === 'admin';
 
     // For client role — always chat with coach
     const coachId = 'u1-coach';

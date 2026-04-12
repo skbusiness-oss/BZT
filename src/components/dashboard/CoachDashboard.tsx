@@ -1,16 +1,21 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useData } from '../../context/DataContext';
+import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { Users, AlertCircle, TrendingUp, CheckCircle2, ChevronRight, Search, UserPlus, X } from 'lucide-react';
 import { Category } from '../../types';
 
 export const CoachDashboard = () => {
     const { clients, addClient } = useData();
+    const { createUserAccount } = useAuth();
     const { t } = useLanguage();
     const navigate = useNavigate();
     const [showAddModal, setShowAddModal] = useState(false);
-    const [newClient, setNewClient] = useState({ name: '', email: '', category: 'cutting' as Category });
+    const [newClient, setNewClient] = useState({ name: '', email: '', password: '', role: 'coaching' as 'coaching' | 'community', category: 'cutting' as Category });
+    const [addError, setAddError] = useState('');
+    const [isCreating, setIsCreating] = useState(false);
+    const [dashSearch, setDashSearch] = useState('');
 
     const totalClients = clients.length;
     const pendingReviews = clients.filter(c => c.needsReview).length;
@@ -19,20 +24,49 @@ export const CoachDashboard = () => {
     const proClients = clients.filter(c => c.category === 'pro').length;
     const healthClients = clients.filter(c => c.category === 'health').length;
 
-    const handleCreateClient = () => {
-        if (newClient.name && newClient.email) {
-            addClient({
-                userId: `u${Date.now()}`,
-                name: newClient.name,
-                email: newClient.email,
-                category: newClient.category,
-                currentWeek: 0,
-                programLength: 12,
-                needsReview: false,
-                isOnboarding: true,
-            });
-            setNewClient({ name: '', email: '', category: 'cutting' });
+    const filteredClients = clients.filter(c =>
+        c.name.toLowerCase().includes(dashSearch.toLowerCase()) ||
+        c.email.toLowerCase().includes(dashSearch.toLowerCase())
+    );
+
+    const handleCreateClient = async () => {
+        if (!newClient.name || !newClient.email || !newClient.password) return;
+        setAddError('');
+        setIsCreating(true);
+
+        try {
+            const result = await createUserAccount(
+                newClient.email,
+                newClient.password,
+                newClient.name,
+                newClient.role
+            );
+
+            if (result.error) {
+                setAddError(result.error);
+                setIsCreating(false);
+                return;
+            }
+
+            const uid = result.uid!;
+            if (newClient.role === 'coaching') {
+                await addClient({
+                    userId: uid,
+                    name: newClient.name,
+                    email: newClient.email,
+                    category: newClient.category,
+                    currentWeek: 0,
+                    programLength: 12,
+                    needsReview: false,
+                    isOnboarding: true,
+                }, uid);
+            }
+            setNewClient({ name: '', email: '', password: '', role: 'coaching', category: 'cutting' });
             setShowAddModal(false);
+        } catch (e: any) {
+            setAddError(`Error: ${e.message}`);
+        } finally {
+            setIsCreating(false);
         }
     };
 
@@ -129,13 +163,15 @@ export const CoachDashboard = () => {
                         <input
                             type="text"
                             placeholder="Search clients..."
+                            value={dashSearch}
+                            onChange={e => setDashSearch(e.target.value)}
                             className="clay-input py-2 pl-9 pr-4 text-sm w-full"
                         />
                     </div>
                 </div>
 
                 <div className="space-y-3">
-                    {clients.map(client => (
+                    {filteredClients.map(client => (
                         <button
                             key={client.id}
                             onClick={() => navigate(`/clients/${client.id}/review`)}
@@ -202,29 +238,56 @@ export const CoachDashboard = () => {
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm text-navy-200 mb-1">{t('programType')}</label>
-                                <select
-                                    value={newClient.category}
-                                    onChange={e => setNewClient({ ...newClient, category: e.target.value as Category })}
+                                <label className="block text-sm text-navy-200 mb-1">Password</label>
+                                <input
+                                    type="password"
+                                    placeholder="Min 6 characters"
+                                    value={newClient.password}
+                                    onChange={e => setNewClient({ ...newClient, password: e.target.value })}
                                     className="w-full clay-input p-3"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm text-navy-200 mb-1">Access Role</label>
+                                <select
+                                    value={newClient.role}
+                                    onChange={e => setNewClient({ ...newClient, role: e.target.value as any })}
+                                    className="w-full clay-input p-3 text-white"
                                 >
-                                    <option value="cutting">{t('cutting')}</option>
-                                    <option value="bulking">{t('bulking')}</option>
-                                    <option value="pro">{t('pro')}</option>
-                                    <option value="health">{t('health')}</option>
+                                    <option value="coaching">Premium Coaching Client</option>
+                                    <option value="community">Community Member (Free)</option>
                                 </select>
                             </div>
+
+                            {newClient.role === 'coaching' && (
+                                <div>
+                                    <label className="block text-sm text-navy-200 mb-1">{t('programType')}</label>
+                                    <select
+                                        value={newClient.category}
+                                        onChange={e => setNewClient({ ...newClient, category: e.target.value as Category })}
+                                        className="w-full clay-input p-3 text-white"
+                                    >
+                                        <option value="cutting">{t('cutting')}</option>
+                                        <option value="bulking">{t('bulking')}</option>
+                                        <option value="pro">{t('pro')}</option>
+                                        <option value="health">{t('health')}</option>
+                                    </select>
+                                </div>
+                            )}
+                            {addError && (
+                                <div className="text-red-400 text-sm bg-red-500/10 rounded-lg p-3">{addError}</div>
+                            )}
                         </div>
                         <div className="flex gap-3 mt-6">
-                            <button onClick={() => setShowAddModal(false)} className="flex-1 clay-button bg-navy-800 hover:bg-navy-700 text-white py-3">
+                            <button onClick={() => { setShowAddModal(false); setAddError(''); }} className="flex-1 clay-button bg-navy-800 hover:bg-navy-700 text-white py-3">
                                 {t('cancel')}
                             </button>
                             <button
                                 onClick={handleCreateClient}
-                                disabled={!newClient.name || !newClient.email}
+                                disabled={isCreating || !newClient.name || !newClient.email || !newClient.password}
                                 className="flex-1 clay-button bg-gradient-to-r from-gold-400 to-gold-600 disabled:from-navy-700 disabled:to-navy-700 disabled:cursor-not-allowed text-navy-950 py-3"
                             >
-                                {t('createClient')}
+                                {isCreating ? 'Creating...' : t('createClient')}
                             </button>
                         </div>
                     </div>

@@ -4,6 +4,20 @@ export default {
         "./index.html",
         "./src/**/*.{js,ts,jsx,tsx}",
     ],
+    safelist: [
+        // Dynamic client category colors (Clients.tsx, CoachDashboard.tsx)
+        // These are constructed via template literals like `bg-${color}-500/10`
+        // and would be purged in production without safelisting.
+        {
+            pattern: /bg-(orange|blue|purple|teal|red|indigo|gold)-(400|500)\/(10|15)/,
+        },
+        {
+            pattern: /text-(orange|blue|purple|teal|red|indigo|gold)-(400|500)/,
+        },
+        {
+            pattern: /border-(orange|blue|purple|teal|red|indigo|gold)-(500)\/(20|40)/,
+        },
+    ],
     theme: {
         extend: {
             colors: {

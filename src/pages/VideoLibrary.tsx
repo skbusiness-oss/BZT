@@ -14,6 +14,7 @@ export const VideoLibrary = () => {
     const [showAddModal, setShowAddModal] = useState(false);
     const [showCategoryModal, setShowCategoryModal] = useState(false);
     const [newCategory, setNewCategory] = useState('');
+    const [activeVideo, setActiveVideo] = useState<any>(null);
 
     const [newVideo, setNewVideo] = useState({
         title: '',
@@ -25,7 +26,7 @@ export const VideoLibrary = () => {
         isLocked: false
     });
 
-    const isCoach = user?.role === 'coach';
+    const isCoach = user?.role === 'coach' || user?.role === 'admin';
 
     const allCategories = ['All', ...categories];
 
@@ -60,6 +61,42 @@ export const VideoLibrary = () => {
     const detectPlatform = (url: string) => {
         if (url.includes('vimeo')) return 'vimeo';
         return 'youtube';
+    };
+
+    const getEmbedUrl = (video: any) => {
+        try {
+            if (!video.videoUrl) {
+                // Fallback testing video if database url is empty string
+                return video.platform === 'vimeo' 
+                    ? 'https://player.vimeo.com/video/76979871' 
+                    : 'https://www.youtube.com/embed/dQw4w9WgXcQ';
+            }
+
+            const url = video.videoUrl;
+
+            if (video.platform === 'vimeo' || url.includes('vimeo')) {
+                // Match standard vimeo URLs
+                const match = url.match(/vimeo\.com\/(\d+)/);
+                if (match) return `https://player.vimeo.com/video/${match[1]}`;
+                
+                // If it's already an embed URL, return as is
+                if (url.includes('player.vimeo.com')) return url;
+                
+                // Final fallback: try to extract just numbers, otherwise default
+                const numbersOnly = url.replace(/\D/g, '');
+                return numbersOnly ? `https://player.vimeo.com/video/${numbersOnly}` : url;
+            } else {
+                // Robust YouTube regex extracts 11-char ID from all standard formats:
+                // youtu.be/ID, youtube.com/watch?v=ID, youtube.com/embed/ID, youtube.com/shorts/ID
+                const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/))([\w-]{11})/);
+                if (match) {
+                    return `https://www.youtube.com/embed/${match[1]}?autoplay=1`;
+                }
+                return url; // fallback to pasting literal url
+            }
+        } catch {
+            return video.videoUrl;
+        }
     };
 
     return (
@@ -127,7 +164,10 @@ export const VideoLibrary = () => {
                     return (
                         <div key={video.id} className="group clay-card overflow-hidden hover:border-gold-500/20 transition-all">
                             {/* Thumbnail */}
-                            <div className="aspect-video relative overflow-hidden">
+                            <div 
+                                className={clsx("aspect-video relative overflow-hidden", unlocked ? "cursor-pointer" : "cursor-not-allowed")}
+                                onClick={() => unlocked && setActiveVideo(video)}
+                            >
                                 <img
                                     src={video.thumbnailUrl || `https://placehold.co/600x400/1a237e/7986cb?text=${video.title}`}
                                     alt={video.title}
@@ -181,7 +221,10 @@ export const VideoLibrary = () => {
 
                                 <div className="flex items-center justify-between">
                                     {unlocked ? (
-                                        <button className="text-sm font-bold text-gold-400 hover:text-gold-300 flex items-center gap-1">
+                                        <button 
+                                            onClick={() => setActiveVideo(video)}
+                                            className="text-sm font-bold text-gold-400 hover:text-gold-300 flex items-center gap-1"
+                                        >
                                             Watch Now <Play size={12} />
                                         </button>
                                     ) : (
@@ -358,6 +401,32 @@ export const VideoLibrary = () => {
                             >
                                 Add Category
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Video Player Modal */}
+            {activeVideo && (
+                <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-[100] animate-in fade-in duration-200">
+                    <button 
+                        onClick={() => setActiveVideo(null)} 
+                        className="absolute flex items-center gap-2 top-8 right-8 text-white/50 hover:text-white transition-colors"
+                    >
+                        <span className="font-bold tracking-widest text-sm uppercase">Close</span>
+                        <X size={32} />
+                    </button>
+                    
+                    <div className="w-full max-w-5xl aspect-video px-4 animate-in zoom-in-95 duration-300">
+                        <iframe
+                            src={getEmbedUrl(activeVideo)}
+                            className="w-full h-full rounded-2xl shadow-2xl border-2 border-white/10"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allowFullScreen
+                        ></iframe>
+                        <div className="mt-6 text-center">
+                            <h2 className="text-2xl font-bold text-white mb-2">{activeVideo.title}</h2>
+                            <p className="text-navy-200 max-w-2xl mx-auto">{activeVideo.description}</p>
                         </div>
                     </div>
                 </div>

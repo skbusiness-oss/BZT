@@ -11,6 +11,7 @@ import { Workouts } from './pages/Workouts';
 import { Profile } from './pages/Profile';
 import { Messages } from './pages/Messages';
 import { Community } from './pages/Community';
+import { AdminSetup } from './pages/AdminSetup';
 import React from 'react';
 
 import { Loader2 } from 'lucide-react';
@@ -33,6 +34,7 @@ export const AppRoutes = () => {
     return (
         <Routes>
             <Route path="/login" element={<Login />} />
+            <Route path="/admin/setup" element={<ProtectedRoute allowedRoles={['admin']}><AdminSetup /></ProtectedRoute>} />
             <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
                 <Route path="/" element={<Dashboard />} />
                 <Route path="/checkin" element={
@@ -41,17 +43,17 @@ export const AppRoutes = () => {
                     </ProtectedRoute>
                 } />
                 <Route path="/clients/:clientId/review" element={
-                    <ProtectedRoute allowedRoles={['coach']}>
+                    <ProtectedRoute allowedRoles={['coach', 'admin']}>
                         <CoachReview />
                     </ProtectedRoute>
                 } />
                 <Route path="/clients" element={
-                    <ProtectedRoute allowedRoles={['coach']}>
+                    <ProtectedRoute allowedRoles={['coach', 'admin']}>
                         <Clients />
                     </ProtectedRoute>
                 } />
                 <Route path="/messages" element={
-                    <ProtectedRoute allowedRoles={['coach', 'coaching']}>
+                    <ProtectedRoute allowedRoles={['coach', 'admin', 'coaching']}>
                         <Messages />
                     </ProtectedRoute>
                 } />

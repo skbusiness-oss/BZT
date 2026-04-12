@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useData } from '../context/DataContext';
+import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { Search, ChevronRight, CheckCircle2, AlertCircle, Plus, X, Trash2, UserCog, Shield, Users } from 'lucide-react';
 import clsx from 'clsx';
@@ -15,6 +16,7 @@ const CLIENT_CATEGORIES: { value: Category; label: string; color: string }[] = [
 
 export const Clients = () => {
     const { clients, addClient, removeClient, updateClient } = useData();
+    const { createUserAccount } = useAuth();
     const { t } = useLanguage();
     const navigate = useNavigate();
     const [search, setSearch] = useState('');
@@ -27,9 +29,13 @@ export const Clients = () => {
     const [newClient, setNewClient] = useState({
         name: '',
         email: '',
+        password: '',
+        role: 'coaching' as 'coaching' | 'community',
         category: 'cutting' as Category,
         programLength: 12
     });
+    const [addError, setAddError] = useState('');
+    const [isCreating, setIsCreating] = useState(false);
 
     const filteredClients = clients.filter(c => {
         const matchesSearch = c.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -38,20 +44,47 @@ export const Clients = () => {
         return matchesSearch && matchesCategory;
     });
 
-    const handleAddClient = () => {
-        if (newClient.name && newClient.email) {
-            addClient({
-                userId: `u${Date.now()}`,
-                name: newClient.name,
-                email: newClient.email,
-                category: newClient.category,
-                currentWeek: 0,
-                programLength: newClient.programLength,
-                needsReview: false,
-                isOnboarding: true
-            });
-            setNewClient({ name: '', email: '', category: 'cutting', programLength: 12 });
+    const handleAddClient = async () => {
+        if (!newClient.name || !newClient.email || !newClient.password) return;
+        setAddError('');
+        setIsCreating(true);
+
+        try {
+            const result = await createUserAccount(
+                newClient.email,
+                newClient.password,
+                newClient.name,
+                newClient.role
+            );
+
+            if (result.error) {
+                setAddError(result.error);
+                setIsCreating(false);
+                return;
+            }
+
+            const uid = result.uid!;
+
+            // 2. Create the client doc in Firestore ONLY if they are coaching
+            if (newClient.role === 'coaching') {
+                await addClient({
+                    userId: uid,
+                    name: newClient.name,
+                    email: newClient.email,
+                    category: newClient.category,
+                    currentWeek: 0,
+                    programLength: newClient.programLength,
+                    needsReview: false,
+                    isOnboarding: true
+                }, uid);
+            }
+
+            setNewClient({ name: '', email: '', password: '', role: 'coaching', category: 'cutting', programLength: 12 });
             setShowAddModal(false);
+        } catch (e: any) {
+            setAddError(`Error: ${e.message}`);
+        } finally {
+            setIsCreating(false);
         }
     };
 
@@ -296,41 +329,70 @@ export const Clients = () => {
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm text-navy-200 mb-1">Category *</label>
-                                <select
-                                    value={newClient.category}
-                                    onChange={e => setNewClient({ ...newClient, category: e.target.value as Category })}
+                                <label className="block text-sm text-navy-200 mb-1">Password *</label>
+                                <input
+                                    type="password"
+                                    value={newClient.password}
+                                    onChange={e => setNewClient({ ...newClient, password: e.target.value })}
+                                    placeholder="Min 6 characters"
                                     className="w-full clay-input p-3"
-                                >
-                                    {CLIENT_CATEGORIES.map(cat => (
-                                        <option key={cat.value} value={cat.value}>{cat.label}</option>
-                                    ))}
-                                </select>
+                                />
                             </div>
                             <div>
-                                <label className="block text-sm text-navy-200 mb-1">Program Length (weeks)</label>
+                                <label className="block text-sm text-navy-200 mb-1">Access Role *</label>
                                 <select
-                                    value={newClient.programLength}
-                                    onChange={e => setNewClient({ ...newClient, programLength: parseInt(e.target.value) })}
-                                    className="w-full clay-input p-3"
+                                    value={newClient.role}
+                                    onChange={e => setNewClient({ ...newClient, role: e.target.value as any })}
+                                    className="w-full clay-input p-3 text-white"
                                 >
-                                    <option value={8}>8 Weeks</option>
-                                    <option value={12}>12 Weeks</option>
-                                    <option value={16}>16 Weeks</option>
-                                    <option value={24}>24 Weeks</option>
+                                    <option value="coaching">Premium Coaching Client</option>
+                                    <option value="community">Community Member (Free)</option>
                                 </select>
                             </div>
+
+                            {newClient.role === 'coaching' && (
+                                <>
+                                    <div>
+                                        <label className="block text-sm text-navy-200 mb-1">Category *</label>
+                                        <select
+                                            value={newClient.category}
+                                            onChange={e => setNewClient({ ...newClient, category: e.target.value as Category })}
+                                            className="w-full clay-input p-3"
+                                        >
+                                            {CLIENT_CATEGORIES.map(cat => (
+                                                <option key={cat.value} value={cat.value}>{cat.label}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm text-navy-200 mb-1">Program Length (weeks)</label>
+                                        <select
+                                            value={newClient.programLength}
+                                            onChange={e => setNewClient({ ...newClient, programLength: parseInt(e.target.value) })}
+                                            className="w-full clay-input p-3"
+                                        >
+                                            <option value={8}>8 Weeks</option>
+                                            <option value={12}>12 Weeks</option>
+                                            <option value={16}>16 Weeks</option>
+                                            <option value={24}>24 Weeks</option>
+                                        </select>
+                                    </div>
+                                </>
+                            )}
+                            {addError && (
+                                <div className="text-red-400 text-sm bg-red-500/10 rounded-lg p-3">{addError}</div>
+                            )}
                         </div>
                         <div className="flex gap-3 mt-6">
-                            <button onClick={() => setShowAddModal(false)} className="flex-1 clay-button bg-navy-800 hover:bg-navy-700 text-white py-3">
+                            <button onClick={() => { setShowAddModal(false); setAddError(''); }} className="flex-1 clay-button bg-navy-800 hover:bg-navy-700 text-white py-3">
                                 Cancel
                             </button>
                             <button
                                 onClick={handleAddClient}
-                                disabled={!newClient.name || !newClient.email}
+                                disabled={isCreating || !newClient.name || !newClient.email || !newClient.password}
                                 className="flex-1 clay-button bg-gradient-to-r from-gold-400 to-gold-600 disabled:from-navy-700 disabled:to-navy-700 disabled:cursor-not-allowed text-navy-950 py-3"
                             >
-                                Add Client
+                                {isCreating ? 'Adding...' : 'Add Client'}
                             </button>
                         </div>
                     </div>
