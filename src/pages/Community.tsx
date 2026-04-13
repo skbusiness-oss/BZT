@@ -1,12 +1,11 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
-import { useLanguage } from '../context/LanguageContext';
 import { Heart, MessageCircle, Send, Sparkles } from 'lucide-react';
 
 export const Community = () => {
     const { user } = useAuth();
-    const { posts, addPost, likePost, addComment } = useData();
+    const { posts, addPost, likePost, addComment, loadComments } = useData();
     const [newPost, setNewPost] = useState('');
     const [commentText, setCommentText] = useState<Record<string, string>>({});
     const [showComments, setShowComments] = useState<Record<string, boolean>>({});
@@ -124,11 +123,17 @@ export const Community = () => {
                                 </button>
 
                                 <button
-                                    onClick={() => setShowComments(prev => ({ ...prev, [post.id]: !prev[post.id] }))}
+                                    onClick={() => {
+                                        const willOpen = !showComments[post.id];
+                                        setShowComments(prev => ({ ...prev, [post.id]: willOpen }));
+                                        if (willOpen && post.comments.length === 0 && (post.commentCount ?? 0) > 0) {
+                                            loadComments(post.id);
+                                        }
+                                    }}
                                     className="flex items-center gap-2 text-sm text-navy-400 hover:text-navy-200 transition-colors"
                                 >
                                     <MessageCircle size={16} />
-                                    {post.comments.length > 0 ? post.comments.length : 'Comment'}
+                                    {(post.commentCount ?? post.comments.length) > 0 ? (post.commentCount ?? post.comments.length) : 'Comment'}
                                 </button>
                             </div>
 

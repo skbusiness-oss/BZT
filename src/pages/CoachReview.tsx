@@ -14,8 +14,11 @@ import {
     FileText,
     Dumbbell,
     X,
-    Camera
+    Camera,
+    AlertCircle,
+    Loader2
 } from 'lucide-react';
+import clsx from 'clsx';
 import { MacroTarget } from '../types';
 
 export const CoachReview = () => {
@@ -38,6 +41,13 @@ export const CoachReview = () => {
 
     const [newHighCarb, setNewHighCarb] = useState<MacroTarget>({ carbs: 250, protein: 180, fats: 60, calories: 2260 });
     const [newLowCarb, setNewLowCarb] = useState<MacroTarget>({ carbs: 120, protein: 180, fats: 80, calories: 1920 });
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
+
+    const showToast = (type: 'success' | 'error', msg: string) => {
+        setToast({ type, msg });
+        setTimeout(() => setToast(null), 3500);
+    };
 
     useEffect(() => {
         if (weekData) {
@@ -52,36 +62,33 @@ export const CoachReview = () => {
         return <div className="text-white p-8">{t('clientNotFound')}</div>;
     }
 
-    const handleAction = () => {
-        if (isProgramCreation) {
-            createProgram(client.id, {
-                highCarb: newHighCarb,
-                lowCarb: newLowCarb
-            });
-            alert(`Program Created! ${client.name} is now on Week 1.`);
-            navigate('/');
-        } else if (weekData) {
-            updateWeek(weekData.id, {
-                coachFeedback: feedback,
-                status: 'reviewed'
-            });
+    const handleAction = async () => {
+        setIsSubmitting(true);
+        try {
+            if (isProgramCreation) {
+                await createProgram(client.id, { highCarb: newHighCarb, lowCarb: newLowCarb });
+                showToast('success', `Program created! ${client.name} is now on Week 1.`);
+                setTimeout(() => navigate('/'), 1000);
+            } else if (weekData) {
+                await updateWeek(weekData.id, { coachFeedback: feedback, status: 'reviewed' });
 
-            if (changeTargets) {
-                cascadeTargets(client.id, weekData.weekNumber + 1, {
-                    highCarb: newHighCarb,
-                    lowCarb: newLowCarb
-                });
+                if (changeTargets) {
+                    await cascadeTargets(client.id, weekData.weekNumber + 1, { highCarb: newHighCarb, lowCarb: newLowCarb });
+                }
+
+                await advanceWeek(client.id, weekData.weekNumber);
+                await updateClient(client.id, { needsReview: false });
+
+                showToast('success', changeTargets
+                    ? `Week ${weekData.weekNumber} reviewed. Targets updated from Week ${weekData.weekNumber + 1} onwards.`
+                    : `Week ${weekData.weekNumber} reviewed. Client advanced to Week ${weekData.weekNumber + 1}.`
+                );
+                setTimeout(() => navigate('/'), 1000);
             }
-
-            // Auto-advance: lock this week, advance client to next week
-            advanceWeek(client.id, weekData.weekNumber);
-            updateClient(client.id, { needsReview: false });
-
-            alert(changeTargets
-                ? `Week ${weekData.weekNumber} reviewed & locked. Targets updated from Week ${weekData.weekNumber + 1} onwards.`
-                : `Week ${weekData.weekNumber} reviewed & locked. Client advanced to Week ${weekData.weekNumber + 1}.`
-            );
-            navigate('/');
+        } catch {
+            showToast('error', 'Action failed. Please try again.');
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -100,6 +107,18 @@ export const CoachReview = () => {
     };
 
     return (
+        <>
+        {toast && (
+            <div className={clsx(
+                "fixed top-6 right-6 z-[200] flex items-center gap-3 px-5 py-4 rounded-xl shadow-2xl border animate-in slide-in-from-top-2 duration-300",
+                toast.type === 'success'
+                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+                    : 'bg-red-500/10 border-red-500/30 text-red-300'
+            )}>
+                {toast.type === 'success' ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
+                <span className="font-medium text-sm">{toast.msg}</span>
+            </div>
+        )}
         <div className="max-w-7xl mx-auto pb-20 space-y-6 animate-in fade-in duration-500">
 
             {/* Header */}
@@ -258,7 +277,7 @@ export const CoachReview = () => {
                                             <label className="text-[10px] text-navy-400 uppercase">{macro.charAt(0)}</label>
                                             <input
                                                 type="number"
-                                                value={(newHighCarb as any)[macro]}
+                                                value={newHighCarb[macro as keyof MacroTarget]}
                                                 onChange={(e) => updateTarget('high', macro as keyof MacroTarget, parseInt(e.target.value))}
                                                 className="w-full clay-input px-2 py-1 text-sm"
                                             />
@@ -279,7 +298,7 @@ export const CoachReview = () => {
                                             <label className="text-[10px] text-navy-400 uppercase">{macro.charAt(0)}</label>
                                             <input
                                                 type="number"
-                                                value={(newLowCarb as any)[macro]}
+                                                value={newLowCarb[macro as keyof MacroTarget]}
                                                 onChange={(e) => updateTarget('low', macro as keyof MacroTarget, parseInt(e.target.value))}
                                                 className="w-full clay-input px-2 py-1 text-sm"
                                             />
@@ -322,9 +341,11 @@ export const CoachReview = () => {
                         <div className="flex flex-col gap-3">
                             <button
                                 onClick={handleAction}
-                                className="w-full clay-button bg-gradient-to-r from-gold-400 to-gold-600 text-navy-950 py-3 flex items-center justify-center gap-2 gold-glow"
+                                disabled={isSubmitting}
+                                className="w-full clay-button bg-gradient-to-r from-gold-400 to-gold-600 text-navy-950 py-3 flex items-center justify-center gap-2 gold-glow disabled:opacity-50"
                             >
-                                <CheckCircle2 size={20} /> {isProgramCreation ? t('createProgram') : t('markReviewed')}
+                                {isSubmitting ? <Loader2 size={20} className="animate-spin" /> : <CheckCircle2 size={20} />}
+                                {isProgramCreation ? t('createProgram') : t('markReviewed')}
                             </button>
                             <button className="w-full clay-button bg-navy-800 hover:bg-navy-700 text-navy-200 py-3">
                                 {t('saveProgress')}
@@ -374,5 +395,6 @@ export const CoachReview = () => {
                 </div>
             </div>
         </div>
+        </>
     );
 };

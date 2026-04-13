@@ -14,18 +14,24 @@ export const Messages = () => {
 
     const isCoach = user?.role === 'coach' || user?.role === 'admin';
 
-    // For client role — look up the real coach UID from Firestore
+    // For client role — resolve their assigned coach
     const [coachId, setCoachId] = useState<string | null>(null);
+    const clientDoc = clients.find(c => c.userId === user?.id);
 
     useEffect(() => {
-        if (!isCoach) {
-            // Query for any user with role 'coach' or 'admin'
-            const q = query(collection(db, 'users'), where('role', 'in', ['coach', 'admin']), limit(1));
-            getDocs(q).then(snap => {
-                if (!snap.empty) setCoachId(snap.docs[0].id);
-            });
+        if (!isCoach && user) {
+            // Prefer the coachId stored on the client document
+            if (clientDoc?.coachId) {
+                setCoachId(clientDoc.coachId);
+            } else {
+                // Fallback: query for any user with role 'coach' or 'admin'
+                const q = query(collection(db, 'users'), where('role', 'in', ['coach', 'admin']), limit(1));
+                getDocs(q).then(snap => {
+                    if (!snap.empty) setCoachId(snap.docs[0].id);
+                });
+            }
         }
-    }, [isCoach]);
+    }, [isCoach, user, clientDoc?.coachId]);
 
     // Auto-select conversation for client
     useEffect(() => {

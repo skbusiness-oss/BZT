@@ -21,7 +21,7 @@ import clsx from 'clsx';
 import bgDesktop from '../../assets/bg-desktop.jpg';
 import bgMobile from '../../assets/bg-mobile.jpg';
 
-const SidebarItem = ({ to, icon: Icon, label, end = false, onClick }: { to: string, icon: any, label: string, end?: boolean, onClick?: () => void }) => {
+const SidebarItem = ({ to, icon: Icon, label, end = false, onClick }: { to: string, icon: React.ComponentType<{ size?: number; className?: string }>, label: string, end?: boolean, onClick?: () => void }) => {
     return (
         <NavLink
             to={to}

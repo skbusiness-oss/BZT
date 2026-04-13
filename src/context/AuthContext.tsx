@@ -16,6 +16,7 @@ import {
 } from 'firebase/auth';
 import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { initializeApp as initializeSecondaryApp } from 'firebase/app';
+import { DEFAULT_TARGETS } from '../lib/constants';
 
 // ─── Secondary Firebase app for creating client accounts ───────────────────
 // When you call createUserWithEmailAndPassword on the main app,
@@ -33,12 +34,6 @@ const secondaryApp = initializeSecondaryApp(
   'secondary' // name it so Firebase doesn't confuse it with the main app
 );
 const secondaryAuth = getAuth(secondaryApp);
-
-// ─── Default macros used when a new coached client is created ───────────────
-const DEFAULT_TARGETS = {
-  highCarb: { carbs: 300, protein: 180, fats: 60, calories: 2400 },
-  lowCarb:  { carbs: 150, protein: 180, fats: 80,  calories: 2000 },
-};
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -118,8 +113,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       await signInWithEmailAndPassword(auth, email, password);
       return {};
-    } catch (error: any) {
-      return { error: getFirebaseErrorMessage(error.code) };
+    } catch (error: unknown) {
+      return { error: getFirebaseErrorMessage((error as { code?: string })?.code ?? '') };
     }
   };
 
@@ -160,7 +155,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       return { uid: newUid };
     } catch (error: any) {
-      if (error.code === 'auth/email-already-in-use') {
+      if ((error as { code?: string })?.code === 'auth/email-already-in-use') {
         return { error: 'A user with this email already exists.' };
       }
       return { error: getFirebaseErrorMessage(error.code) };

@@ -28,7 +28,7 @@ export interface DayEntry {
 }
 
 export interface WeekPhotos {
-    front?: string; // base64 data URL
+    front?: string; // Firebase Storage download URL
     side?: string;
     back?: string;
     face?: string;
@@ -60,6 +60,7 @@ export interface Week {
 export interface Client {
     id: string;
     userId: string;
+    coachId?: string;
     name: string;
     email: string;
     category: Category;

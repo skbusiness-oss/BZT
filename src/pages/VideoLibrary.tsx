@@ -14,7 +14,7 @@ export const VideoLibrary = () => {
     const [showAddModal, setShowAddModal] = useState(false);
     const [showCategoryModal, setShowCategoryModal] = useState(false);
     const [newCategory, setNewCategory] = useState('');
-    const [activeVideo, setActiveVideo] = useState<any>(null);
+    const [activeVideo, setActiveVideo] = useState<typeof videos[number] | null>(null);
 
     const [newVideo, setNewVideo] = useState({
         title: '',
@@ -36,7 +36,7 @@ export const VideoLibrary = () => {
         return matchesCategory && matchesSearch;
     });
 
-    const canAccess = (video: any) => {
+    const canAccess = (video: typeof videos[number]) => {
         if (!video.isLocked) return true;
         if (user?.role === 'community') return false;
         return true;
@@ -63,7 +63,7 @@ export const VideoLibrary = () => {
         return 'youtube';
     };
 
-    const getEmbedUrl = (video: any) => {
+    const getEmbedUrl = (video: typeof videos[number]) => {
         try {
             if (!video.videoUrl) {
                 // Fallback testing video if database url is empty string

@@ -96,10 +96,14 @@ service cloud.firestore {
                       || resource.data.receiverId == request.auth.uid);
 
       allow create: if isSignedIn()
-                    && request.resource.data.senderId == request.auth.uid;
+                    && request.resource.data.senderId == request.auth.uid
+                    && request.resource.data.text is string
+                    && request.resource.data.text.size() > 0
+                    && request.resource.data.text.size() <= 2000;
 
       allow update: if isSignedIn()
-                    && resource.data.receiverId == request.auth.uid;
+                    && resource.data.receiverId == request.auth.uid
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
 
       allow delete: if isSignedIn() && isCoach();
     }
@@ -113,7 +117,10 @@ service cloud.firestore {
       allow read: if isSignedIn();
 
       allow create: if isSignedIn()
-                    && request.resource.data.authorId == request.auth.uid;
+                    && request.resource.data.authorId == request.auth.uid
+                    && request.resource.data.content is string
+                    && request.resource.data.content.size() > 0
+                    && request.resource.data.content.size() <= 5000;
 
       // Author can change content; any signed-in user can update ONLY the likes array; coach can do anything
       allow update: if isSignedIn()
@@ -131,7 +138,10 @@ service cloud.firestore {
         allow read: if isSignedIn();
 
         allow create: if isSignedIn()
-                      && request.resource.data.authorId == request.auth.uid;
+                      && request.resource.data.authorId == request.auth.uid
+                      && request.resource.data.content is string
+                      && request.resource.data.content.size() > 0
+                      && request.resource.data.content.size() <= 1000;
 
         // Author can edit their own comment; coach can moderate
         allow update: if isSignedIn()

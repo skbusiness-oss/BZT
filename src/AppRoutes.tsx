@@ -12,6 +12,7 @@ import { Profile } from './pages/Profile';
 import { Messages } from './pages/Messages';
 import { Community } from './pages/Community';
 import { AdminSetup } from './pages/AdminSetup';
+import { ErrorBoundary } from './components/shared/ErrorBoundary';
 import React from 'react';
 
 import { Loader2 } from 'lucide-react';
@@ -36,31 +37,31 @@ export const AppRoutes = () => {
             <Route path="/login" element={<Login />} />
             <Route path="/admin/setup" element={<ProtectedRoute allowedRoles={['admin']}><AdminSetup /></ProtectedRoute>} />
             <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-                <Route path="/" element={<Dashboard />} />
+                <Route path="/" element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
                 <Route path="/checkin" element={
                     <ProtectedRoute allowedRoles={['coaching']}>
-                        <CheckIn />
+                        <ErrorBoundary><CheckIn /></ErrorBoundary>
                     </ProtectedRoute>
                 } />
                 <Route path="/clients/:clientId/review" element={
                     <ProtectedRoute allowedRoles={['coach', 'admin']}>
-                        <CoachReview />
+                        <ErrorBoundary><CoachReview /></ErrorBoundary>
                     </ProtectedRoute>
                 } />
                 <Route path="/clients" element={
                     <ProtectedRoute allowedRoles={['coach', 'admin']}>
-                        <Clients />
+                        <ErrorBoundary><Clients /></ErrorBoundary>
                     </ProtectedRoute>
                 } />
                 <Route path="/messages" element={
                     <ProtectedRoute allowedRoles={['coach', 'admin', 'coaching']}>
-                        <Messages />
+                        <ErrorBoundary><Messages /></ErrorBoundary>
                     </ProtectedRoute>
                 } />
-                <Route path="/community" element={<Community />} />
-                <Route path="/library" element={<VideoLibrary />} />
-                <Route path="/workouts" element={<Workouts />} />
-                <Route path="/profile" element={<Profile />} />
+                <Route path="/community" element={<ErrorBoundary><Community /></ErrorBoundary>} />
+                <Route path="/library" element={<ErrorBoundary><VideoLibrary /></ErrorBoundary>} />
+                <Route path="/workouts" element={<ErrorBoundary><Workouts /></ErrorBoundary>} />
+                <Route path="/profile" element={<ErrorBoundary><Profile /></ErrorBoundary>} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
