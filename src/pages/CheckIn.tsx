@@ -14,14 +14,16 @@ import {
     Target,
     AlertCircle,
     Dumbbell,
-    X
+    X,
+    CheckCircle,
+    Loader2
 } from 'lucide-react';
 import clsx from 'clsx';
 
 export const CheckIn = () => {
     const { user } = useAuth();
     const { t } = useLanguage();
-    const { clients, getClientWeeks, updateWeek, updateClient, workouts } = useData();
+    const { clients, getClientWeeks, updateWeek, updateClient, workouts, uploadPhoto } = useData();
 
     const client = clients.find(c => c.userId === user?.id);
     const weeks = client ? getClientWeeks(client.id) : [];
@@ -34,6 +36,13 @@ export const CheckIn = () => {
     const [hunger, setHunger] = useState(5);
     const [photos, setPhotos] = useState<WeekPhotos>({});
     const [photoModal, setPhotoModal] = useState<string | null>(null);
+    const [uploadingAngle, setUploadingAngle] = useState<string | null>(null);
+    const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
+
+    const showToast = (type: 'success' | 'error', msg: string) => {
+        setToast({ type, msg });
+        setTimeout(() => setToast(null), 3500);
+    };
 
     useEffect(() => {
         if (weekData) {
@@ -55,49 +64,49 @@ export const CheckIn = () => {
         setEntries(newEntries);
     };
 
-    const handleSave = () => {
-        updateWeek(weekData.id, {
-            dailyEntries: entries,
-            weeklySummary: summary,
-            hungerScale: hunger,
-            photos,
-        });
-        alert(t('progressSaved'));
+    const handleSave = async () => {
+        try {
+            await updateWeek(weekData.id, {
+                dailyEntries: entries,
+                weeklySummary: summary,
+                hungerScale: hunger,
+                photos,
+            });
+            showToast('success', t('progressSaved'));
+        } catch {
+            showToast('error', 'Failed to save. Please try again.');
+        }
     };
 
-    const handleSubmit = () => {
+    const handleSubmit = async () => {
         if (!client) return;
-        updateWeek(weekData.id, {
-            dailyEntries: entries,
-            weeklySummary: summary,
-            hungerScale: hunger,
-            photos,
-            status: 'submitted'
-        });
-        updateClient(client.id, { needsReview: true });
-        alert(t('checkInSubmitted'));
+        try {
+            await updateWeek(weekData.id, {
+                dailyEntries: entries,
+                weeklySummary: summary,
+                hungerScale: hunger,
+                photos,
+                status: 'submitted'
+            });
+            await updateClient(client.id, { needsReview: true });
+            showToast('success', t('checkInSubmitted'));
+        } catch {
+            showToast('error', 'Submission failed. Please try again.');
+        }
     };
 
-    const handlePhotoUpload = (angle: keyof WeekPhotos, file: File) => {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const dataUrl = e.target?.result as string;
-            // Resize to save localStorage space
-            const img = new window.Image();
-            img.onload = () => {
-                const canvas = document.createElement('canvas');
-                const maxDim = 400;
-                const scale = Math.min(maxDim / img.width, maxDim / img.height, 1);
-                canvas.width = img.width * scale;
-                canvas.height = img.height * scale;
-                const ctx = canvas.getContext('2d');
-                ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
-                const compressed = canvas.toDataURL('image/jpeg', 0.7);
-                setPhotos(prev => ({ ...prev, [angle]: compressed }));
-            };
-            img.src = dataUrl;
-        };
-        reader.readAsDataURL(file);
+    // Upload photo to Firebase Storage and store the download URL
+    const handlePhotoUpload = async (angle: keyof WeekPhotos, file: File) => {
+        if (!user) return;
+        setUploadingAngle(angle);
+        try {
+            const downloadUrl = await uploadPhoto(file, user.id, selectedWeekNum);
+            setPhotos(prev => ({ ...prev, [angle]: downloadUrl }));
+        } catch {
+            showToast('error', 'Photo upload failed. Please try again.');
+        } finally {
+            setUploadingAngle(null);
+        }
     };
 
     const removePhoto = (angle: keyof WeekPhotos) => {
@@ -109,6 +118,18 @@ export const CheckIn = () => {
 
     return (
         <>
+            {/* Toast Notification */}
+            {toast && (
+                <div className={clsx(
+                    "fixed top-6 right-6 z-[200] flex items-center gap-3 px-5 py-4 rounded-xl shadow-2xl border animate-in slide-in-from-top-2 duration-300",
+                    toast.type === 'success'
+                        ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+                        : 'bg-red-500/10 border-red-500/30 text-red-300'
+                )}>
+                    {toast.type === 'success' ? <CheckCircle size={18} /> : <AlertCircle size={18} />}
+                    <span className="font-medium text-sm">{toast.msg}</span>
+                </div>
+            )}
             <div className="max-w-6xl mx-auto pb-20 space-y-6 animate-in fade-in duration-500">
 
                 {/* Header & Navigation */}
@@ -287,7 +308,11 @@ export const CheckIn = () => {
                                                     "aspect-[3/4] rounded-lg clay-inset border border-dashed border-navy-600 flex flex-col items-center justify-center gap-2 text-navy-400 transition-all",
                                                     !isReadOnly && "cursor-pointer hover:border-gold-500/40 hover:text-gold-400"
                                                 )}>
-                                                    <Camera size={24} />
+                                                    {uploadingAngle === angle ? (
+                                                        <Loader2 size={24} className="animate-spin text-gold-400" />
+                                                    ) : (
+                                                        <Camera size={24} />
+                                                    )}
                                                     <span className="text-xs capitalize">{angle}</span>
                                                     {!isReadOnly && (
                                                         <input

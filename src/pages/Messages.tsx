@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
-import { useLanguage } from '../context/LanguageContext';
 import { Send, MessageSquare, ArrowLeft } from 'lucide-react';
+import { db } from '../lib/firebase';
+import { collection, query, where, getDocs, limit } from 'firebase/firestore';
 
 export const Messages = () => {
     const { user } = useAuth();
@@ -13,16 +14,26 @@ export const Messages = () => {
 
     const isCoach = user?.role === 'coach' || user?.role === 'admin';
 
-    // For client role — always chat with coach
-    const coachId = 'u1-coach';
+    // For client role — look up the real coach UID from Firestore
+    const [coachId, setCoachId] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (!isCoach) {
+            // Query for any user with role 'coach' or 'admin'
+            const q = query(collection(db, 'users'), where('role', 'in', ['coach', 'admin']), limit(1));
+            getDocs(q).then(snap => {
+                if (!snap.empty) setCoachId(snap.docs[0].id);
+            });
+        }
+    }, [isCoach]);
 
     // Auto-select conversation for client
     useEffect(() => {
-        if (!isCoach && user) {
+        if (!isCoach && user && coachId) {
             setSelectedUserId(coachId);
             markMessagesRead(user.id, coachId);
         }
-    }, [isCoach, user]);
+    }, [isCoach, user, coachId]);
 
     // Scroll to bottom when messages change
     useEffect(() => {
@@ -37,6 +48,14 @@ export const Messages = () => {
     }, [selectedUserId, user, messages.length]);
 
     if (!user) return null;
+
+    // If client and coach hasn't been found yet
+    if (!isCoach && !coachId) return (
+        <div className="flex items-center justify-center h-64 text-navy-400">
+            <MessageSquare className="mr-3 opacity-30" size={24} />
+            Looking for your coach...
+        </div>
+    );
 
     // Conversation contacts
     const contacts = isCoach

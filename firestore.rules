@@ -107,17 +107,24 @@ service cloud.firestore {
     // ─── posts/{postId} ───────────────────────────────────
     // • All logged-in users can read
     // • Create if authorId matches your uid
-    // • Update (like/comment) by any logged-in user
-    // • Delete by coach only
+    // • Author can edit their own content; any user can toggle likes; coach can do anything
+    // • Delete by coach or author only
     match /posts/{postId} {
       allow read: if isSignedIn();
 
       allow create: if isSignedIn()
                     && request.resource.data.authorId == request.auth.uid;
 
-      allow update: if isSignedIn();
+      // Author can change content; any signed-in user can update ONLY the likes array; coach can do anything
+      allow update: if isSignedIn()
+                    && (
+                      isCoach()
+                      || resource.data.authorId == request.auth.uid
+                      || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes'])
+                    );
 
-      allow delete: if isSignedIn() && isCoach();
+      allow delete: if isSignedIn()
+                    && (isCoach() || resource.data.authorId == request.auth.uid);
 
       // Subcollection: comments
       match /comments/{commentId} {
@@ -126,9 +133,12 @@ service cloud.firestore {
         allow create: if isSignedIn()
                       && request.resource.data.authorId == request.auth.uid;
 
-        allow update: if isSignedIn();
+        // Author can edit their own comment; coach can moderate
+        allow update: if isSignedIn()
+                      && (isCoach() || resource.data.authorId == request.auth.uid);
 
-        allow delete: if isSignedIn() && isCoach();
+        allow delete: if isSignedIn()
+                      && (isCoach() || resource.data.authorId == request.auth.uid);
       }
     }
 
