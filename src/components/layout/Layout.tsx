@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { useData } from '../../context/DataContext';
+import { useMessages } from '../../context/MessagesContext';
 import { useLanguage } from '../../context/LanguageContext';
 import {
     LayoutDashboard,
@@ -15,7 +15,8 @@ import {
     Menu,
     X,
     MessageSquare,
-    Sparkles
+    ExternalLink,
+    Settings
 } from 'lucide-react';
 import clsx from 'clsx';
 import bgDesktop from '../../assets/bg-desktop.jpg';
@@ -42,10 +43,16 @@ const SidebarItem = ({ to, icon: Icon, label, end = false, onClick }: { to: stri
 
 export const Layout = () => {
     const { user, signOut } = useAuth();
-    const { getUnreadCount } = useData();
+    const { getUnreadCount } = useMessages();
     const { t, lang, setLang, isRTL } = useLanguage();
     const navigate = useNavigate();
     const [sidebarOpen, setSidebarOpen] = useState(false);
+
+    // Memoize unread count to prevent double-render recalculation
+    const unreadCount = useMemo(
+        () => (user ? getUnreadCount(user.id) : 0),
+        [getUnreadCount, user]
+    );
 
     const handleLogout = async () => {
         setSidebarOpen(false);
@@ -60,6 +67,9 @@ export const Layout = () => {
     const closeSidebar = () => setSidebarOpen(false);
 
     if (!user) return null;
+
+    const isCoach = user.role === 'coach' || user.role === 'admin';
+    const isClient = user.role === 'client';
 
     return (
         <div className="flex h-screen text-white overflow-hidden" style={{ background: '#060814' }}>
@@ -126,20 +136,20 @@ export const Layout = () => {
                     </div>
 
                     <nav className="flex flex-col gap-1">
-                        <SidebarItem to="/" icon={LayoutDashboard} label={t('navDashboard')} onClick={closeSidebar} />
+                        <SidebarItem to="/" icon={LayoutDashboard} label={t('navDashboard')} end onClick={closeSidebar} />
 
-                        {user.role === 'coaching' && (
+                        {isClient && (
                             <SidebarItem to="/checkin" icon={ClipboardCheck} label={t('navCheckIns')} onClick={closeSidebar} />
                         )}
 
-                        {(user.role === 'coach' || user.role === 'admin') && (
+                        {isCoach && (
                             <SidebarItem to="/clients" icon={Users} label={t('navClients')} onClick={closeSidebar} />
                         )}
 
                         <SidebarItem to="/library" icon={PlaySquare} label={t('navVideoLibrary')} onClick={closeSidebar} />
                         <SidebarItem to="/workouts" icon={Dumbbell} label={t('navWorkouts')} onClick={closeSidebar} />
 
-                        {(user.role === 'coach' || user.role === 'admin' || user.role === 'coaching') && (
+                        {(isCoach || isClient) && (
                             <NavLink
                                 to="/messages"
                                 onClick={closeSidebar}
@@ -152,16 +162,29 @@ export const Layout = () => {
                             >
                                 <MessageSquare size={20} />
                                 <span className="flex-1">Messages</span>
-                                {getUnreadCount(user.id) > 0 && (
+                                {unreadCount > 0 && (
                                     <span className="w-5 h-5 rounded-full bg-gold-500 text-navy-950 text-xs font-bold flex items-center justify-center">
-                                        {getUnreadCount(user.id)}
+                                        {unreadCount}
                                     </span>
                                 )}
                             </NavLink>
                         )}
 
-                        <SidebarItem to="/community" icon={Sparkles} label="Community" onClick={closeSidebar} />
+                        {/* Community → Discord external link */}
+                        <a
+                            href="https://discord.gg/biozackteam"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={closeSidebar}
+                            className="flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 text-navy-200 hover:bg-navy-700/40 hover:text-white"
+                        >
+                            <ExternalLink size={20} />
+                            <span className="flex-1">Community</span>
+                            <ExternalLink size={12} className="opacity-40" />
+                        </a>
+
                         <SidebarItem to="/profile" icon={UserCircle} label={t('navProfile')} onClick={closeSidebar} />
+                        <SidebarItem to="/settings" icon={Settings} label="Settings" onClick={closeSidebar} />
                     </nav>
                 </div>
 
@@ -233,4 +256,3 @@ export const Layout = () => {
         </div>
     );
 };
-

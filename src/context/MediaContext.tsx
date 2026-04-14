@@ -58,9 +58,9 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
     const totalListeners = 4;
     const checkReady = () => { if (++listenersReady >= totalListeners) setLoading(false); };
 
-    const videosQuery = isCoach || user.role === 'coaching'
-      ? query(collection(db, 'videos'))
-      : query(collection(db, 'videos'), where('isLocked', '==', false));
+    const videosQuery = isCoach || user.role === 'client'
+      ? query(collection(db, 'courses'))
+      : query(collection(db, 'courses'), where('isLocked', '==', false));
 
     unsubs.push(onSnapshot(videosQuery, (snap) => {
       const parsed = snap.docs.map((d) => docToObj<Video>(d));
@@ -87,7 +87,7 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
   }, [user?.id, isCoach]);
 
   const addVideo = async (video: Omit<Video, 'id'>) => {
-    await addDoc(collection(db, 'videos'), { ...video, createdAt: serverTimestamp() });
+    await addDoc(collection(db, 'courses'), { ...video, createdAt: serverTimestamp() });
   };
 
   const addCategory = async (category: string) => {

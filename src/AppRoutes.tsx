@@ -11,6 +11,7 @@ import { Workouts } from './pages/Workouts';
 import { Profile } from './pages/Profile';
 import { Messages } from './pages/Messages';
 import { Community } from './pages/Community';
+import { Settings } from './pages/Settings';
 import { AdminSetup } from './pages/AdminSetup';
 import { ErrorBoundary } from './components/shared/ErrorBoundary';
 import React from 'react';
@@ -39,7 +40,7 @@ export const AppRoutes = () => {
             <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
                 <Route path="/" element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
                 <Route path="/checkin" element={
-                    <ProtectedRoute allowedRoles={['coaching']}>
+                    <ProtectedRoute allowedRoles={['client']}>
                         <ErrorBoundary><CheckIn /></ErrorBoundary>
                     </ProtectedRoute>
                 } />
@@ -54,7 +55,7 @@ export const AppRoutes = () => {
                     </ProtectedRoute>
                 } />
                 <Route path="/messages" element={
-                    <ProtectedRoute allowedRoles={['coach', 'admin', 'coaching']}>
+                    <ProtectedRoute allowedRoles={['coach', 'admin', 'client']}>
                         <ErrorBoundary><Messages /></ErrorBoundary>
                     </ProtectedRoute>
                 } />
@@ -62,6 +63,7 @@ export const AppRoutes = () => {
                 <Route path="/library" element={<ErrorBoundary><VideoLibrary /></ErrorBoundary>} />
                 <Route path="/workouts" element={<ErrorBoundary><Workouts /></ErrorBoundary>} />
                 <Route path="/profile" element={<ErrorBoundary><Profile /></ErrorBoundary>} />
+                <Route path="/settings" element={<ErrorBoundary><Settings /></ErrorBoundary>} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

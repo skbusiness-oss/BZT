@@ -11,8 +11,9 @@ export const Dashboard = () => {
 
     switch (user.role) {
         case 'coach':
+        case 'admin':
             return <CoachDashboard />;
-        case 'coaching':
+        case 'client':
             return <ClientDashboard />;
         case 'community':
         default:

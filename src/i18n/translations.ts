@@ -22,7 +22,8 @@ export const translations = {
 
     // --- Roles ---
     coach: { en: 'Coach', ar: 'المدرب' },
-    coaching: { en: 'Coaching Client', ar: 'عميل تدريب' },
+    admin: { en: 'Admin', ar: 'مدير' },
+    client: { en: 'Coaching Client', ar: 'عميل تدريب' },
     community: { en: 'Community', ar: 'المجتمع' },
 
     // --- Sidebar Nav ---

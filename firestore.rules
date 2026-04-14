@@ -46,18 +46,18 @@ service cloud.firestore {
       allow write: if isSignedIn() && isCoach();
     }
 
-    // ─── weeks/{weekId} ───────────────────────────────────
-    // • Client can read and update their own weeks
+    // ─── checkIns/{checkInId} ─────────────────────────────
+    // • Client can read and update their own check-ins
     // • Client CANNOT change coachFeedback or newMacros (coach-only fields)
-    // • Coach can read/write all weeks
-    match /weeks/{weekId} {
+    // • Coach can read/write all check-ins
+    match /checkIns/{checkInId} {
       allow read: if isSignedIn()
                   && (resource.data.clientId == request.auth.uid || isCoach());
 
       // Coach full write
       allow create, delete: if isSignedIn() && isCoach();
 
-      // Coach can update anything; client can update own weeks minus protected fields
+      // Coach can update anything; client can update own check-ins minus protected fields
       allow update: if isSignedIn()
                     && (isCoach()
                         || (resource.data.clientId == request.auth.uid
@@ -65,14 +65,14 @@ service cloud.firestore {
                                  .hasAny(['coachFeedback', 'newMacros', 'newTargets'])));
     }
 
-    // ─── videos/{videoId} ─────────────────────────────────
-    // • Community users can only read videos where isLocked == false
-    // • coaching (VIP) + coach can read all
+    // ─── courses/{courseId} ───────────────────────────────
+    // • Community users can only read courses where isLocked == false
+    // • client (VIP) + coach can read all
     // • Only coach can write
-    match /videos/{videoId} {
+    match /courses/{courseId} {
       allow read: if isSignedIn()
                   && (isCoach()
-                      || role() == 'coaching'
+                      || role() == 'client'
                       || resource.data.isLocked == false);
       allow write: if isSignedIn() && isCoach();
     }

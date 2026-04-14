@@ -26,7 +26,7 @@ export const AddClientModal = ({ onClose, showProgramLength = false }: Props) =>
         name: '',
         email: '',
         password: '',
-        role: 'coaching' as 'coaching' | 'community',
+        role: 'client' as 'client' | 'community',
         category: 'cutting' as Category,
         programLength: 12,
     });
@@ -53,7 +53,7 @@ export const AddClientModal = ({ onClose, showProgramLength = false }: Props) =>
             }
 
             const uid = result.uid!;
-            if (newClient.role === 'coaching') {
+            if (newClient.role === 'client') {
                 await addClient({
                     userId: uid,
                     name: newClient.name,
@@ -117,15 +117,15 @@ export const AddClientModal = ({ onClose, showProgramLength = false }: Props) =>
                         <label className="block text-sm text-navy-200 mb-1">Access Role *</label>
                         <select
                             value={newClient.role}
-                            onChange={e => setNewClient({ ...newClient, role: e.target.value as 'coaching' | 'community' })}
+                            onChange={e => setNewClient({ ...newClient, role: e.target.value as 'client' | 'community' })}
                             className="w-full clay-input p-3 text-white"
                         >
-                            <option value="coaching">Premium Coaching Client</option>
+                            <option value="client">Premium Coaching Client</option>
                             <option value="community">Community Member (Free)</option>
                         </select>
                     </div>
 
-                    {newClient.role === 'coaching' && (
+                    {newClient.role === 'client' && (
                         <>
                             <div>
                                 <label className="block text-sm text-navy-200 mb-1">{t('programType')} *</label>

@@ -12,7 +12,8 @@ import {
   onAuthStateChanged,
   updateProfile,
   getAuth,
-  createUserWithEmailAndPassword
+  createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
 } from 'firebase/auth';
 import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { initializeApp as initializeSecondaryApp } from 'firebase/app';
@@ -48,6 +49,7 @@ interface AuthContextType {
     name: string,
     role: Role
   ) => Promise<{ uid?: string; error?: string }>;
+  sendPasswordReset: (email: string) => Promise<{ error?: string }>;
   isAuthenticated: boolean;
   isAdmin: boolean;
   isCoach: boolean;
@@ -118,6 +120,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  // ── Password reset ────────────────────────────────────────────────────────
+  const sendPasswordReset = async (email: string): Promise<{ error?: string }> => {
+    try {
+      await sendPasswordResetEmail(auth, email);
+      return {};
+    } catch (error: unknown) {
+      return { error: getFirebaseErrorMessage((error as { code?: string })?.code ?? '') };
+    }
+  };
+
   // ── Sign out ───────────────────────────────────────────────────────────────
   const signOut = async () => {
     await firebaseSignOut(auth);
@@ -147,9 +159,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       await setDoc(doc(db, 'users', newUid), {
         displayName: name,
         email,
-        role, // 'coaching' or 'community'
+        role, // 'client' or 'community'
         createdAt: serverTimestamp(),
-        macros: role === 'coaching' ? DEFAULT_TARGETS : null,
+        macros: role === 'client' ? DEFAULT_TARGETS : null,
         stripeCustomerId: null,
       });
 
@@ -170,6 +182,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         signIn,
         signOut,
         createUserAccount,
+        sendPasswordReset,
         isAuthenticated: !!user,
         isAdmin: user?.role === 'admin',
         isCoach: user?.role === 'admin' || user?.role === 'coach',

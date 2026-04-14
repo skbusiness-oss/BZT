@@ -1,4 +1,4 @@
-export type Role = 'community' | 'coaching' | 'coach' | 'admin';
+export type Role = 'community' | 'client' | 'coach' | 'admin';
 
 export interface User {
     id: string;
@@ -69,7 +69,7 @@ export interface Client {
     needsReview: boolean;
     isOnboarding?: boolean;
     intakeData?: IntakeData;
-    accessLevel?: 'coaching' | 'community';
+    accessLevel?: 'client' | 'community';
 }
 
 export interface IntakeData {

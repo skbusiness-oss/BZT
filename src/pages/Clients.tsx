@@ -152,11 +152,11 @@ export const Clients = () => {
                                             {client.category}
                                         </span>
                                         <span className={clsx("px-2 py-0.5 rounded text-xs font-medium",
-                                            (client.accessLevel || 'coaching') === 'coaching'
+                                            (client.accessLevel || 'client') === 'client'
                                                 ? "bg-gold-500/10 text-gold-400"
                                                 : "bg-indigo-500/10 text-indigo-400"
                                         )}>
-                                            {(client.accessLevel || 'coaching') === 'coaching' ? '🏋️ Coaching' : '👥 Community'}
+                                            {(client.accessLevel || 'client') === 'client' ? '🏋️ Coaching' : '👥 Community'}
                                         </span>
                                         <span>•</span>
                                         <span>Week {client.currentWeek}</span>
@@ -265,10 +265,10 @@ export const Clients = () => {
                             </h3>
                             <div className="grid grid-cols-2 gap-2">
                                 <button
-                                    onClick={() => updateClient(selectedClient.id, { accessLevel: 'coaching' })}
+                                    onClick={() => updateClient(selectedClient.id, { accessLevel: 'client' })}
                                     className={clsx(
                                         "p-3 rounded-xl text-center transition-all border",
-                                        (selectedClient.accessLevel || 'coaching') === 'coaching'
+                                        (selectedClient.accessLevel || 'client') === 'client'
                                             ? "bg-gold-500/15 border-gold-500/40 text-gold-400"
                                             : "clay-card-sm border-transparent text-navy-300 hover:border-white/[0.06]"
                                     )}

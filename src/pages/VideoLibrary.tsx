@@ -58,41 +58,57 @@ export const VideoLibrary = () => {
         }
     };
 
-    const detectPlatform = (url: string) => {
-        if (url.includes('vimeo')) return 'vimeo';
+    /**
+     * If the user pasted a full <iframe> embed snippet, pull out just the src URL.
+     * Works for both YouTube and Vimeo embed codes.
+     */
+    const extractUrlFromEmbed = (raw: string): string => {
+        const srcMatch = raw.match(/src=["']([^"']+)["']/i);
+        return srcMatch ? srcMatch[1] : raw;
+    };
+
+    const detectPlatform = (raw: string): 'youtube' | 'vimeo' => {
+        if (raw.includes('vimeo')) return 'vimeo';
         return 'youtube';
     };
 
-    const getEmbedUrl = (video: typeof videos[number]) => {
+    const getEmbedUrl = (video: typeof videos[number]): string => {
         try {
             if (!video.videoUrl) {
-                // Fallback testing video if database url is empty string
-                return video.platform === 'vimeo' 
-                    ? 'https://player.vimeo.com/video/76979871' 
+                return video.platform === 'vimeo'
+                    ? 'https://player.vimeo.com/video/76979871'
                     : 'https://www.youtube.com/embed/dQw4w9WgXcQ';
             }
 
-            const url = video.videoUrl;
+            // Strip out iframe embed code → bare URL
+            const url = extractUrlFromEmbed(video.videoUrl.trim());
 
             if (video.platform === 'vimeo' || url.includes('vimeo')) {
-                // Match standard vimeo URLs
-                const match = url.match(/vimeo\.com\/(\d+)/);
-                if (match) return `https://player.vimeo.com/video/${match[1]}`;
-                
-                // If it's already an embed URL, return as is
+                // Already a player URL  e.g. https://player.vimeo.com/video/123456
                 if (url.includes('player.vimeo.com')) return url;
-                
-                // Final fallback: try to extract just numbers, otherwise default
-                const numbersOnly = url.replace(/\D/g, '');
-                return numbersOnly ? `https://player.vimeo.com/video/${numbersOnly}` : url;
+                // Standard  https://vimeo.com/123456  or  https://vimeo.com/channels/.../123456
+                const match = url.match(/vimeo\.com\/(?:.*\/)?(\d+)/);
+                if (match) return `https://player.vimeo.com/video/${match[1]}`;
+                return url;
             } else {
-                // Robust YouTube regex extracts 11-char ID from all standard formats:
-                // youtu.be/ID, youtube.com/watch?v=ID, youtube.com/embed/ID, youtube.com/shorts/ID
-                const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/))([\w-]{11})/);
+                // Handles every YouTube surface:
+                //  • youtube.com/watch?v=ID
+                //  • youtube.com/watch?list=X&v=ID
+                //  • youtu.be/ID
+                //  • youtube.com/embed/ID   (already an embed URL — re-use as-is)
+                //  • youtube.com/shorts/ID
+                //  • youtube.com/live/ID
+                //  • youtube.com/v/ID
+                // Strip ?si= tracking token that YouTube injects into embed codes
+                const clean = url.replace(/[?&]si=[\w-]+/, '');
+                const match = clean.match(
+                    /(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/|live\/))([\w-]{11})/
+                );
                 if (match) {
-                    return `https://www.youtube.com/embed/${match[1]}?autoplay=1`;
+                    return `https://www.youtube.com/embed/${match[1]}?autoplay=1&rel=0`;
                 }
-                return url; // fallback to pasting literal url
+                // Already a bare embed URL with no recognisable pattern — use it directly
+                return url;
             }
         } catch {
             return video.videoUrl;
@@ -281,16 +297,16 @@ export const VideoLibrary = () => {
                                 <label className="block text-sm text-navy-200 mb-1 flex items-center gap-2">
                                     <Link2 size={14} /> Video URL (YouTube or Vimeo) *
                                 </label>
-                                <input
-                                    type="url"
+                                <textarea
                                     value={newVideo.videoUrl}
                                     onChange={e => setNewVideo({
                                         ...newVideo,
                                         videoUrl: e.target.value,
                                         platform: detectPlatform(e.target.value)
                                     })}
-                                    placeholder="https://youtube.com/watch?v=... or https://vimeo.com/..."
-                                    className="w-full clay-input p-3"
+                                    placeholder="Paste a YouTube/Vimeo URL  — or paste the full <iframe> embed code directly"
+                                    rows={3}
+                                    className="w-full clay-input p-3 resize-none text-sm"
                                 />
                                 {newVideo.videoUrl && (
                                     <div className="mt-2 flex items-center gap-2 text-xs text-navy-400">
@@ -419,10 +435,13 @@ export const VideoLibrary = () => {
                     
                     <div className="w-full max-w-5xl aspect-video px-4 animate-in zoom-in-95 duration-300">
                         <iframe
+                            key={activeVideo.id}
                             src={getEmbedUrl(activeVideo)}
+                            title={activeVideo.title}
                             className="w-full h-full rounded-2xl shadow-2xl border-2 border-white/10"
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                             allowFullScreen
+                            referrerPolicy="strict-origin-when-cross-origin"
                         ></iframe>
                         <div className="mt-6 text-center">
                             <h2 className="text-2xl font-bold text-white mb-2">{activeVideo.title}</h2>

@@ -47,7 +47,7 @@ export const AdminSetup = () => {
                 { title: 'Coaching Secrets', category: 'Coaching', thumbnailUrl: 'https://placehold.co/600x400/f43f5e/ffffff?text=Secrets', isLocked: true, description: 'Insider tips from top coaches.', videoUrl: '', platform: 'youtube' },
             ];
             for (const v of videos) {
-                await addDoc(collection(db, 'videos'), { ...v, createdAt: serverTimestamp() });
+                await addDoc(collection(db, 'courses'), { ...v, createdAt: serverTimestamp() });
             }
             addLog(`✅ ${videos.length} sample videos created`);
         } catch (e: any) {

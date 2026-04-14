@@ -5,4 +5,5 @@ export { CoachReview } from './CoachReview';
 export { Clients } from './Clients';
 export { VideoLibrary } from './VideoLibrary';
 export { Profile } from './Profile';
-export { Week0Onboarding } from './Week0Onboarding';
+export { Settings } from './Settings';
+export { Community } from './Community';

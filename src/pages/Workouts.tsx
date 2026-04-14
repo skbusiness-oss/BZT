@@ -49,7 +49,7 @@ export const Workouts = () => {
     const { t }   = useLanguage();
 
     const isCoach   = user?.role === 'coach' || user?.role === 'admin';
-    const isClient  = user?.role === 'coaching' || user?.role === 'community';
+    const isClient  = user?.role === 'client' || user?.role === 'community';
 
     // ── View / filter state ────────────────────────────────────
     const [viewMode, setViewMode]         = useState<ViewMode>('programs');

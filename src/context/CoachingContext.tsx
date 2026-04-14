@@ -70,8 +70,8 @@ export const CoachingProvider = ({ children }: { children: ReactNode }) => {
     }));
 
     const weeksQuery = isCoach
-      ? collection(db, 'weeks')
-      : query(collection(db, 'weeks'), where('userId', '==', user.id));
+      ? collection(db, 'checkIns')
+      : query(collection(db, 'checkIns'), where('clientId', '==', user.id));
 
     unsubs.push(onSnapshot(weeksQuery, (snap) => {
       setWeeks(snap.docs.map((d) => docToObj<Week>(d)));
@@ -88,7 +88,7 @@ export const CoachingProvider = ({ children }: { children: ReactNode }) => {
   );
 
   const updateWeek = async (weekId: string, updates: Partial<Week>) => {
-    await updateDoc(doc(db, 'weeks', weekId), { ...updates, updatedAt: serverTimestamp() });
+    await updateDoc(doc(db, 'checkIns', weekId), { ...updates, updatedAt: serverTimestamp() });
   };
 
   const updateClient = async (clientId: string, updates: Partial<Client>) => {
@@ -102,7 +102,7 @@ export const CoachingProvider = ({ children }: { children: ReactNode }) => {
   ) => {
     const affected = weeks.filter((w) => w.clientId === clientId && w.weekNumber >= startWeekNum);
     await Promise.all(
-      affected.map((w) => updateDoc(doc(db, 'weeks', w.id), { activeTargets: newTargets, updatedAt: serverTimestamp() }))
+      affected.map((w) => updateDoc(doc(db, 'checkIns', w.id), { activeTargets: newTargets, updatedAt: serverTimestamp() }))
     );
   };
 
@@ -111,8 +111,8 @@ export const CoachingProvider = ({ children }: { children: ReactNode }) => {
     const toUnlock = weeks.find((w) => w.clientId === clientId && w.weekNumber === reviewedWeekNum + 1);
     const client = clients.find((c) => c.id === clientId);
     const ops: Promise<unknown>[] = [];
-    if (toReview) ops.push(updateDoc(doc(db, 'weeks', toReview.id), { status: 'locked', updatedAt: serverTimestamp() }));
-    if (toUnlock && toUnlock.status !== 'locked') ops.push(updateDoc(doc(db, 'weeks', toUnlock.id), { status: 'pending', updatedAt: serverTimestamp() }));
+    if (toReview) ops.push(updateDoc(doc(db, 'checkIns', toReview.id), { status: 'locked', updatedAt: serverTimestamp() }));
+    if (toUnlock && toUnlock.status !== 'locked') ops.push(updateDoc(doc(db, 'checkIns', toUnlock.id), { status: 'pending', updatedAt: serverTimestamp() }));
     if (client && client.currentWeek === reviewedWeekNum) {
       ops.push(updateDoc(doc(db, 'clients', clientId), {
         currentWeek: Math.min(reviewedWeekNum + 1, client.programLength),
@@ -124,7 +124,7 @@ export const CoachingProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const completeOnboarding = async (clientId: string, initialData: Record<string, string>) => {
-    const weekRef = doc(db, 'weeks', `${clientId}-w0`);
+    const weekRef = doc(db, 'checkIns', `${clientId}-w0`);
     await setDoc(weekRef, {
       clientId,
       userId: clients.find((c) => c.id === clientId)?.userId || null,
@@ -154,7 +154,7 @@ export const CoachingProvider = ({ children }: { children: ReactNode }) => {
     const programLength = client?.programLength || 12;
     const weekWrites = Array.from({ length: programLength }, (_, i) => {
       const weekNum = i + 1;
-      return setDoc(doc(db, 'weeks', `${clientId}-w${weekNum}`), {
+      return setDoc(doc(db, 'checkIns', `${clientId}-w${weekNum}`), {
         clientId,
         userId: client?.userId || null,
         weekNumber: weekNum,
@@ -178,13 +178,13 @@ export const CoachingProvider = ({ children }: { children: ReactNode }) => {
     if (!week) return;
     const existing = week.assignedWorkoutIds || [];
     if (existing.includes(workoutId)) return;
-    await updateDoc(doc(db, 'weeks', weekId), { assignedWorkoutIds: [...existing, workoutId], updatedAt: serverTimestamp() });
+    await updateDoc(doc(db, 'checkIns', weekId), { assignedWorkoutIds: [...existing, workoutId], updatedAt: serverTimestamp() });
   };
 
   const unassignWorkout = async (weekId: string, workoutId: string) => {
     const week = weeks.find((w) => w.id === weekId);
     if (!week) return;
-    await updateDoc(doc(db, 'weeks', weekId), {
+    await updateDoc(doc(db, 'checkIns', weekId), {
       assignedWorkoutIds: (week.assignedWorkoutIds || []).filter((id) => id !== workoutId),
       updatedAt: serverTimestamp(),
     });
@@ -202,12 +202,12 @@ export const CoachingProvider = ({ children }: { children: ReactNode }) => {
   const removeClient = async (clientId: string) => {
     await deleteDoc(doc(db, 'clients', clientId));
     const clientWeeks = weeks.filter((w) => w.clientId === clientId);
-    await Promise.all(clientWeeks.map((w) => deleteDoc(doc(db, 'weeks', w.id))));
+    await Promise.all(clientWeeks.map((w) => deleteDoc(doc(db, 'checkIns', w.id))));
   };
 
   const uploadPhoto = async (file: File, userId: string, weekNumber: number): Promise<string> => {
     const ext = file.name.split('.').pop();
-    const path = `checkIns/${userId}/week${weekNumber}/${Date.now()}.${ext}`;
+    const path = `check-ins/${userId}/week${weekNumber}/${Date.now()}.${ext}`;
     const storageRef = ref(storage, path);
     const snapshot = await uploadBytes(storageRef, file);
     return getDownloadURL(snapshot.ref);
