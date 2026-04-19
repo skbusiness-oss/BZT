@@ -61,7 +61,9 @@ export const ExerciseCard = ({ exercise, index }: ExerciseCardProps) => {
                                 imgReady ? 'opacity-100' : 'opacity-0'
                             )}
                             onLoad={() => setImgReady(true)}
+                            onError={() => setImgReady(true)}
                             loading="lazy"
+                            decoding="async"
                         />
                     </>
                 )}

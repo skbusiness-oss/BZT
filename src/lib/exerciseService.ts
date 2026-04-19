@@ -29,11 +29,39 @@ export interface ExerciseDetail {
     equipment: string;
 }
 
-// ─── Session cache ────────────────────────────────────────
+// ─── Persistent cache (localStorage-backed) ───────────────
 
-const nameCache = new Map<string, ExerciseDetail | null>();
+const LS_KEY = 'bz_exerciseDetail_v1';
+
+function loadNameCache(): Map<string, ExerciseDetail | null> {
+    try {
+        const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(LS_KEY) : null;
+        if (!raw) return new Map();
+        const obj = JSON.parse(raw) as Record<string, ExerciseDetail | null>;
+        return new Map(Object.entries(obj));
+    } catch {
+        return new Map();
+    }
+}
+
+let savePending = false;
+function persistNameCache() {
+    if (savePending || typeof localStorage === 'undefined') return;
+    savePending = true;
+    setTimeout(() => {
+        try {
+            const obj: Record<string, ExerciseDetail | null> = {};
+            nameCache.forEach((v, k) => { obj[k] = v; });
+            localStorage.setItem(LS_KEY, JSON.stringify(obj));
+        } catch { /* quota/serialize errors are non-fatal */ }
+        savePending = false;
+    }, 500);
+}
+
+const nameCache = loadNameCache();
 const searchCache = new Map<string, ExerciseResult[]>();
 const muscleCache = new Map<string, ExerciseResult[]>();
+const inflight = new Map<string, Promise<ExerciseDetail | null>>();
 
 // ─── Internal fetch helper ────────────────────────────────
 
@@ -60,32 +88,66 @@ async function apiFetch<T>(path: string, params: Record<string, string> = {}): P
 export async function getExerciseByName(name: string): Promise<ExerciseDetail | null> {
     const key = name.trim().toLowerCase();
     if (nameCache.has(key)) return nameCache.get(key)!;
+    if (inflight.has(key)) return inflight.get(key)!;
 
-    try {
-        const res = await apiFetch<{
-            success: boolean;
-            data: ExerciseResult[];
-        }>('/exercises', { name: key, limit: '1' });
+    const p = (async (): Promise<ExerciseDetail | null> => {
+        try {
+            // 1) Try strict name filter first (fast, cheap).
+            let ex: ExerciseResult | undefined;
+            try {
+                const res = await apiFetch<{ success: boolean; data: ExerciseResult[] }>(
+                    '/exercises', { name: key, limit: '1' }
+                );
+                if (res.success && res.data?.length) ex = res.data[0];
+            } catch { /* fall through to search */ }
 
-        if (!res.success || !res.data || res.data.length === 0) {
-            nameCache.set(key, null);
+            // 2) Fallback: fuzzy search endpoint catches names that don't
+            //    match ExerciseDB's canonical naming (plurals, synonyms, etc.).
+            if (!ex) {
+                const res = await apiFetch<{
+                    success: boolean;
+                    data: { exerciseId: string; name: string; gifUrl: string }[];
+                }>('/exercises/search', { search: key, threshold: '0.4' });
+                if (res.success && res.data?.length) {
+                    const hit = res.data[0];
+                    ex = {
+                        exerciseId: hit.exerciseId,
+                        name: hit.name,
+                        gifUrl: hit.gifUrl,
+                        instructions: [],
+                        targetMuscles: [],
+                        secondaryMuscles: [],
+                        bodyParts: [],
+                        equipments: [],
+                    };
+                }
+            }
+
+            if (!ex) {
+                nameCache.set(key, null);
+                persistNameCache();
+                return null;
+            }
+
+            const detail: ExerciseDetail = {
+                gifUrl: ex.gifUrl,
+                instructions: ex.instructions ?? [],
+                targetMuscle: ex.targetMuscles?.[0] ?? '',
+                equipment: ex.equipments?.[0] ?? '',
+            };
+            nameCache.set(key, detail);
+            persistNameCache();
+            return detail;
+        } catch (err) {
+            console.error('[exerciseService] getExerciseByName failed:', err);
             return null;
+        } finally {
+            inflight.delete(key);
         }
+    })();
 
-        const ex = res.data[0];
-        const detail: ExerciseDetail = {
-            gifUrl: ex.gifUrl,
-            instructions: ex.instructions,
-            targetMuscle: ex.targetMuscles?.[0] ?? '',
-            equipment: ex.equipments?.[0] ?? '',
-        };
-
-        nameCache.set(key, detail);
-        return detail;
-    } catch (err) {
-        console.error('[exerciseService] getExerciseByName failed:', err);
-        return null;
-    }
+    inflight.set(key, p);
+    return p;
 }
 
 /**
