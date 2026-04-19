@@ -91,6 +91,7 @@ export interface Video {
     videoUrl?: string;
     platform?: 'youtube' | 'vimeo';
     description?: string;
+    pdfFiles?: { name: string; url: string }[];
 }
 
 export interface Exercise {
@@ -186,4 +187,57 @@ export interface Post {
     likes: string[]; // user IDs who liked
     comments: Comment[];
     commentCount?: number;
+}
+
+// --- Workout Wizard & Program Tracking ---
+export type Difficulty = 'beginner' | 'intermediate' | 'advanced';
+
+export interface UserActiveProgram {
+    userId: string;
+    programId: string;
+    programName: string;
+    goal: WorkoutGoal;
+    split: string;
+    difficulty: Difficulty;
+    startDate: string;           // ISO date
+    currentCycle: number;        // starts at 1
+    completedDays: number[];     // day numbers completed e.g. [1,2,3]
+    rotation: ProgramDay[];      // full 10-day rotation
+    assignedByCoach: boolean;
+}
+
+export type GifSource = 'free-exercise-db' | 'workout-cool' | 'youtube';
+export type ExerciseType = 'lift' | 'cardio_protocol';
+
+export interface ExerciseDetail {
+    canonicalName: string;
+    canonicalNameAr: string;
+    gifUrl: string;
+    gifId?: string;
+    videoUrl?: string;
+    videoId?: string;
+    videoSource?: string;
+    gifSource?: GifSource;
+    type?: ExerciseType;
+    muscles: {
+        primary: string[];
+        primaryAr: string[];
+        secondary: string[];
+        secondaryAr: string[];
+    };
+    instructions: string[];
+    instructionsAr: string[];
+    tips: string[];
+    tipsAr: string[];
+    commonMistakes: string[];
+    commonMistakesAr: string[];
+    equipment: string;
+    equipmentAr: string;
+}
+
+export interface ProgramAssignmentResult {
+    program: TrainingProgram;
+    recommendedSplits: string[];
+    difficulty: Difficulty;
+    goal: WorkoutGoal;
 }

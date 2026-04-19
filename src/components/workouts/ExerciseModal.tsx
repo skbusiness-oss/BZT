@@ -101,8 +101,19 @@ export const ExerciseModal = ({ exerciseName, exerciseDetail, onClose }: Exercis
                 onClick={e => e.stopPropagation()}
                 dir={isRTL ? 'rtl' : 'ltr'}
             >
-                {/* GIF / Image (local first, ExerciseDB fallback) */}
-                {(() => {
+                {/* Video: YouTube embed > local GIF > ExerciseDB fallback */}
+                {exerciseDetail.videoId ? (
+                    <div className="w-full aspect-video bg-navy-950 rounded-t-3xl overflow-hidden">
+                        <iframe
+                            src={`https://www.youtube.com/embed/${exerciseDetail.videoId}?autoplay=1&mute=1&loop=1&playlist=${exerciseDetail.videoId}&controls=1&rel=0&modestbranding=1&playsinline=1`}
+                            className="w-full h-full"
+                            style={{ border: 'none' }}
+                            allow="autoplay; encrypted-media; picture-in-picture"
+                            allowFullScreen
+                            title={exerciseDetail.canonicalName}
+                        />
+                    </div>
+                ) : (() => {
                     const src = (!imgError && exerciseDetail.gifUrl) || remoteGif;
                     return src;
                 })() ? (

@@ -1,0 +1,83 @@
+═══════════════════════════════════════════════════════
+BZT — EXERCISES NEEDING MANUAL VIDEO
+Channel: https://www.youtube.com/@fit-distance/videos
+═══════════════════════════════════════════════════════
+
+HOW TO FIND THE VIDEO ID:
+1. Go to the channel above
+2. Search for the exercise (use French terms from list)
+3. Click the video
+4. Copy the ID from URL: youtube.com/watch?v=XXXXXXXXXXX
+5. Open src/data/exerciseLibrary.ts
+6. Find the entry in FIT_DISTANCE_VIDEOS at the bottom of the file
+7. Add:  'Exercise Name': 'XXXXXXXXXXX',
+
+─────────────────────────────────────────────────
+NOT FOUND ON CHANNEL (search manually):
+─────────────────────────────────────────────────
+[ ] Pec Deck Fly
+    Try searching: "pec deck" or "butterfly" or "machine pectoraux"
+    The @fit-distance channel has no pec deck / butterfly machine video.
+    Fallback: https://www.youtube.com/results?search_query=pec+deck+machine+tutorial
+
+[ ] Cable Face Pull
+    Try searching: "face pull" or "facial à la corde" or "poulie face"
+    The channel has no face pull video.
+    Fallback: https://www.youtube.com/results?search_query=face+pull+proper+form
+
+[ ] Push-Up
+    The channel only has variant push-ups (diamond, wall, one-arm, pike).
+    Try searching: "pompes classiques" or "pompes au sol"
+    Fallback: https://www.youtube.com/results?search_query=standard+pushup+tutorial
+
+[ ] Farmers Walk
+    No farmer's walk / loaded carry video on the channel.
+    Try searching: "farmer" or "marche fermier" or "porter haltères"
+    Fallback: https://www.youtube.com/results?search_query=farmers+walk+form
+
+[ ] Bicycle Crunch
+    Try searching: "crunch vélo" or "vélo abdominaux" or "air bike"
+    Closest on channel: "Crunch air bike avec élastique" (mPIvQJmi3IA) — but that is with a band.
+    Fallback: https://www.youtube.com/results?search_query=bicycle+crunch+form
+
+─────────────────────────────────────────────────
+LOW CONFIDENCE (please verify):
+─────────────────────────────────────────────────
+[ ] Reverse Pec Deck (Rear Delt)
+    Matched to French video: "Élévation latérale des deltoïdes postérieurs en position assise"
+    Video URL: https://youtube.com/watch?v=M_XTsbsXrkM
+    Check: this is a bent-over rear delt raise, not the pec deck machine
+    reverse — same muscles, but different equipment.
+
+─────────────────────────────────────────────────
+MEDIUM CONFIDENCE (verify if time):
+─────────────────────────────────────────────────
+[ ] Barbell Overhead Press → SEATED version (should be standing)
+    https://youtube.com/watch?v=Sadx09VPulo
+[ ] T-Bar Row → Landmine row (same movement pattern)
+    https://youtube.com/watch?v=hRKyzgiDggA
+[ ] Cable Tricep Pushdown → REVERSE grip version
+    https://youtube.com/watch?v=EHd0NygL5QQ
+[ ] Seated Cable Row → UNILATERAL version
+    https://youtube.com/watch?v=Ma_1UuJ2yGU
+[ ] Incline Hammer Strength Press → Generic incline machine press
+    https://youtube.com/watch?v=Zd0Z1NF9yU0
+[ ] Hanging Leg Raise → Hanging KNEE raise variant
+    https://youtube.com/watch?v=yybIhG9-qok
+[ ] Barbell Power Clean → Full clean (not strictly power clean)
+    https://youtube.com/watch?v=vfnMtgVE6DM
+[ ] Cable Pullover → Barbell attached to cable (standard variant)
+    https://youtube.com/watch?v=LLaiYqBdRjI
+
+─────────────────────────────────────────────────
+SUMMARY:
+─────────────────────────────────────────────────
+Total entries in exerciseLibrary.ts : 93
+  - cardio protocols (no video)    : 25
+  - exercise entries               : 68
+Filled from fit-distance           : 63
+  - HIGH confidence                : 54
+  - MEDIUM confidence              : 8
+  - LOW confidence                 : 1
+Needs manual review                : 5
+Coverage (of 68)                   : 92.6%
