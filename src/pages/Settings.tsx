@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
-import { Settings as SettingsIcon, Globe, Bell, Shield, LogOut, ChevronRight } from 'lucide-react';
+import { Globe, Bell, Shield, LogOut, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export const Settings = () => {
@@ -18,72 +18,74 @@ export const Settings = () => {
     if (!user) return null;
 
     return (
-        <div className="max-w-2xl mx-auto space-y-6 animate-in fade-in duration-500 pb-20">
-            <div>
-                <h1 className="text-3xl font-bold text-white flex items-center gap-3">
-                    <SettingsIcon className="text-gold-400" size={28} />
-                    Settings
+        <div className="max-w-2xl mx-auto space-y-8 animate-in fade-in duration-500 pb-20">
+            {/* Editorial header */}
+            <header>
+                <span className="eyebrow block mb-2">{t('preferences')}</span>
+                <h1 className="display-headline text-5xl md:text-6xl text-on-surface">
+                    {t('settingsTitle')}<span className="text-primary-container">.</span>
                 </h1>
-                <p className="text-navy-200 mt-1">Manage your account preferences.</p>
-            </div>
+                <p className="text-on-surface-variant mt-3 font-light">{t('settingsSubtitle')}</p>
+            </header>
 
-            {/* Language */}
-            <div className="clay-card divide-y divide-white/[0.04]">
-                <div className="p-4">
-                    <h3 className="text-xs font-semibold uppercase tracking-widest text-navy-400 mb-1">Preferences</h3>
+            {/* Preferences card */}
+            <section className="clay-card overflow-hidden">
+                <div className="p-5">
+                    <span className="eyebrow text-on-surface-variant opacity-70">{t('preferences')}</span>
                 </div>
-                <div className="flex items-center justify-between p-4">
-                    <div className="flex items-center gap-3 text-white">
-                        <Globe size={18} className="text-navy-300" />
-                        <span>Language</span>
+                <div className="flex items-center justify-between p-5">
+                    <div className="flex items-center gap-3 text-on-surface">
+                        <Globe size={18} className="text-on-surface-variant" />
+                        <span>{t('language')}</span>
                     </div>
                     <button
                         onClick={() => setLang(lang === 'en' ? 'ar' : 'en')}
-                        className="clay-button bg-navy-800 hover:bg-navy-700 text-white px-4 py-1.5 text-sm"
+                        className="px-4 py-1.5 text-sm rounded-full bg-surface-container-highest text-on-surface hover:bg-surface-bright transition-colors font-label uppercase tracking-widest"
                     >
                         {lang === 'en' ? 'العربية' : 'English'}
                     </button>
                 </div>
-                <div className="flex items-center justify-between p-4">
-                    <div className="flex items-center gap-3 text-white">
-                        <Bell size={18} className="text-navy-300" />
-                        <span>Notifications</span>
+                <div className="flex items-center justify-between p-5" style={{ background: 'rgba(9, 14, 28, 0.4)' }}>
+                    <div className="flex items-center gap-3 text-on-surface">
+                        <Bell size={18} className="text-on-surface-variant" />
+                        <span>{t('notifications')}</span>
                     </div>
                     <button
                         onClick={() => setNotificationsEnabled(v => !v)}
-                        className={`relative w-11 h-6 rounded-full transition-colors ${notificationsEnabled ? 'bg-gold-500' : 'bg-navy-700'}`}
+                        className={`relative w-11 h-6 rounded-full transition-colors ${notificationsEnabled ? 'gold-gradient' : 'bg-surface-container-highest'}`}
                     >
-                        <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${notificationsEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
+                        <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-on-surface transition-transform ${notificationsEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
                     </button>
                 </div>
-            </div>
+            </section>
 
-            {/* Account */}
-            <div className="clay-card divide-y divide-white/[0.04]">
-                <div className="p-4">
-                    <h3 className="text-xs font-semibold uppercase tracking-widest text-navy-400 mb-1">Account</h3>
+            {/* Account card */}
+            <section className="clay-card overflow-hidden">
+                <div className="p-5">
+                    <span className="eyebrow text-on-surface-variant opacity-70">{t('accountSection')}</span>
                 </div>
                 <button
                     onClick={() => navigate('/profile')}
-                    className="w-full flex items-center justify-between p-4 hover:bg-white/[0.02] transition-colors"
+                    className="w-full flex items-center justify-between p-5 hover:bg-surface-container-highest/40 transition-colors"
                 >
-                    <div className="flex items-center gap-3 text-white">
-                        <Shield size={18} className="text-navy-300" />
-                        <span>View Profile</span>
+                    <div className="flex items-center gap-3 text-on-surface">
+                        <Shield size={18} className="text-on-surface-variant" />
+                        <span>{t('viewProfile')}</span>
                     </div>
-                    <ChevronRight size={16} className="text-navy-400" />
+                    <ChevronRight size={16} className="text-on-surface-variant" />
                 </button>
                 <button
                     onClick={handleLogout}
-                    className="w-full flex items-center gap-3 p-4 text-rose-400 hover:bg-rose-500/5 transition-colors"
+                    className="w-full flex items-center gap-3 p-5 text-rose-400 hover:bg-rose-500/5 transition-colors"
+                    style={{ background: 'rgba(9, 14, 28, 0.4)' }}
                 >
                     <LogOut size={18} />
                     <span>{t('signOut')}</span>
                 </button>
-            </div>
+            </section>
 
-            <div className="text-center text-navy-500 text-xs">
-                BioZackTeam v1.0.0
+            <div className="text-center text-on-surface-variant/40 text-xs uppercase tracking-widest">
+                BioZackTeam · v1.0.0
             </div>
         </div>
     );

@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { Play, Lock, Search, Plus, X, Youtube, Video as VideoIcon, Link2, Image } from 'lucide-react';
 import clsx from 'clsx';
+import { VideoWatermark } from '../components/shared/VideoWatermark';
 
 export const VideoLibrary = () => {
     const { videos, categories, addVideo, addCategory } = useData();
@@ -111,7 +112,7 @@ export const VideoLibrary = () => {
                 return url;
             }
         } catch {
-            return video.videoUrl;
+            return video.videoUrl ?? '';
         }
     };
 
@@ -434,15 +435,19 @@ export const VideoLibrary = () => {
                     </button>
                     
                     <div className="w-full max-w-5xl aspect-video px-4 animate-in zoom-in-95 duration-300">
-                        <iframe
-                            key={activeVideo.id}
-                            src={getEmbedUrl(activeVideo)}
-                            title={activeVideo.title}
-                            className="w-full h-full rounded-2xl shadow-2xl border-2 border-white/10"
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                            allowFullScreen
-                            referrerPolicy="strict-origin-when-cross-origin"
-                        ></iframe>
+                        <div className="relative w-full h-full">
+                            <iframe
+                                key={activeVideo.id}
+                                src={getEmbedUrl(activeVideo)}
+                                title={activeVideo.title}
+                                className="w-full h-full rounded-2xl shadow-2xl border-2 border-white/10"
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                                allowFullScreen
+                                referrerPolicy="strict-origin-when-cross-origin"
+                            ></iframe>
+                            {/* Per-user watermark — sibling overlay, pointer-events: none */}
+                            <VideoWatermark />
+                        </div>
                         <div className="mt-6 text-center">
                             <h2 className="text-2xl font-bold text-white mb-2">{activeVideo.title}</h2>
                             <p className="text-navy-200 max-w-2xl mx-auto">{activeVideo.description}</p>

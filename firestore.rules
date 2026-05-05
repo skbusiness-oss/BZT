@@ -2,13 +2,23 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ─── Helper: read the caller's role from their Firestore profile ───
+    // ─── Helpers ──────────────────────────────────────────────
+    // Role is always read from the user's Firestore doc — no hardcoded emails.
+    // AuthContext creates the doc on first login before any other writes.
     function role() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
+        : 'community';
     }
 
     function isCoach() {
-      return role() == 'coach' || role() == 'admin';
+      // Prefer the custom Auth claim (set by `setUserRole` Cloud Function) — no
+      // Firestore read, matches Storage rules. Falls back to the Firestore
+      // role for accounts that haven't been migrated yet.
+      return request.auth != null && (
+        request.auth.token.role in ['coach', 'admin']
+        || role() in ['coach', 'admin']
+      );
     }
 
     function isSignedIn() {
@@ -19,77 +29,179 @@ service cloud.firestore {
       return request.auth.uid == uid;
     }
 
-    // ─── users/{uid} ──────────────────────────────────────
-    // • Any user can read their own profile
-    // • Coach can read/write any user doc
-    // • Users can update their own doc BUT cannot change the role field
-    match /users/{uid} {
-      allow read: if isSignedIn() && (isOwner(uid) || isCoach());
-
-      // Coach can create/delete any user doc.
-      // Users can create their OWN doc (first login auto-create in AuthContext).
-      allow create: if isSignedIn() && (isOwner(uid) || isCoach());
-      allow delete: if isSignedIn() && isCoach();
-
-      // Coach can update anything; users can update own doc BUT cannot change 'role'
-      allow update: if isSignedIn()
-                    && (isCoach()
-                        || (isOwner(uid)
-                            && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role'])));
+    function isValidString(s, maxLen) {
+      return s is string && s.size() > 0 && s.size() <= maxLen;
     }
 
-    // ─── clients/{clientId} ───────────────────────────────
-    // Legacy collection — client reads own, coach reads/writes all
+    function canReadCourseData(course) {
+      return course.isPublished == true
+             && (course.accessTier == 'community'
+                 || (course.accessTier == 'client' && role() == 'client'));
+    }
+
+    function completedLesson(courseId, lessonId) {
+      let progressId = request.auth.uid + '_' + courseId + '_' + lessonId;
+      return exists(/databases/$(database)/documents/userLessonProgress/$(progressId))
+             && get(/databases/$(database)/documents/userLessonProgress/$(progressId)).data.status == 'completed';
+    }
+
+    function canReadLessonMetadata(courseId) {
+      let course = get(/databases/$(database)/documents/courses/$(courseId)).data;
+      return isCoach() || canReadCourseData(course);
+    }
+
+    function canReadLessonContentData(courseId, lesson) {
+      let course = get(/databases/$(database)/documents/courses/$(courseId)).data;
+      return isCoach()
+             || (course.isPublished == true
+                 && (lesson.isPreview == true
+                     || (canReadCourseData(course)
+                         && (lesson.isRequired != true
+                             || lesson.order <= 1
+                             || (lesson.prerequisiteLessonId is string
+                                 && completedLesson(courseId, lesson.prerequisiteLessonId))))));
+    }
+
+    function canReadLessonContentId(courseId, lessonId) {
+      let lesson = get(/databases/$(database)/documents/courses/$(courseId)/lessons/$(lessonId)).data;
+      return canReadLessonContentData(courseId, lesson);
+    }
+
+    function isValidLessonMetadata() {
+      return request.resource.data.keys().hasOnly(
+               ['title', 'description', 'thumbnailUrl', 'order', 'durationMinutes',
+                'isRequired', 'isPreview', 'prerequisiteLessonId', 'hasContent',
+                'createdBy', 'createdAt', 'updatedAt', 'archived']);
+    }
+
+    function isValidLessonContent(courseId, lessonId) {
+      return request.resource.data.keys().hasOnly(
+               ['id', 'lessonId', 'courseId', 'videoUrl', 'platform', 'resources', 'updatedAt'])
+             && request.resource.data.id == lessonId
+             && request.resource.data.lessonId == lessonId
+             && request.resource.data.courseId == courseId;
+    }
+
+    function isValidLessonProgressWrite(progressId) {
+      return request.resource.data.keys().hasOnly(
+               ['id', 'userId', 'courseId', 'lessonId', 'status',
+                'startedAt', 'completedAt', 'updatedAt'])
+             && request.resource.data.id == progressId
+             && request.resource.data.userId == request.auth.uid
+             && request.resource.data.status in ['started', 'completed']
+             && request.resource.data.courseId is string
+             && request.resource.data.lessonId is string
+             && canReadLessonContentId(request.resource.data.courseId, request.resource.data.lessonId);
+    }
+
+    // ─── publicProfiles/{uid} ──────────────────────────────────
+    // Public projection used by the leaderboard. Server-only writes:
+    // every field on this doc is set by Cloud Functions (`awardXp`,
+    // `setUserRole`, `setUserDisabled`). No client-side mutations.
+    match /publicProfiles/{uid} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+
+    // ─── users/{uid} ──────────────────────────────────────────
+    // Server-controlled fields:
+    //   - role           → setUserRole Cloud Function
+    //   - disabled       → setUserDisabled Cloud Function
+    //   - disabledAt     → setUserDisabled
+    //   - disabledBy     → setUserDisabled
+    //   - activityScore  → awardXp
+    //   - streak         → awardXp
+    //   - lastActiveAt   → awardXp
+    // Owner can update any other field on their own doc (display name,
+    // theme, profile bits). Coach can read all but mutates roles/disabled
+    // ONLY through the callable functions.
+    match /users/{uid} {
+      allow read: if isSignedIn() && (isOwner(uid) || isCoach());
+      allow create: if isSignedIn() && (isOwner(uid) || isCoach());
+      allow delete: if false; // deletions go through deleteUser Cloud Function
+      allow update: if isSignedIn() && isOwner(uid)
+                    && !request.resource.data.diff(resource.data).affectedKeys()
+                         .hasAny([
+                           'role', 'disabled', 'disabledAt', 'disabledBy',
+                           'activityScore', 'streak', 'lastActiveAt',
+                         ]);
+
+      // ── selfLogs subcollection ──────────────────────────────
+      // Community/client self-tracked weight + body measurements.
+      // Owner: full read/write. Coach/admin: read-only (view-as).
+      match /selfLogs/{logId} {
+        allow read: if isSignedIn() && (isOwner(uid) || isCoach());
+        allow create, update: if isSignedIn() && isOwner(uid)
+                              && request.resource.data.keys().hasOnly(
+                                   ['date', 'weight', 'measurements', 'metrics', 'notes', 'createdAt', 'updatedAt']);
+        allow delete: if isSignedIn() && isOwner(uid);
+      }
+    }
+
+    // ─── clients/{clientId} ───────────────────────────────────
     match /clients/{clientId} {
       allow read: if isSignedIn()
                   && (resource.data.userId == request.auth.uid || isCoach());
-      allow write: if isSignedIn() && isCoach();
+      allow create, delete: if isSignedIn() && isCoach();
+      allow update: if isSignedIn()
+                    && (isCoach()
+                        // Onboarding: client can update their own doc but not coach-managed fields
+                        || (resource.data.userId == request.auth.uid
+                            && resource.data.isOnboarding == true
+                            && !request.resource.data.diff(resource.data)
+                                 .affectedKeys().hasAny(['programLength', 'coachId', 'userId']))
+                        // Post-onboarding: stricter — also lock currentWeek
+                        || (resource.data.userId == request.auth.uid
+                            && resource.data.isOnboarding != true
+                            && !request.resource.data.diff(resource.data)
+                                 .affectedKeys().hasAny(['currentWeek', 'programLength', 'coachId', 'userId'])));
     }
 
-    // ─── checkIns/{checkInId} ─────────────────────────────
-    // • Client can read and update their own check-ins
-    // • Client CANNOT change coachFeedback or newMacros (coach-only fields)
-    // • Coach can read/write all check-ins
+    // ─── checkIns/{checkInId} ─────────────────────────────────
     match /checkIns/{checkInId} {
       allow read: if isSignedIn()
                   && (resource.data.clientId == request.auth.uid || isCoach());
 
-      // Coach full write
-      allow create, delete: if isSignedIn() && isCoach();
+      // Client can only create a checkIn for themselves; also enforce userId matches
+      allow create: if isSignedIn()
+                    && (isCoach()
+                        || (request.resource.data.clientId == request.auth.uid
+                            && request.resource.data.userId == request.auth.uid));
 
-      // Coach can update anything; client can update own check-ins minus protected fields
+      allow delete: if isSignedIn() && isCoach();
+
+      // Clients cannot touch coach-only fields. They CAN flip status from
+      // 'pending' to 'submitted' to submit their week (no other status changes).
       allow update: if isSignedIn()
                     && (isCoach()
                         || (resource.data.clientId == request.auth.uid
                             && !request.resource.data.diff(resource.data).affectedKeys()
-                                 .hasAny(['coachFeedback', 'newMacros', 'newTargets'])));
+                                 .hasAny(['coachFeedback', 'newMacros', 'newTargets', 'activeTargets'])
+                            && (
+                                 // Status unchanged
+                                 request.resource.data.status == resource.data.status
+                                 // OR transitioning pending → submitted
+                                 || (resource.data.status == 'pending'
+                                     && request.resource.data.status == 'submitted')
+                               )));
     }
 
-    // ─── courses/{courseId} ───────────────────────────────
-    // • Community users can only read courses where isLocked == false
-    // • client (VIP) + coach can read all
-    // • Only coach can write
-    match /courses/{courseId} {
+    // ─── videos/{videoId} ─────────────────────────────────────
+    match /videos/{videoId} {
       allow read: if isSignedIn()
                   && (isCoach()
                       || role() == 'client'
                       || resource.data.isLocked == false);
-      allow write: if isSignedIn() && isCoach();
+      allow create, update, delete: if isSignedIn() && isCoach();
     }
 
-    // ─── workouts/{workoutId} ─────────────────────────────
-    // • All logged-in users can read
-    // • Only coach can write
+    // ─── workouts/{workoutId} ─────────────────────────────────
     match /workouts/{workoutId} {
       allow read: if isSignedIn();
       allow write: if isSignedIn() && isCoach();
     }
 
-    // ─── messages/{messageId} ─────────────────────────────
-    // • Read only if you are the sender or receiver
-    // • Create only if senderId matches your uid
-    // • Update (mark read) only if you are the receiver
-    // • Delete: coach only
+    // ─── messages/{messageId} ─────────────────────────────────
     match /messages/{messageId} {
       allow read: if isSignedIn()
                   && (resource.data.senderId == request.auth.uid
@@ -97,10 +209,9 @@ service cloud.firestore {
 
       allow create: if isSignedIn()
                     && request.resource.data.senderId == request.auth.uid
-                    && request.resource.data.text is string
-                    && request.resource.data.text.size() > 0
-                    && request.resource.data.text.size() <= 2000;
+                    && isValidString(request.resource.data.text, 2000);
 
+      // Only mark-as-read updates allowed for the receiver
       allow update: if isSignedIn()
                     && resource.data.receiverId == request.auth.uid
                     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
@@ -108,42 +219,33 @@ service cloud.firestore {
       allow delete: if isSignedIn() && isCoach();
     }
 
-    // ─── posts/{postId} ───────────────────────────────────
-    // • All logged-in users can read
-    // • Create if authorId matches your uid
-    // • Author can edit their own content; any user can toggle likes; coach can do anything
-    // • Delete by coach or author only
+    // ─── posts/{postId} ───────────────────────────────────────
     match /posts/{postId} {
       allow read: if isSignedIn();
 
+      // authorId must match caller; authorRole must match caller's actual role
+      // (prevents spoofing e.g. a community member posting as 'coach')
       allow create: if isSignedIn()
                     && request.resource.data.authorId == request.auth.uid
-                    && request.resource.data.content is string
-                    && request.resource.data.content.size() > 0
-                    && request.resource.data.content.size() <= 5000;
+                    && request.resource.data.authorRole == role()
+                    && isValidString(request.resource.data.content, 5000);
 
-      // Author can change content; any signed-in user can update ONLY the likes array; coach can do anything
       allow update: if isSignedIn()
-                    && (
-                      isCoach()
-                      || resource.data.authorId == request.auth.uid
-                      || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes'])
-                    );
+                    && (isCoach()
+                        || resource.data.authorId == request.auth.uid
+                        || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes', 'commentCount']));
 
       allow delete: if isSignedIn()
                     && (isCoach() || resource.data.authorId == request.auth.uid);
 
-      // Subcollection: comments
+      // ── comments ────────────────────────────────────────────
       match /comments/{commentId} {
         allow read: if isSignedIn();
 
         allow create: if isSignedIn()
                       && request.resource.data.authorId == request.auth.uid
-                      && request.resource.data.content is string
-                      && request.resource.data.content.size() > 0
-                      && request.resource.data.content.size() <= 1000;
+                      && isValidString(request.resource.data.content, 1000);
 
-        // Author can edit their own comment; coach can moderate
         allow update: if isSignedIn()
                       && (isCoach() || resource.data.authorId == request.auth.uid);
 
@@ -152,12 +254,89 @@ service cloud.firestore {
       }
     }
 
-    // ─── settings/{docId} ─────────────────────────────────
-    // • All logged-in users can read (categories, config, etc.)
-    // • Only coach can write
+    // ─── libraryTags/{tagId} ──────────────────────────────────
+    match /libraryTags/{tagId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isSignedIn() && isCoach();
+    }
+
+    // ─── libraryCategories/{categoryId} ───────────────────────
+    match /libraryCategories/{categoryId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isSignedIn() && isCoach();
+    }
+
+    // ─── courses/{courseId} ───────────────────────────────────
+    // Coaches see all; others only see published courses.
+    match /courses/{courseId} {
+      allow read: if isSignedIn() && (isCoach() || canReadCourseData(resource.data));
+      allow create, update, delete: if isSignedIn() && isCoach();
+
+      match /lessons/{lessonId} {
+        allow read: if isSignedIn() && canReadLessonMetadata(courseId);
+        allow create: if isSignedIn() && isCoach() && isValidLessonMetadata();
+        allow update: if isSignedIn() && isCoach() && isValidLessonMetadata();
+        allow delete: if isSignedIn() && isCoach();
+      }
+
+      match /lessonContent/{lessonId} {
+        allow read: if isSignedIn() && canReadLessonContentId(courseId, lessonId);
+        allow create, update: if isSignedIn() && isCoach() && isValidLessonContent(courseId, lessonId);
+        allow delete: if isSignedIn() && isCoach();
+      }
+    }
+
+    // ─── userLessonProgress/{progressId} ─────────────────────
+    // progressId = "{userId}_{courseId}_{lessonId}"
+    match /userLessonProgress/{progressId} {
+      allow read: if isSignedIn() && (request.auth.uid == resource.data.userId || isCoach());
+      allow create: if isSignedIn()
+                    && progressId == request.auth.uid + '_' + request.resource.data.courseId + '_' + request.resource.data.lessonId
+                    && isValidLessonProgressWrite(progressId);
+      allow update: if isSignedIn()
+                    && resource.data.userId == request.auth.uid
+                    && request.resource.data.userId == resource.data.userId
+                    && request.resource.data.courseId == resource.data.courseId
+                    && request.resource.data.lessonId == resource.data.lessonId
+                    && isValidLessonProgressWrite(progressId);
+      allow delete: if false;
+    }
+
+    // ─── userCourseProgress/{progressId} ─────────────────────
+    // Legacy summary collection; course progress is now derived from userLessonProgress.
+    match /userCourseProgress/{progressId} {
+      allow read: if isSignedIn() && (request.auth.uid == resource.data.userId || isCoach());
+      allow create, update: if isSignedIn() && isCoach();
+      allow delete: if false;
+    }
+
+    // ─── settings/{docId} ─────────────────────────────────────
     match /settings/{docId} {
       allow read: if isSignedIn();
       allow write: if isSignedIn() && isCoach();
+    }
+
+    // ─── auditLog/{logId} ─────────────────────────────────────
+    // Coach-only audit trail. Append-only — no updates or deletes.
+    match /auditLog/{logId} {
+      allow read, create: if isSignedIn() && isCoach();
+      allow update, delete: if false;
+    }
+
+    // ─── deletionLogs/{uid} ───────────────────────────────────
+    // Per-user deletion log written when coach bans a community member.
+    // One doc per banned uid (overwritable on re-ban). Coach-only.
+    match /deletionLogs/{uid} {
+      allow read, create, update: if isSignedIn() && isCoach();
+      allow delete: if false;
+    }
+
+    // ─── userPrograms/{userId} ────────────────────────────────
+    // Stores each user's active training program.
+    // Users manage their own; coaches can assign to any user.
+    match /userPrograms/{userId} {
+      allow read: if isSignedIn() && (isOwner(userId) || isCoach());
+      allow write: if isSignedIn() && (isOwner(userId) || isCoach());
     }
   }
 }

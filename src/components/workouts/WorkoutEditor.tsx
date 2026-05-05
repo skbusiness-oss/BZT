@@ -73,7 +73,7 @@ const ExerciseRow = ({
                     onClick={onMoveUp}
                     disabled={isFirst}
                     title="Move up"
-                    className="w-6 h-6 rounded flex items-center justify-center text-navy-400 hover:text-white hover:bg-navy-700/60 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+                    className="w-6 h-6 rounded flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high/60 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
                 >
                     <ChevronUp size={14} />
                 </button>
@@ -81,14 +81,14 @@ const ExerciseRow = ({
                     onClick={onMoveDown}
                     disabled={isLast}
                     title="Move down"
-                    className="w-6 h-6 rounded flex items-center justify-center text-navy-400 hover:text-white hover:bg-navy-700/60 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+                    className="w-6 h-6 rounded flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high/60 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
                 >
                     <ChevronDown size={14} />
                 </button>
             </div>
 
             {/* Row number */}
-            <span className="text-xs font-bold text-navy-600 w-4 mt-2.5 shrink-0 select-none">
+            <span className="text-xs font-bold text-on-surface-variant/40 w-4 mt-2.5 shrink-0 select-none">
                 {index + 1}
             </span>
 
@@ -103,7 +103,7 @@ const ExerciseRow = ({
                 />
                 <div className="grid grid-cols-3 gap-2">
                     <div>
-                        <label className="text-[10px] text-navy-500 uppercase font-semibold tracking-wide">Sets</label>
+                        <label className="text-[10px] text-on-surface-variant/60 uppercase font-semibold tracking-wide">Sets</label>
                         <input
                             type="number" min="1"
                             value={exercise.sets}
@@ -112,7 +112,7 @@ const ExerciseRow = ({
                         />
                     </div>
                     <div>
-                        <label className="text-[10px] text-navy-500 uppercase font-semibold tracking-wide">Reps</label>
+                        <label className="text-[10px] text-on-surface-variant/60 uppercase font-semibold tracking-wide">Reps</label>
                         <input
                             type="text"
                             value={exercise.reps}
@@ -122,7 +122,7 @@ const ExerciseRow = ({
                         />
                     </div>
                     <div>
-                        <label className="text-[10px] text-navy-500 uppercase font-semibold tracking-wide">Rest (s)</label>
+                        <label className="text-[10px] text-on-surface-variant/60 uppercase font-semibold tracking-wide">Rest (s)</label>
                         <input
                             type="number" min="0"
                             value={exercise.restSeconds}
@@ -144,7 +144,7 @@ const ExerciseRow = ({
             <button
                 onClick={onRemove}
                 title="Remove exercise"
-                className="shrink-0 mt-1.5 w-7 h-7 rounded-lg flex items-center justify-center text-navy-500 hover:text-red-400 hover:bg-red-400/10 transition-colors"
+                className="shrink-0 mt-1.5 w-7 h-7 rounded-lg flex items-center justify-center text-on-surface-variant/60 hover:text-red-400 hover:bg-red-400/10 transition-colors"
             >
                 <Trash2 size={14} />
             </button>
@@ -183,7 +183,7 @@ const ExerciseSearchBar = ({
         <div ref={wrapRef} className="relative">
             {/* Input */}
             <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-navy-400 pointer-events-none" size={15} />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none" size={15} />
                 <input
                     type="text"
                     value={query}
@@ -194,7 +194,7 @@ const ExerciseSearchBar = ({
                 {isSearching && (
                     <Loader2
                         size={15}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-navy-400 animate-spin pointer-events-none"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant animate-spin pointer-events-none"
                     />
                 )}
             </div>
@@ -209,7 +209,7 @@ const ExerciseSearchBar = ({
                             className="flex items-center gap-3 w-full px-3 py-2.5 hover:bg-white/[0.04] transition-colors border-b border-white/[0.03] last:border-0 text-left group"
                         >
                             {/* Mini GIF */}
-                            <div className="w-10 h-10 rounded-lg overflow-hidden shrink-0 bg-navy-800/60">
+                            <div className="w-10 h-10 rounded-lg overflow-hidden shrink-0 bg-surface-container/60">
                                 {r.gifUrl && (
                                     <img
                                         src={r.gifUrl}
@@ -219,10 +219,10 @@ const ExerciseSearchBar = ({
                                     />
                                 )}
                             </div>
-                            <span className="flex-1 text-sm font-medium text-white capitalize group-hover:text-gold-300 transition-colors line-clamp-1">
+                            <span className="flex-1 text-sm font-medium text-on-surface capitalize group-hover:text-primary-fixed transition-colors line-clamp-1">
                                 {r.name}
                             </span>
-                            <Plus size={15} className="text-gold-400 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+                            <Plus size={15} className="text-primary shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
                         </button>
                     ))}
                 </div>
@@ -231,7 +231,7 @@ const ExerciseSearchBar = ({
             {/* Manual add link */}
             <button
                 onClick={onAddManual}
-                className="mt-2 text-xs text-gold-400 hover:text-gold-300 flex items-center gap-1 font-medium transition-colors"
+                className="mt-2 text-xs text-primary hover:text-primary-fixed flex items-center gap-1 font-medium transition-colors"
             >
                 <Plus size={13} /> Add exercise manually
             </button>
@@ -442,16 +442,16 @@ export const WorkoutEditor = ({
                 {/* ── Header ─────────────────────────────────── */}
                 <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.05] shrink-0">
                     <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-xl bg-gold-500/10 border border-gold-400/20 flex items-center justify-center shrink-0">
-                            <Dumbbell className="text-gold-400" size={16} />
+                        <div className="w-8 h-8 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+                            <Dumbbell className="text-primary" size={16} />
                         </div>
-                        <h2 className="text-xl font-bold text-white">
+                        <h2 className="text-xl font-bold text-on-surface">
                             {workout ? 'Edit Workout' : 'New Workout'}
                         </h2>
                     </div>
                     <button
                         onClick={onClose}
-                        className="w-8 h-8 rounded-lg hover:bg-white/[0.05] flex items-center justify-center text-navy-400 hover:text-white transition-colors"
+                        className="w-8 h-8 rounded-lg hover:bg-white/[0.05] flex items-center justify-center text-on-surface-variant hover:text-on-surface transition-colors"
                     >
                         <X size={18} />
                     </button>
@@ -463,7 +463,7 @@ export const WorkoutEditor = ({
                     {/* Metadata */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="md:col-span-2">
-                            <label className="block text-[11px] font-semibold text-navy-300 uppercase tracking-wider mb-1.5">
+                            <label className="block text-[11px] font-semibold text-on-surface/70 uppercase tracking-wider mb-1.5">
                                 Workout Name *
                             </label>
                             <input
@@ -475,7 +475,7 @@ export const WorkoutEditor = ({
                             />
                         </div>
                         <div className="md:col-span-2">
-                            <label className="block text-[11px] font-semibold text-navy-300 uppercase tracking-wider mb-1.5">
+                            <label className="block text-[11px] font-semibold text-on-surface/70 uppercase tracking-wider mb-1.5">
                                 Description
                             </label>
                             <textarea
@@ -487,7 +487,7 @@ export const WorkoutEditor = ({
                             />
                         </div>
                         <div>
-                            <label className="block text-[11px] font-semibold text-navy-300 uppercase tracking-wider mb-1.5">
+                            <label className="block text-[11px] font-semibold text-on-surface/70 uppercase tracking-wider mb-1.5">
                                 Split Type
                             </label>
                             <select
@@ -501,7 +501,7 @@ export const WorkoutEditor = ({
                             </select>
                         </div>
                         <div>
-                            <label className="block text-[11px] font-semibold text-navy-300 uppercase tracking-wider mb-1.5">
+                            <label className="block text-[11px] font-semibold text-on-surface/70 uppercase tracking-wider mb-1.5">
                                 Goal
                             </label>
                             <select
@@ -515,7 +515,7 @@ export const WorkoutEditor = ({
                             </select>
                         </div>
                         <div>
-                            <label className="block text-[11px] font-semibold text-navy-300 uppercase tracking-wider mb-1.5">
+                            <label className="block text-[11px] font-semibold text-on-surface/70 uppercase tracking-wider mb-1.5">
                                 Duration (min)
                             </label>
                             <input
@@ -529,10 +529,10 @@ export const WorkoutEditor = ({
                             <button
                                 onClick={() => setShowTemplates(v => !v)}
                                 className={clsx(
-                                    'w-full clay-button py-3 flex items-center justify-center gap-2 text-sm font-semibold transition-colors',
+                                    'w-full py-3 rounded-xl flex items-center justify-center gap-2 text-[10px] font-label font-bold uppercase tracking-widest transition-colors hover:scale-[1.02] active:scale-[0.98]',
                                     showTemplates
-                                        ? 'bg-gold-500/10 border border-gold-400/20 text-gold-400'
-                                        : 'bg-navy-800 hover:bg-navy-700 text-navy-200 hover:text-white'
+                                        ? 'bg-primary/10 border border-primary/20 text-primary'
+                                        : 'bg-surface-container hover:bg-surface-container-highest text-on-surface/70 hover:text-on-surface'
                                 )}
                             >
                                 <LayoutTemplate size={16} />
@@ -545,11 +545,11 @@ export const WorkoutEditor = ({
                     {showTemplates && (
                         <div className="clay-inset p-4 rounded-xl animate-in fade-in slide-in-from-top-2 duration-200 space-y-3">
                             <div className="flex items-center gap-3">
-                                <span className="text-sm font-bold text-white flex items-center gap-1.5">
-                                    <Layers size={15} className="text-gold-400" /> Choose a Template
+                                <span className="text-sm font-bold text-on-surface flex items-center gap-1.5">
+                                    <Layers size={15} className="text-primary" /> Choose a Template
                                 </span>
                                 <div className="relative flex-1">
-                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-navy-400 pointer-events-none" size={13} />
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none" size={13} />
                                     <input
                                         type="text"
                                         value={templateSearch}
@@ -564,25 +564,25 @@ export const WorkoutEditor = ({
                                     <button
                                         key={t.id}
                                         onClick={() => loadTemplate(t.id)}
-                                        className="text-left p-3 rounded-xl bg-navy-800/50 hover:bg-navy-700/60 border border-white/[0.04] hover:border-white/[0.08] transition-colors group"
+                                        className="text-left p-3 rounded-xl bg-surface-container/50 hover:bg-surface-container-high/60 border border-white/[0.04] hover:border-white/[0.08] transition-colors group"
                                     >
-                                        <p className="text-sm font-semibold text-white group-hover:text-gold-300 transition-colors line-clamp-1">
+                                        <p className="text-sm font-semibold text-on-surface group-hover:text-primary-fixed transition-colors line-clamp-1">
                                             {t.name}
                                         </p>
-                                        <p className="text-[10px] text-navy-500 mt-0.5">
+                                        <p className="text-[10px] text-on-surface-variant/60 mt-0.5">
                                             {t.exercises.length} exercises · {t.category}
                                         </p>
                                     </button>
                                 ))}
                                 {filteredTemplates.length === 0 && (
-                                    <p className="text-navy-400 text-sm col-span-3 text-center py-4">No templates match</p>
+                                    <p className="text-on-surface-variant text-sm col-span-3 text-center py-4">No templates match</p>
                                 )}
                             </div>
                         </div>
                     )}
 
                     {/* Mode toggle */}
-                    <div className="flex gap-2 p-1 bg-navy-900/60 rounded-xl w-fit border border-white/[0.04]">
+                    <div className="flex gap-2 p-1 bg-surface-container-low/60 rounded-xl w-fit border border-white/[0.04]">
                         {(['single', 'weekly'] as const).map(m => (
                             <button
                                 key={m}
@@ -590,8 +590,8 @@ export const WorkoutEditor = ({
                                 className={clsx(
                                     'px-5 py-2 rounded-lg text-sm font-semibold transition-all flex items-center gap-2',
                                     mode === m
-                                        ? 'bg-gradient-to-r from-gold-400 to-gold-600 text-navy-950 shadow-lg shadow-gold-400/15'
-                                        : 'text-navy-400 hover:text-white'
+                                        ? 'bg-gradient-to-r from-primary to-primary-container text-on-primary shadow-lg shadow-primary/15'
+                                        : 'text-on-surface-variant hover:text-on-surface'
                                 )}
                             >
                                 {m === 'single' ? <Dumbbell size={15} /> : <Calendar size={15} />}
@@ -604,7 +604,7 @@ export const WorkoutEditor = ({
                     {mode === 'single' && (
                         <div className="space-y-3">
                             {exercises.length === 0 && (
-                                <p className="text-navy-500 text-sm text-center py-4">
+                                <p className="text-on-surface-variant/60 text-sm text-center py-4">
                                     No exercises yet — search below or add manually.
                                 </p>
                             )}
@@ -645,18 +645,18 @@ export const WorkoutEditor = ({
                                             'flex flex-col items-center gap-1 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all border',
                                             activeDayIdx === i
                                                 ? day.type === 'rest'
-                                                    ? 'bg-navy-700 border-navy-500 text-white'
-                                                    : 'bg-gradient-to-b from-gold-400/20 to-gold-600/10 border-gold-400/30 text-gold-300'
-                                                : 'clay-card-sm border-transparent text-navy-400 hover:text-white'
+                                                    ? 'bg-surface-container-high border-outline-variant text-on-surface'
+                                                    : 'bg-gradient-to-b from-primary/20 to-primary-container/10 border-primary/30 text-primary-fixed'
+                                                : 'clay-card-sm border-transparent text-on-surface-variant hover:text-on-surface'
                                         )}
                                     >
                                         {day.type === 'rest'
-                                            ? <Moon size={14} className={activeDayIdx === i ? 'text-indigo-400' : 'text-navy-600'} />
-                                            : <Dumbbell size={14} className={activeDayIdx === i ? 'text-gold-400' : 'text-navy-600'} />
+                                            ? <Moon size={14} className={activeDayIdx === i ? 'text-indigo-400' : 'text-on-surface-variant/40'} />
+                                            : <Dumbbell size={14} className={activeDayIdx === i ? 'text-primary' : 'text-on-surface-variant/40'} />
                                         }
                                         <span>{DAYS_SHORT[i]}</span>
                                         {day.type === 'training' && day.exercises.length > 0 && (
-                                            <span className="w-4 h-4 rounded-full bg-gold-400/20 text-gold-400 text-[9px] font-bold flex items-center justify-center">
+                                            <span className="w-4 h-4 rounded-full bg-primary/20 text-primary text-[9px] font-bold flex items-center justify-center">
                                                 {day.exercises.length}
                                             </span>
                                         )}
@@ -668,10 +668,10 @@ export const WorkoutEditor = ({
                             <div className="clay-inset p-4 rounded-xl space-y-4">
                                 {/* Day header */}
                                 <div className="flex items-center justify-between">
-                                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                                    <h3 className="text-sm font-bold text-on-surface flex items-center gap-2">
                                         {activeDay.type === 'rest'
                                             ? <Moon size={16} className="text-indigo-400" />
-                                            : <Dumbbell size={16} className="text-gold-400" />
+                                            : <Dumbbell size={16} className="text-primary" />
                                         }
                                         {activeDay.label}
                                     </h3>
@@ -680,8 +680,8 @@ export const WorkoutEditor = ({
                                         className={clsx(
                                             'px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors border',
                                             activeDay.type === 'rest'
-                                                ? 'bg-navy-700 border-navy-600 text-navy-200 hover:text-white'
-                                                : 'bg-gold-500/10 border-gold-400/20 text-gold-400 hover:bg-gold-500/20'
+                                                ? 'bg-surface-container-high border-outline-variant text-on-surface hover:text-on-surface'
+                                                : 'bg-primary/10 border-primary/20 text-primary hover:bg-primary/20'
                                         )}
                                     >
                                         {activeDay.type === 'rest'
@@ -695,7 +695,7 @@ export const WorkoutEditor = ({
                                 {activeDay.type === 'rest' && (
                                     <div className="text-center py-8">
                                         <Moon className="text-indigo-400/30 mx-auto mb-2" size={36} />
-                                        <p className="text-navy-500 text-sm">
+                                        <p className="text-on-surface-variant/60 text-sm">
                                             Rest Day — Recovery &amp; Nutrition Focus
                                         </p>
                                     </div>
@@ -705,7 +705,7 @@ export const WorkoutEditor = ({
                                 {activeDay.type === 'training' && (
                                     <div className="space-y-3">
                                         {activeDay.exercises.length === 0 && (
-                                            <p className="text-navy-500 text-sm text-center py-3">
+                                            <p className="text-on-surface-variant/60 text-sm text-center py-3">
                                                 No exercises yet — search below or add manually.
                                             </p>
                                         )}
@@ -741,14 +741,14 @@ export const WorkoutEditor = ({
                 <div className="flex gap-3 px-5 py-4 border-t border-white/[0.05] shrink-0">
                     <button
                         onClick={onClose}
-                        className="flex-1 clay-button bg-navy-800 hover:bg-navy-700 text-white py-3 font-semibold"
+                        className="flex-1 py-3 rounded-xl font-label text-[10px] font-bold uppercase tracking-widest text-on-surface bg-surface-container hover:bg-surface-container-highest transition-colors"
                     >
                         Cancel
                     </button>
                     <button
                         onClick={handleSave}
                         disabled={!canSave}
-                        className="flex-1 clay-button bg-gradient-to-r from-gold-400 to-gold-600 disabled:from-navy-700 disabled:to-navy-700 disabled:text-navy-500 disabled:cursor-not-allowed text-navy-950 py-3 font-bold"
+                        className="flex-1 py-3 rounded-xl font-label text-[10px] font-bold uppercase tracking-widest text-on-primary bg-gradient-to-r from-primary to-primary-container disabled:opacity-50 disabled:cursor-not-allowed hover:scale-[1.02] active:scale-[0.98] transition-all"
                     >
                         {workout ? 'Save Changes' : 'Create Workout'}
                     </button>

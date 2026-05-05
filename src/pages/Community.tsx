@@ -1,40 +1,58 @@
 import { ExternalLink, MessageCircle, Users, Zap } from 'lucide-react';
+import { useLanguage } from '../context/LanguageContext';
 
 const DISCORD_INVITE = 'https://discord.gg/biozackteam';
 
 export const Community = () => {
+    const { t } = useLanguage();
     return (
-        <div className="max-w-xl mx-auto space-y-8 animate-in fade-in duration-500 pt-8">
-            {/* Header */}
-            <div className="text-center">
-                <div className="w-20 h-20 rounded-2xl mx-auto mb-6 flex items-center justify-center"
-                    style={{ background: 'linear-gradient(135deg, #5865F2, #404EED)' }}>
-                    <MessageCircle size={36} className="text-white" />
-                </div>
-                <h1 className="text-3xl font-bold text-white mb-2">Join the Community</h1>
-                <p className="text-navy-200">
+        <div className="max-w-xl mx-auto space-y-8 animate-in fade-in duration-500 pt-8 pb-20">
+            {/* Prominent gold-gradient Discord CTA at top */}
+            <a
+                href={DISCORD_INVITE}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-3 w-full px-6 py-4 rounded-full font-bold text-lg text-on-primary
+                           bg-gradient-to-r from-primary to-primary-container shadow-clay-gold
+                           active:scale-[0.98] hover:scale-[1.01] transition-transform"
+            >
+                <MessageCircle size={22} />
+                {t('joinDiscord')}
+                <ExternalLink size={16} className="opacity-70" />
+            </a>
+            <p className="text-on-surface-variant text-sm text-center -mt-4">
+                {t('discordDesc')}
+            </p>
+
+            {/* Editorial header */}
+            <header className="text-center">
+                <span className="font-label text-[10px] font-bold uppercase tracking-widest text-primary block mb-3">Members Lounge</span>
+                <h1 className="font-headline font-extrabold text-5xl md:text-6xl text-on-surface mb-4 tracking-tighter">
+                    Join the <span className="text-primary-container">Community</span>
+                </h1>
+                <p className="text-on-surface/70 font-body leading-relaxed max-w-md mx-auto">
                     Connect with fellow members, share your progress, ask questions,
                     and get support — all on Discord.
                 </p>
-            </div>
+            </header>
 
-            {/* Discord CTA Card */}
-            <div className="clay-card p-8 text-center space-y-6">
+            {/* Glass CTA Card */}
+            <section className="bg-surface-container-low rounded-2xl p-8 text-center space-y-8 ghost-border">
                 <div className="grid grid-cols-3 gap-4 text-sm">
-                    <div className="clay-card-sm p-4 flex flex-col items-center gap-2">
-                        <Users size={22} className="text-gold-400" />
-                        <span className="text-white font-medium">Members</span>
-                        <span className="text-navy-300 text-xs">Active community</span>
+                    <div className="bg-surface-container-lowest rounded-xl p-5 flex flex-col items-center gap-3 ghost-border">
+                        <Users size={24} className="text-primary" />
+                        <span className="text-on-surface font-headline font-bold text-sm">Members</span>
+                        <span className="text-on-surface/50 text-[10px] font-label uppercase tracking-widest">Active community</span>
                     </div>
-                    <div className="clay-card-sm p-4 flex flex-col items-center gap-2">
-                        <MessageCircle size={22} className="text-gold-400" />
-                        <span className="text-white font-medium">Channels</span>
-                        <span className="text-navy-300 text-xs">Tips, wins, Q&amp;A</span>
+                    <div className="bg-surface-container-lowest rounded-xl p-5 flex flex-col items-center gap-3 ghost-border">
+                        <MessageCircle size={24} className="text-primary" />
+                        <span className="text-on-surface font-headline font-bold text-sm">Channels</span>
+                        <span className="text-on-surface/50 text-[10px] font-label uppercase tracking-widest">Tips, wins, Q&amp;A</span>
                     </div>
-                    <div className="clay-card-sm p-4 flex flex-col items-center gap-2">
-                        <Zap size={22} className="text-gold-400" />
-                        <span className="text-white font-medium">Live</span>
-                        <span className="text-navy-300 text-xs">Coach events</span>
+                    <div className="bg-surface-container-lowest rounded-xl p-5 flex flex-col items-center gap-3 ghost-border">
+                        <Zap size={24} className="text-primary" />
+                        <span className="text-on-surface font-headline font-bold text-sm">Live</span>
+                        <span className="text-on-surface/50 text-[10px] font-label uppercase tracking-widest">Coach events</span>
                     </div>
                 </div>
 
@@ -42,7 +60,7 @@ export const Community = () => {
                     href={DISCORD_INVITE}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-3 w-full justify-center clay-button text-white font-bold py-4 px-8 text-lg transition-transform active:scale-95"
+                    className="inline-flex items-center gap-3 w-full justify-center text-on-surface font-bold py-5 px-8 text-sm uppercase tracking-[0.15em] rounded-full shadow-lg active:scale-95 transition-transform"
                     style={{ background: 'linear-gradient(135deg, #5865F2, #404EED)' }}
                 >
                     <MessageCircle size={22} />
@@ -50,10 +68,10 @@ export const Community = () => {
                     <ExternalLink size={16} className="opacity-70" />
                 </a>
 
-                <p className="text-navy-400 text-xs">
-                    Opens Discord in a new tab. Free to join.
+                <p className="text-on-surface/40 text-[10px] font-label uppercase tracking-widest font-bold">
+                    Opens Discord in a new tab · Free to join
                 </p>
-            </div>
+            </section>
         </div>
     );
 };

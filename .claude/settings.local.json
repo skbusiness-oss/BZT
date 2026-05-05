@@ -1,7 +1,18 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(npm run:*)",
+      "Bash(firebase deploy:*)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:github.com)",
+      "Bash(wc -l /c/Users/MED/.gemini/antigravity/scratch/biozack-fitness/src/context/*.tsx)",
+      "Bash(grep -v \"^--$\")",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(curl -sL \"https://api.github.com/repos/Snouzy/workout-cool\")",
+      "Bash(curl -sL \"https://api.github.com/search/repositories?q=workout-cool+user:Snouzy\")"
     ]
   }
 }

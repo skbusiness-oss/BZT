@@ -10,7 +10,7 @@ import { useEffect, useState } from 'react';
 import { useLanguage } from '../../context/LanguageContext';
 import { ExerciseDetail } from '../../types';
 import { getExerciseByName } from '../../lib/exerciseService';
-import { X, AlertCircle, Dumbbell, Target, BookOpen, AlertTriangle, Wrench } from 'lucide-react';
+import { X, Dumbbell, AlertTriangle, Wrench, Play, Lightbulb, ListOrdered } from 'lucide-react';
 
 interface ExerciseModalProps {
     exerciseName: string;
@@ -42,47 +42,55 @@ export const ExerciseModal = ({ exerciseName, exerciseDetail, onClose }: Exercis
     // Fallback: no data found
     if (!exerciseDetail) {
         return (
-            <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 animate-in fade-in duration-200" onClick={onClose}>
+            <>
+                <div className="fixed inset-0 bg-surface-container-lowest/80 backdrop-blur-sm z-40 animate-in fade-in duration-200" onClick={onClose} />
                 <div
-                    className="bg-navy-900 border border-white/10 rounded-t-3xl sm:rounded-3xl w-full sm:max-w-lg max-h-[85vh] overflow-y-auto animate-in slide-in-from-bottom-5 duration-300"
+                    className="fixed inset-x-0 bottom-0 z-50 flex flex-col max-h-[85vh] bg-surface-container-highest/95 backdrop-blur-2xl rounded-t-[2rem] shadow-[0_-10px_40px_rgba(0,0,0,0.5)] transition-transform duration-500 ease-out animate-in slide-in-from-bottom-full"
                     onClick={e => e.stopPropagation()}
                     dir={isRTL ? 'rtl' : 'ltr'}
                 >
-                    <div className="p-6">
-                        <div className="flex items-center justify-between mb-6">
-                            <h2 className="text-xl font-bold text-white">{exerciseName}</h2>
-                            <button onClick={onClose} className="text-white/40 hover:text-white p-1">
-                                <X size={24} />
-                            </button>
-                        </div>
+                    <div className="w-full flex justify-center py-4 shrink-0">
+                        <div className="w-12 h-1.5 bg-on-surface/20 rounded-full" />
+                    </div>
+                    
+                    <button onClick={onClose} className="absolute top-4 right-6 w-10 h-10 flex items-center justify-center rounded-full bg-surface-container/50 text-on-surface hover:bg-surface-bright transition-colors z-10" style={{ [isRTL ? 'left' : 'right']: '1.5rem', [isRTL ? 'right' : 'left']: 'auto' }}>
+                        <X size={20} />
+                    </button>
+
+                    <div className="flex-1 overflow-y-auto pb-12 px-6">
+                        <h2 className="text-3xl font-headline font-extrabold text-on-surface mb-6">{exerciseName}</h2>
                         {remoteGif ? (
-                            <div className="w-full aspect-video bg-navy-950 rounded-2xl overflow-hidden mb-4">
-                                <img src={remoteGif} alt={exerciseName} className="w-full h-full object-cover" />
+                            <div className="w-full aspect-video rounded-xl ghost-border bg-surface-container-lowest relative overflow-hidden mb-6">
+                                <img src={remoteGif} alt={exerciseName} className="w-full h-full object-cover opacity-80" />
+                                <div className="absolute inset-0 border-2 border-primary/30 rounded-xl pointer-events-none" />
                             </div>
                         ) : (
-                            <div className="flex flex-col items-center py-12 text-center">
-                                <Dumbbell className="text-navy-500 mb-4" size={48} />
-                                <p className="text-navy-300 text-lg font-medium">
+                            <div className="flex flex-col items-center py-12 text-center bg-surface-container-low rounded-xl ghost-border mb-6">
+                                <Dumbbell className="text-on-surface/30 mb-4" size={48} />
+                                <p className="text-on-surface/60 text-lg font-body">
                                     {isAr ? 'تفاصيل هذا التمرين قريباً' : 'Exercise details coming soon'}
-                                </p>
-                                <p className="text-navy-500 text-sm mt-2">
-                                    {isAr ? 'اسأل مدربك إذا احتجت تعليمات' : 'Ask your coach if you need instructions'}
                                 </p>
                             </div>
                         )}
                         {remoteInstructions.length > 0 && (
-                            <ol className="space-y-2 ps-1 mt-2">
-                                {remoteInstructions.map((step, i) => (
-                                    <li key={i} className="flex gap-3 text-sm text-navy-200">
-                                        <span className="text-blue-400 font-bold shrink-0 w-5 text-center">{i + 1}</span>
-                                        <span>{step}</span>
-                                    </li>
-                                ))}
-                            </ol>
+                            <div className="space-y-4">
+                                <h3 className="text-xl font-headline font-bold flex items-center gap-3">
+                                    <ListOrdered size={20} className="text-primary" />
+                                    {isAr ? 'الخطوات' : 'Execution Steps'}
+                                </h3>
+                                <div className="space-y-4">
+                                    {remoteInstructions.map((step, i) => (
+                                        <div key={i} className="flex gap-4 items-start group">
+                                            <div className="flex-none w-8 h-8 rounded-full bg-surface-container-highest border border-primary/40 flex items-center justify-center text-primary font-headline font-bold text-sm">{i + 1}</div>
+                                            <p className="text-on-surface/80 leading-relaxed font-body pt-1">{step}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
                         )}
                     </div>
                 </div>
-            </div>
+            </>
         );
     }
 
@@ -95,142 +103,147 @@ export const ExerciseModal = ({ exerciseName, exerciseDetail, onClose }: Exercis
     const equipment = isAr ? exerciseDetail.equipmentAr : exerciseDetail.equipment;
 
     return (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 animate-in fade-in duration-200" onClick={onClose}>
+        <>
+            {/* Modal Backdrop */}
+            <div className="fixed inset-0 bg-surface-container-lowest/80 backdrop-blur-sm z-40 animate-in fade-in duration-200" onClick={onClose} />
+            
+            {/* Bottom Sheet Modal */}
             <div
-                className="bg-navy-900 border border-white/10 rounded-t-3xl sm:rounded-3xl w-full sm:max-w-lg max-h-[90vh] overflow-y-auto animate-in slide-in-from-bottom-5 duration-300"
+                className="fixed inset-x-0 bottom-0 z-50 flex flex-col max-h-[85vh] bg-surface-container-highest/95 backdrop-blur-2xl rounded-t-[2rem] shadow-[0_-10px_40px_rgba(0,0,0,0.5)] transition-transform duration-500 ease-out animate-in slide-in-from-bottom-full"
                 onClick={e => e.stopPropagation()}
                 dir={isRTL ? 'rtl' : 'ltr'}
             >
-                {/* Video: YouTube embed > local GIF > ExerciseDB fallback */}
-                {exerciseDetail.videoId ? (
-                    <div className="w-full aspect-video bg-navy-950 rounded-t-3xl overflow-hidden">
-                        <iframe
-                            src={`https://www.youtube.com/embed/${exerciseDetail.videoId}?autoplay=1&mute=1&loop=1&playlist=${exerciseDetail.videoId}&controls=1&rel=0&modestbranding=1&playsinline=1`}
-                            className="w-full h-full"
-                            style={{ border: 'none' }}
-                            allow="autoplay; encrypted-media; picture-in-picture"
-                            allowFullScreen
-                            title={exerciseDetail.canonicalName}
-                        />
-                    </div>
-                ) : (() => {
-                    const src = (!imgError && exerciseDetail.gifUrl) || remoteGif;
-                    return src;
-                })() ? (
-                    <div className="w-full aspect-video bg-navy-950 rounded-t-3xl overflow-hidden">
-                        <img
-                            src={(!imgError && exerciseDetail.gifUrl) || remoteGif || ''}
-                            alt={name}
-                            className="w-full h-full object-cover"
-                            onError={() => setImgError(true)}
-                        />
-                    </div>
-                ) : (
-                    <div className="w-full aspect-video bg-navy-950 rounded-t-3xl flex items-center justify-center">
-                        <Dumbbell className="text-navy-700" size={64} />
-                    </div>
-                )}
+                {/* Grab Handle */}
+                <div className="w-full flex justify-center py-4 shrink-0">
+                    <div className="w-12 h-1.5 bg-on-surface/20 rounded-full" />
+                </div>
 
-                <div className="p-6 space-y-5">
-                    {/* Header */}
-                    <div className="flex items-center justify-between">
-                        <h2 className="text-xl font-bold text-white flex-1">{name}</h2>
-                        <button onClick={onClose} className="text-white/40 hover:text-white p-1 ms-3">
-                            <X size={24} />
-                        </button>
-                    </div>
+                {/* Scrollable Content */}
+                <div className="flex-1 overflow-y-auto pb-12 px-6 no-scrollbar">
+                    {/* Close Button */}
+                    <button onClick={onClose} className="absolute top-4 right-6 w-10 h-10 flex items-center justify-center rounded-full bg-surface-container/50 text-on-surface hover:bg-surface-bright transition-colors z-10" style={{ [isRTL ? 'left' : 'right']: '1.5rem', [isRTL ? 'right' : 'left']: 'auto' }}>
+                        <X size={20} />
+                    </button>
 
-                    {/* Equipment */}
-                    {equipment && (
-                        <div className="flex items-center gap-2 text-navy-300">
-                            <Wrench size={16} className="text-gold-400 shrink-0" />
-                            <span className="text-sm">{equipment}</span>
+                    {/* Media Player Section */}
+                    <div className="relative group mt-2 mb-8">
+                        <div className="aspect-video w-full overflow-hidden rounded-xl ghost-border bg-surface-container-lowest relative">
+                            {exerciseDetail.videoId ? (
+                                <iframe
+                                    src={`https://www.youtube.com/embed/${exerciseDetail.videoId}?autoplay=1&mute=1&loop=1&playlist=${exerciseDetail.videoId}&controls=1&rel=0&modestbranding=1&playsinline=1`}
+                                    className="w-full h-full opacity-90"
+                                    style={{ border: 'none' }}
+                                    allow="autoplay; encrypted-media; picture-in-picture"
+                                    allowFullScreen
+                                    title={exerciseDetail.canonicalName}
+                                />
+                            ) : (() => {
+                                const src = (!imgError && exerciseDetail.gifUrl) || remoteGif;
+                                return src;
+                            })() ? (
+                                <>
+                                    <img src={(!imgError && exerciseDetail.gifUrl) || remoteGif || ''} alt={name} className="w-full h-full object-cover opacity-80" onError={() => setImgError(true)} />
+                                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                        <div className="w-16 h-16 rounded-full bg-gradient-to-br from-primary to-primary-container flex items-center justify-center shadow-lg opacity-80">
+                                            <Play size={32} className="text-on-primary fill-current ml-1" />
+                                        </div>
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="w-full h-full flex items-center justify-center">
+                                    <Dumbbell className="text-on-surface/30" size={64} />
+                                </div>
+                            )}
+                            {/* Gold Frame Overlay */}
+                            <div className="absolute inset-0 border-2 border-primary/30 rounded-xl pointer-events-none" />
                         </div>
-                    )}
+                    </div>
 
-                    {/* Muscle Groups */}
-                    <div className="space-y-2">
-                        <div className="flex items-center gap-2">
-                            <Target size={16} className="text-orange-400 shrink-0" />
-                            <span className="text-xs font-bold uppercase text-orange-400 tracking-wider">
-                                {isAr ? 'العضلات المستهدفة' : 'Target Muscles'}
-                            </span>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
+                    {/* Title & Metadata */}
+                    <div className="mb-10">
+                        <div className="flex flex-wrap gap-2 mb-4">
                             {primaryMuscles.map((m, i) => (
-                                <span key={i} className="px-3 py-1 rounded-full bg-orange-500/15 text-orange-300 text-xs font-medium">
+                                <span key={`p-${i}`} className="px-4 py-1.5 rounded-full bg-surface-container-highest text-primary font-label text-[11px] font-bold uppercase tracking-widest border border-primary/10">
                                     {m}
                                 </span>
                             ))}
                             {secondaryMuscles.map((m, i) => (
-                                <span key={`s-${i}`} className="px-3 py-1 rounded-full bg-white/5 text-navy-300 text-xs font-medium">
+                                <span key={`s-${i}`} className="px-4 py-1.5 rounded-full bg-surface-container-highest text-on-surface/60 font-label text-[11px] font-bold uppercase tracking-widest border border-outline-variant/30">
                                     {m}
                                 </span>
                             ))}
+                            {equipment && (
+                                <span className="px-4 py-1.5 rounded-full bg-surface-container-highest text-on-surface/60 font-label text-[11px] font-bold uppercase tracking-widest border border-outline-variant/30 flex items-center gap-1.5">
+                                    <Wrench size={12} /> {equipment}
+                                </span>
+                            )}
                         </div>
+                        <h2 className="text-4xl md:text-5xl font-headline font-extrabold text-on-surface tracking-tight leading-tight">{name}</h2>
                     </div>
 
-                    {/* Instructions */}
+                    {/* Instructions Section */}
                     {instructions.length > 0 && (
-                        <div className="space-y-2">
-                            <div className="flex items-center gap-2">
-                                <BookOpen size={16} className="text-blue-400 shrink-0" />
-                                <span className="text-xs font-bold uppercase text-blue-400 tracking-wider">
-                                    {isAr ? 'الخطوات' : 'Instructions'}
-                                </span>
-                            </div>
-                            <ol className="space-y-2 ps-1">
+                        <div className="mb-10">
+                            <h3 className="text-xl font-headline font-bold mb-6 flex items-center gap-3">
+                                <ListOrdered size={24} className="text-primary" />
+                                {isAr ? 'الخطوات' : 'Execution Steps'}
+                            </h3>
+                            <div className="space-y-6">
                                 {instructions.map((step, i) => (
-                                    <li key={i} className="flex gap-3 text-sm text-navy-200">
-                                        <span className="text-blue-400 font-bold shrink-0 w-5 text-center">{i + 1}</span>
-                                        <span>{step}</span>
-                                    </li>
+                                    <div key={i} className="flex gap-6 items-start group">
+                                        <div className="flex-none w-8 h-8 rounded-full bg-surface-container-highest border border-primary/40 flex items-center justify-center text-primary font-headline font-bold text-sm">{i + 1}</div>
+                                        <p className="text-on-surface/80 leading-relaxed font-body pt-1">{step}</p>
+                                    </div>
                                 ))}
-                            </ol>
+                            </div>
                         </div>
                     )}
 
-                    {/* Tips */}
+                    {/* Coach Tips Section */}
                     {tips.length > 0 && (
-                        <div className="space-y-2">
-                            <div className="flex items-center gap-2">
-                                <AlertCircle size={16} className="text-emerald-400 shrink-0" />
-                                <span className="text-xs font-bold uppercase text-emerald-400 tracking-wider">
-                                    {isAr ? 'نصائح المدرب' : 'Coach Tips'}
-                                </span>
+                        <div className="p-6 bg-surface-container rounded-xl border-l-4 border-primary relative overflow-hidden mb-8">
+                            <div className="absolute top-0 right-0 p-4 opacity-10" style={{ [isRTL ? 'left' : 'right']: 0, [isRTL ? 'right' : 'auto']: 'auto' }}>
+                                <Lightbulb size={64} />
                             </div>
-                            <ul className="space-y-1.5">
+                            <h4 className="text-primary font-headline font-bold text-lg mb-2 uppercase tracking-wide">
+                                {isAr ? 'نصائح المدرب' : "Coach Zack's Insights"}
+                            </h4>
+                            <div className="space-y-3 relative z-10">
                                 {tips.map((tip, i) => (
-                                    <li key={i} className="flex gap-2 text-sm text-navy-200">
-                                        <span className="text-emerald-400 mt-0.5">•</span>
-                                        <span>{tip}</span>
-                                    </li>
+                                    <p key={i} className="text-on-surface/90 leading-relaxed font-body italic">"{tip}"</p>
                                 ))}
-                            </ul>
+                            </div>
                         </div>
                     )}
 
                     {/* Common Mistakes */}
                     {mistakes.length > 0 && (
-                        <div className="space-y-2">
-                            <div className="flex items-center gap-2">
-                                <AlertTriangle size={16} className="text-red-400 shrink-0" />
-                                <span className="text-xs font-bold uppercase text-red-400 tracking-wider">
-                                    {isAr ? 'أخطاء شائعة' : 'Common Mistakes'}
-                                </span>
+                        <div className="p-6 bg-red-900/10 rounded-xl border-l-4 border-red-500 relative overflow-hidden mb-12">
+                            <div className="absolute top-0 right-0 p-4 opacity-5">
+                                <AlertTriangle size={64} />
                             </div>
-                            <ul className="space-y-1.5">
+                            <h4 className="text-red-400 font-headline font-bold text-lg mb-2 uppercase tracking-wide">
+                                {isAr ? 'أخطاء شائعة' : 'Common Mistakes to Avoid'}
+                            </h4>
+                            <ul className="space-y-2 relative z-10">
                                 {mistakes.map((m, i) => (
-                                    <li key={i} className="flex gap-2 text-sm text-red-300/80">
-                                        <span className="text-red-400 mt-0.5">✗</span>
+                                    <li key={i} className="flex gap-3 text-on-surface/80 leading-relaxed font-body">
+                                        <span className="text-red-500 mt-1 shrink-0"><X size={16} /></span>
                                         <span>{m}</span>
                                     </li>
                                 ))}
                             </ul>
                         </div>
                     )}
+                    
+                    {/* Sticky Bottom CTA */}
+                    <div className="sticky bottom-0 left-0 w-full pt-4 bg-gradient-to-t from-surface-container-highest via-surface-container-highest/80 to-transparent pb-4">
+                        <button onClick={onClose} className="w-full py-4 rounded-full text-[12px] uppercase tracking-widest text-on-primary font-bold bg-gradient-to-r from-primary to-primary-container shadow-[0_5px_15px_rgba(230,195,100,0.3)] hover:scale-[1.02] active:scale-[0.98] transition-all">
+                            {isAr ? 'فهمت' : 'Got it'}
+                        </button>
+                    </div>
                 </div>
             </div>
-        </div>
+        </>
     );
 };

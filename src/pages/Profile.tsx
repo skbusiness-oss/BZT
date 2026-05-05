@@ -1,62 +1,148 @@
-import React from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useData } from '../context/DataContext';
 import { useLanguage } from '../context/LanguageContext';
-import { UserCircle, Mail, Shield, Calendar } from 'lucide-react';
+import { Mail, Shield, Calendar, User, Award, Activity } from 'lucide-react';
+import { ProgressPanel } from '../components/profile/ProgressPanel';
+
+function calculateAge(birthdate: string): number {
+    const birth = new Date(birthdate);
+    const today = new Date();
+    let age = today.getFullYear() - birth.getFullYear();
+    const m = today.getMonth() - birth.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+    return age;
+}
+
+const LEVEL_STYLES: Record<string, { color: string; emoji: string }> = {
+    beginner: { color: 'emerald', emoji: '🟢' },
+    intermediate: { color: 'yellow', emoji: '🟡' },
+    pro_competitions: { color: 'red', emoji: '🔴' },
+};
+
+const LEVEL_LABEL_KEY: Record<string, string> = {
+    beginner: 'beginner',
+    intermediate: 'intermediate',
+    pro_competitions: 'proCompetitions',
+};
 
 export const Profile = () => {
     const { user } = useAuth();
+    const { clients } = useData();
     const { t } = useLanguage();
 
     if (!user) return null;
 
-    return (
-        <div className="max-w-2xl mx-auto space-y-8 animate-in fade-in duration-500 pt-8">
-            <h1 className="text-3xl font-bold text-white">{t('profileTitle')}</h1>
+    const client = clients.find(c => c.userId === user.id);
 
-            <div className="clay-card p-8 flex flex-col items-center text-center">
-                <div className="w-24 h-24 rounded-full p-1 mb-4" style={{ background: 'linear-gradient(135deg, #ffd740, #3f51b5)' }}>
-                    <div className="w-full h-full rounded-full bg-navy-950 flex items-center justify-center overflow-hidden">
-                        {user.avatarUrl ? (
-                            <img src={user.avatarUrl} alt={user.name} className="w-full h-full object-cover" />
-                        ) : (
-                            <span className="text-4xl font-bold text-white">{user.name.charAt(0)}</span>
+    return (
+        <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500 pt-4 pb-20">
+            {/* Editorial header */}
+            <header className="mb-10">
+                <span className="font-label text-[10px] font-bold uppercase tracking-widest text-primary block mb-2">Member Identity</span>
+                <h1 className="font-headline font-extrabold text-5xl md:text-6xl text-on-surface tracking-tighter">
+                    {t('profileTitle')}<span className="text-primary-container">.</span>
+                </h1>
+            </header>
+
+            {/* Identity hero card */}
+            <section className="bg-surface-container-low p-10 md:p-12 rounded-2xl flex flex-col items-center text-center ghost-border relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-[60px] -translate-y-1/2 translate-x-1/3 pointer-events-none" />
+                
+                <div className="relative z-10">
+                    <div className="w-32 h-32 rounded-full p-1 mb-6 bg-gradient-to-br from-primary to-primary-container ring-1 ring-primary/20 shadow-[0_10px_30px_rgba(230,195,100,0.2)] mx-auto">
+                        <div className="w-full h-full rounded-full bg-surface-container flex items-center justify-center overflow-hidden">
+                            {user.avatarUrl ? (
+                                <img src={user.avatarUrl} alt={user.name} className="w-full h-full object-cover" />
+                            ) : (
+                                <span className="text-5xl font-headline font-extrabold text-on-surface">{user.name.charAt(0)}</span>
+                            )}
+                        </div>
+                    </div>
+
+                    <h2 className="text-4xl font-headline font-extrabold text-on-surface tracking-tight mb-2">{user.name}</h2>
+                    <p className="text-on-surface/60 font-body text-sm mb-6">{user.email}</p>
+
+                    <div className="inline-flex">
+                        <span className="px-5 py-2.5 rounded-full bg-surface-container-highest text-primary text-[10px] font-label font-bold uppercase tracking-widest border border-primary/20 inline-flex items-center gap-2 shadow-lg shadow-surface-container-lowest">
+                            <Shield size={14} /> {t(user.role as any)}
+                        </span>
+                    </div>
+                </div>
+            </section>
+
+            {/* Personal Details — only show for clients with data */}
+            {client && (client.birthdate || client.gender || client.fitnessLevel) && (
+                <section className="bg-surface-container-low rounded-2xl p-8 ghost-border space-y-2">
+                    <div className="flex items-center gap-3 mb-6">
+                        <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20">
+                            <User size={20} className="text-primary" />
+                        </div>
+                        <h3 className="font-headline font-bold text-2xl text-on-surface tracking-tight">{t('personalDetails')}</h3>
+                    </div>
+
+                    <div className="space-y-1 bg-surface-container-lowest rounded-xl border border-outline-variant/30 p-2">
+                        {client.birthdate && (
+                            <Row icon={<Calendar size={18} />} label={t('age')} value={`${calculateAge(client.birthdate)} ${t('yearsOld')}`} isLast={!client.gender && !client.fitnessLevel} />
+                        )}
+                        {client.gender && (
+                            <Row icon={<User size={18} />} label={t('gender')} value={`${client.gender === 'male' ? '♂' : '♀'} ${t(client.gender as any)}`} isLast={!client.fitnessLevel} />
+                        )}
+                        {client.fitnessLevel && (
+                            <Row
+                                icon={<Award size={18} />}
+                                label={t('fitnessLevel')}
+                                isLast={true}
+                                value={
+                                    <span className={`px-3 py-1.5 rounded-md text-[10px] font-label font-bold uppercase tracking-widest bg-${LEVEL_STYLES[client.fitnessLevel]?.color ?? 'slate'}-500/10 text-${LEVEL_STYLES[client.fitnessLevel]?.color ?? 'slate'}-400 inline-flex items-center gap-1.5 border border-${LEVEL_STYLES[client.fitnessLevel]?.color ?? 'slate'}-500/20`}>
+                                        <span className="text-sm">{LEVEL_STYLES[client.fitnessLevel]?.emoji}</span> {t((LEVEL_LABEL_KEY[client.fitnessLevel] ?? client.fitnessLevel) as any)}
+                                    </span>
+                                }
+                            />
                         )}
                     </div>
-                </div>
+                </section>
+            )}
 
-                <h2 className="text-2xl font-bold text-white">{user.name}</h2>
-                <p className="text-navy-200">{user.email}</p>
-
-                <div className="mt-6 flex gap-3">
-                    <span className="px-3 py-1 rounded-full clay-card-sm text-gold-400 text-sm font-medium capitalize flex items-center gap-2">
-                        <Shield size={14} /> {t(user.role as any)}
-                    </span>
-                </div>
-            </div>
-
-            <div className="clay-card p-6 space-y-4">
-                <h3 className="font-bold text-white border-b border-white/[0.04] pb-2">{t('accountInfo')}</h3>
-
-                <div className="flex items-center justify-between py-2">
-                    <div className="flex items-center gap-3 text-navy-200">
-                        <Mail size={18} />
-                        <span>{t('email')}</span>
+            <section className="bg-surface-container-low rounded-2xl p-8 ghost-border space-y-2">
+                <div className="flex items-center gap-3 mb-6">
+                    <div className="w-10 h-10 rounded-xl bg-surface-container flex items-center justify-center border border-outline-variant/30">
+                        <Shield size={20} className="text-on-surface/50" />
                     </div>
-                    <span className="text-white">{user.email}</span>
+                    <h3 className="font-headline font-bold text-2xl text-on-surface tracking-tight">{t('accountInfo')}</h3>
                 </div>
+                <div className="space-y-1 bg-surface-container-lowest rounded-xl border border-outline-variant/30 p-2">
+                    <Row icon={<Mail size={18} />} label={t('email')} value={user.email} isLast={false} />
+                    <Row icon={<Calendar size={18} />} label={t('memberSince')} value="Feb 2026" isLast={true} />
+                </div>
+            </section>
 
-                <div className="flex items-center justify-between py-2">
-                    <div className="flex items-center gap-3 text-navy-200">
-                        <Calendar size={18} />
-                        <span>{t('memberSince')}</span>
+            {(user.role === 'client' || user.role === 'community') && (
+                <section>
+                    <div className="flex items-center gap-3 mb-6 px-2">
+                        <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20">
+                            <Activity size={20} className="text-primary" />
+                        </div>
+                        <h3 className="font-headline font-bold text-2xl text-on-surface tracking-tight">{t('profileProgress')}</h3>
                     </div>
-                    <span className="text-white">Feb 2026</span>
-                </div>
-            </div>
+                    <ProgressPanel />
+                </section>
+            )}
 
-            <div className="text-center text-navy-400 text-sm">
-                BioZackTeam PWA v1.0.0
+            <div className="text-center text-on-surface/30 text-[10px] font-label font-bold uppercase tracking-widest pt-8">
+                            BioZackTeam · v1.0.0
             </div>
         </div>
     );
 };
+
+function Row({ icon, label, value, isLast }: { icon: React.ReactNode; label: string; value: React.ReactNode; isLast: boolean }) {
+    return (
+        <div className={`flex items-center justify-between p-4 ${!isLast ? 'border-b border-outline-variant/30' : ''}`}>
+            <div className="flex items-center gap-4 text-on-surface/50">
+                {icon}
+                <span className="text-sm font-body font-medium">{label}</span>
+            </div>
+            <span className="text-on-surface font-headline font-bold">{value}</span>
+        </div>
+    );
+}

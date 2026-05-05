@@ -6,10 +6,13 @@ import { Workout, WorkoutGoal } from '../types';
 import { ALL_PROGRAMS, ALL_TRAINING_PROGRAMS } from '../data';
 import { ExerciseCard }    from '../components/workouts/ExerciseCard';
 import { WorkoutEditor }   from '../components/workouts/WorkoutEditor';
+import { WorkoutWizard }   from '../components/workouts/WorkoutWizard';
+import { ActiveProgramCard } from '../components/workouts/ActiveProgramCard';
+import { useActiveProgram } from '../hooks/useActiveProgram';
 import {
     Search, Plus, X, Trash2, Edit3, Clock, Dumbbell, ChevronDown, ChevronUp,
-    Zap, Target, Timer, Award, Moon, Calendar, Repeat, Flame, TrendingUp,
-    Shield, RotateCcw, Heart, Activity, BookOpen,
+    Zap, Target, Award, Moon, Calendar, Repeat, Flame, TrendingUp,
+    Shield, RotateCcw, Heart, Activity,
 } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -37,19 +40,21 @@ const isCustom = (w: Workout) => !STATIC_WORKOUT_IDS.has(w.id);
 
 // ─── Component ────────────────────────────────────────────────
 
-type ViewMode = 'programs' | 'custom' | 'myweek';
+type ViewMode = 'programs' | 'custom';
 
 export const Workouts = () => {
     const {
         workouts, workoutCategories,
         addWorkout, updateWorkout, removeWorkout, addWorkoutCategory,
-        clients, weeks,
     } = useData();
     const { user } = useAuth();
     const { t }   = useLanguage();
+    const { activeProgram, loading: programLoading } = useActiveProgram();
 
     const isCoach   = user?.role === 'coach' || user?.role === 'admin';
-    const isClient  = user?.role === 'client' || user?.role === 'community';
+
+    // Show wizard for non-coach users without an active program
+    const showWizard = !isCoach && !programLoading && !activeProgram;
 
     // ── View / filter state ────────────────────────────────────
     const [viewMode, setViewMode]         = useState<ViewMode>('programs');
@@ -67,24 +72,6 @@ export const Workouts = () => {
     // ── Category modal state ───────────────────────────────────
     const [showCategoryModal, setShowCategoryModal] = useState(false);
     const [newCategoryName, setNewCategoryName]     = useState('');
-
-    // ── Client week data ───────────────────────────────────────
-    const myClient = isClient ? clients[0] : null;
-    const currentWeekNum = myClient?.currentWeek ?? 1;
-
-    const myWeek = useMemo(() =>
-        isClient
-            ? weeks.find(w => w.clientId === user?.id && w.weekNumber === currentWeekNum)
-            : null,
-        [isClient, weeks, user?.id, currentWeekNum]
-    );
-
-    const assignedWorkouts = useMemo((): Workout[] => {
-        if (!myWeek?.assignedWorkoutIds) return [];
-        return myWeek.assignedWorkoutIds
-            .map(id => workouts.find(w => w.id === id))
-            .filter((w): w is Workout => w !== undefined);
-    }, [myWeek, workouts]);
 
     // ── Editor handlers ────────────────────────────────────────
     const openCreate = () => { setEditingWorkout(null); setShowEditor(true); };
@@ -139,40 +126,55 @@ export const Workouts = () => {
     // ─────────────────────────────────────────────────────────
 
     return (
-        <div className="space-y-6 animate-in fade-in duration-500 pb-20">
+        <div className="space-y-8 animate-in fade-in duration-500 pb-20 max-w-7xl mx-auto">
+
+            {/* ── Workout Wizard (non-coach, no active program) ── */}
+            {showWizard && (
+                <WorkoutWizard />
+            )}
+
+            {/* ── Active Program Banner (non-coach, has program) ── */}
+            {!isCoach && activeProgram && (
+                <ActiveProgramCard />
+            )}
+
+            {/* ── Full browse view (always for coach, below wizard/program for clients) ── */}
+            {(!showWizard) && (
+            <>
 
             {/* ── Page header ──────────────────────────────── */}
-            <div className="flex flex-col md:flex-row justify-between gap-4">
+            <div className="flex flex-col md:flex-row justify-between gap-6 bg-surface-container-low rounded-2xl p-6 md:p-8 ghost-border">
                 <div>
-                    <h1 className="text-3xl font-bold text-white">{t('workoutsTitle')}</h1>
-                    <p className="text-navy-200">
+                    <span className="font-label text-[10px] font-bold uppercase tracking-widest text-primary block mb-2">Training Hub</span>
+                    <h1 className="text-4xl md:text-5xl font-headline font-extrabold text-on-surface tracking-tighter">{t('workoutsTitle')}</h1>
+                    <p className="text-on-surface/60 font-body mt-3 max-w-lg">
                         {isCoach
                             ? t('workoutsCoachSubtitle')
                             : 'Browse complete training programs with 10-day rotations.'}
                     </p>
                 </div>
-                <div className="flex flex-col sm:flex-row gap-3">
+                <div className="flex flex-col gap-3 justify-end">
                     <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-navy-400 pointer-events-none" size={18} />
+                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface/40 pointer-events-none" size={18} />
                         <input
                             type="text"
                             placeholder={t('searchWorkouts')}
                             value={search}
                             onChange={e => setSearch(e.target.value)}
-                            className="clay-input py-2 pl-10 pr-4 w-full sm:w-64"
+                            className="w-full sm:w-64 bg-surface-container-lowest rounded-xl pl-11 pr-4 py-3 text-sm font-body text-on-surface placeholder-on-surface/30 border-none outline-none focus:ring-1 focus:ring-primary/30"
                         />
                     </div>
                     {isCoach && (
-                        <div className="flex gap-2">
+                        <div className="flex gap-3">
                             <button
                                 onClick={openCreate}
-                                className="clay-button bg-gradient-to-r from-gold-400 to-gold-600 text-navy-950 px-5 py-2 flex items-center gap-2"
+                                className="flex-1 py-3 flex items-center justify-center gap-2 text-on-primary font-bold font-label text-[10px] uppercase tracking-widest rounded-xl bg-gradient-to-r from-primary to-primary-container shadow-[0_5px_15px_rgba(230,195,100,0.3)] border border-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all"
                             >
-                                <Plus size={18} /> {t('newWorkout')}
+                                <Plus size={16} /> {t('newWorkout')}
                             </button>
                             <button
                                 onClick={() => setShowCategoryModal(true)}
-                                className="clay-button bg-navy-800 hover:bg-navy-700 text-white px-4 py-2 flex items-center gap-2"
+                                className="flex-1 py-3 flex items-center justify-center gap-2 text-primary font-bold font-label text-[10px] uppercase tracking-widest rounded-xl bg-primary/5 hover:bg-primary/10 border border-primary/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
                             >
                                 <Plus size={16} /> Category
                             </button>
@@ -182,104 +184,95 @@ export const Workouts = () => {
             </div>
 
             {/* ── View mode tabs ────────────────────────────── */}
-            <div className="flex gap-2 flex-wrap">
+            <div className="flex gap-3 flex-wrap">
                 <button
                     onClick={() => setViewMode('programs')}
                     className={clsx(
-                        'px-5 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center gap-2',
+                        'px-6 py-3 rounded-full text-[10px] font-label font-bold uppercase tracking-widest transition-all flex items-center gap-2 border',
                         viewMode === 'programs'
-                            ? 'bg-gradient-to-r from-gold-400 to-gold-600 text-navy-950 shadow-lg shadow-gold-400/20'
-                            : 'clay-card-sm text-navy-200 hover:text-white'
+                            ? 'bg-primary text-on-primary border-primary shadow-[0_10px_20px_rgba(230,195,100,0.2)]'
+                            : 'bg-surface-container-low text-on-surface/60 border-outline-variant/30 hover:bg-surface-container hover:text-on-surface'
                     )}
                 >
-                    <Calendar size={16} /> Training Programs
+                    <Calendar size={14} /> Training Programs
                 </button>
 
                 {isCoach && (
                     <button
                         onClick={() => setViewMode('custom')}
                         className={clsx(
-                            'px-5 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center gap-2',
+                            'px-6 py-3 rounded-full text-[10px] font-label font-bold uppercase tracking-widest transition-all flex items-center gap-2 border',
                             viewMode === 'custom'
-                                ? 'bg-gradient-to-r from-gold-400 to-gold-600 text-navy-950 shadow-lg shadow-gold-400/20'
-                                : 'clay-card-sm text-navy-200 hover:text-white'
+                                ? 'bg-primary text-on-primary border-primary shadow-[0_10px_20px_rgba(230,195,100,0.2)]'
+                                : 'bg-surface-container-low text-on-surface/60 border-outline-variant/30 hover:bg-surface-container hover:text-on-surface'
                         )}
                     >
-                        <Dumbbell size={16} /> Custom Workouts
+                        <Dumbbell size={14} /> Custom Workouts
                     </button>
                 )}
 
-                {isClient && (
-                    <button
-                        onClick={() => setViewMode('myweek')}
-                        className={clsx(
-                            'px-5 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center gap-2',
-                            viewMode === 'myweek'
-                                ? 'bg-gradient-to-r from-gold-400 to-gold-600 text-navy-950 shadow-lg shadow-gold-400/20'
-                                : 'clay-card-sm text-navy-200 hover:text-white'
-                        )}
-                    >
-                        <BookOpen size={16} /> My Week
-                    </button>
-                )}
             </div>
 
             {/* ── Split / category filter (Programs + Custom views) ── */}
-            {viewMode !== 'myweek' && (
-                <>
-                    <div className="flex gap-2 overflow-x-auto pb-1">
-                        {allCategories.map(cat => (
-                            <button
-                                key={cat}
-                                onClick={() => setCategoryFilter(cat)}
-                                className={clsx(
-                                    'px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors',
-                                    categoryFilter === cat
-                                        ? 'bg-gradient-to-r from-gold-400 to-gold-600 text-navy-950 shadow-clay-sm'
-                                        : 'clay-card-sm text-navy-200 hover:text-white'
-                                )}
-                            >
-                                {cat}
-                            </button>
-                        ))}
-                    </div>
-
-                    <div className="flex gap-2 flex-wrap">
-                        <button
-                            onClick={() => setGoalFilter('all')}
-                            className={clsx(
-                                'px-3 py-1.5 rounded-lg text-xs font-medium transition-colors',
-                                goalFilter === 'all' ? 'bg-navy-600 text-white' : 'text-navy-300 hover:text-white'
-                            )}
-                        >
-                            All Goals
-                        </button>
-                        {(Object.keys(GOAL_CONFIG) as WorkoutGoal[]).map(g => {
-                            const GoalIcon = GOAL_CONFIG[g].icon;
-                            return (
+            <div className="bg-surface-container-low rounded-2xl p-6 ghost-border space-y-6">
+                    <div>
+                        <span className="font-label text-[10px] font-bold uppercase tracking-widest text-on-surface/40 block mb-3">Filter by Category</span>
+                        <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
+                            {allCategories.map(cat => (
                                 <button
-                                    key={g}
-                                    onClick={() => setGoalFilter(g)}
+                                    key={cat}
+                                    onClick={() => setCategoryFilter(cat)}
                                     className={clsx(
-                                        'px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5',
-                                        goalFilter === g
-                                            ? `${GOAL_CONFIG[g].bgColor} ${GOAL_CONFIG[g].color}`
-                                            : 'text-navy-300 hover:text-white'
+                                        'px-4 py-2 rounded-lg text-xs font-headline font-bold whitespace-nowrap transition-colors border',
+                                        categoryFilter === cat
+                                            ? 'bg-primary/10 text-primary border-primary/30'
+                                            : 'bg-surface-container-lowest text-on-surface/60 border-outline-variant/30 hover:bg-surface-container hover:text-on-surface'
                                     )}
                                 >
-                                    <GoalIcon size={12} /> {GOAL_CONFIG[g].label}
+                                    {cat}
                                 </button>
-                            );
-                        })}
+                            ))}
+                        </div>
                     </div>
-                </>
-            )}
+
+                    <div>
+                        <span className="font-label text-[10px] font-bold uppercase tracking-widest text-on-surface/40 block mb-3">Filter by Goal</span>
+                        <div className="flex gap-2 flex-wrap">
+                            <button
+                                onClick={() => setGoalFilter('all')}
+                                className={clsx(
+                                    'px-4 py-2 rounded-lg text-xs font-headline font-bold transition-colors border',
+                                    goalFilter === 'all' ? 'bg-surface-container-highest text-on-surface border-outline-variant/50' : 'bg-surface-container-lowest text-on-surface/50 border-outline-variant/30 hover:text-on-surface'
+                                )}
+                            >
+                                All Goals
+                            </button>
+                            {(Object.keys(GOAL_CONFIG) as WorkoutGoal[]).map(g => {
+                                const GoalIcon = GOAL_CONFIG[g].icon;
+                                return (
+                                    <button
+                                        key={g}
+                                        onClick={() => setGoalFilter(g)}
+                                        className={clsx(
+                                            'px-4 py-2 rounded-lg text-xs font-headline font-bold transition-colors flex items-center gap-2 border',
+                                            goalFilter === g
+                                                ? `${GOAL_CONFIG[g].bgColor} ${GOAL_CONFIG[g].color} border-current/20`
+                                                : 'bg-surface-container-lowest text-on-surface/50 border-outline-variant/30 hover:text-on-surface hover:bg-surface-container'
+                                        )}
+                                    >
+                                        <GoalIcon size={14} /> {GOAL_CONFIG[g].label}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </div>
 
             {/* ═══════════════════════════════════════════════
                 TRAINING PROGRAMS VIEW
             ════════════════════════════════════════════════ */}
             {viewMode === 'programs' && (
-                <div className="grid grid-cols-1 gap-4">
+                <div className="grid grid-cols-1 gap-6">
                     {filteredPrograms.map(program => {
                         const isExpanded  = expandedProgram === program.id;
                         const goalConfig  = GOAL_CONFIG[program.goal];
@@ -288,47 +281,51 @@ export const Workouts = () => {
                         const restDays    = program.rotation.filter(d => d.type === 'rest').length;
 
                         return (
-                            <div key={program.id} className="clay-card overflow-hidden transition-all">
+                            <div key={program.id} className="bg-surface-container-low rounded-2xl ghost-border overflow-hidden transition-all duration-300">
                                 {/* Program header */}
                                 <div
-                                    className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer hover:bg-white/[0.02] transition-colors"
+                                    className="p-6 md:p-8 flex flex-col md:flex-row md:items-center justify-between gap-6 cursor-pointer hover:bg-surface-container/30 transition-colors"
                                     onClick={() => setExpandedProgram(isExpanded ? null : program.id)}
                                 >
-                                    <div className="flex items-center gap-4 flex-1">
-                                        <div className={clsx('w-14 h-14 rounded-2xl flex items-center justify-center shrink-0', goalConfig.bgColor)}>
-                                            <GoalIcon className={goalConfig.color} size={26} />
+                                    <div className="flex items-center gap-5 flex-1">
+                                        <div className={clsx('w-16 h-16 rounded-2xl flex items-center justify-center shrink-0 border border-current/10', goalConfig.bgColor, goalConfig.color)}>
+                                            <GoalIcon size={32} />
                                         </div>
                                         <div className="flex-1 min-w-0">
-                                            <h3 className="font-bold text-white text-lg">{program.name}</h3>
-                                            <p className="text-sm text-navy-300 mt-0.5">{program.description}</p>
+                                            <h3 className="font-headline font-extrabold text-on-surface text-2xl tracking-tight mb-1">{program.name}</h3>
+                                            <p className="text-sm font-body text-on-surface/60 line-clamp-2">{program.description}</p>
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-3 shrink-0 flex-wrap">
-                                        <span className="clay-card-sm px-3 py-1 text-xs font-medium text-navy-200">{program.split}</span>
-                                        <span className={clsx('px-3 py-1 rounded-lg text-xs font-bold', goalConfig.bgColor, goalConfig.color)}>
+                                        <span className="bg-surface-container-highest px-3 py-1.5 rounded-lg text-[10px] font-label font-bold uppercase tracking-widest text-on-surface/70 border border-outline-variant/30">{program.split}</span>
+                                        <span className={clsx('px-3 py-1.5 rounded-lg text-[10px] font-label font-bold uppercase tracking-widest border border-current/20', goalConfig.bgColor, goalConfig.color)}>
                                             {goalConfig.label}
                                         </span>
-                                        <div className="flex items-center gap-1.5 text-navy-300 text-sm"><Repeat size={14} /> 10 days</div>
-                                        <div className="flex items-center gap-1.5 text-emerald-400 text-sm font-medium"><Dumbbell size={14} /> {workoutDays}</div>
-                                        <div className="flex items-center gap-1.5 text-navy-400 text-sm"><Moon size={14} /> {restDays}</div>
-                                        {isExpanded
-                                            ? <ChevronUp className="text-gold-400" size={20} />
-                                            : <ChevronDown className="text-navy-400" size={20} />
-                                        }
+                                        <div className="flex items-center gap-1.5 text-on-surface/60 font-body text-sm ml-2"><Repeat size={16} className="text-on-surface/40" /> 10 days</div>
+                                        <div className="flex items-center gap-1.5 text-emerald-400 font-body text-sm font-medium ml-2"><Dumbbell size={16} className="opacity-80" /> {workoutDays}</div>
+                                        <div className="flex items-center gap-1.5 text-on-surface/40 font-body text-sm ml-2"><Moon size={16} /> {restDays}</div>
+                                        <div className="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center ml-2 border border-outline-variant/30 text-on-surface/60">
+                                            {isExpanded
+                                                ? <ChevronUp size={20} className="text-primary" />
+                                                : <ChevronDown size={20} />
+                                            }
+                                        </div>
                                     </div>
                                 </div>
 
                                 {/* Expanded: 10-day rotation */}
                                 {isExpanded && (
-                                    <div className="border-t border-white/[0.04] animate-in fade-in slide-in-from-top-2 duration-200">
+                                    <div className="border-t border-outline-variant/30 animate-in fade-in slide-in-from-top-2 duration-300">
                                         {/* Training rules */}
-                                        <div className="px-5 pt-4 pb-2">
-                                            <div className="clay-inset p-4 rounded-xl">
-                                                <h4 className="text-xs font-bold uppercase text-gold-400 mb-2 tracking-wider">Training Rules</h4>
-                                                <ul className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
+                                        <div className="px-6 md:px-8 pt-6 pb-4">
+                                            <div className="bg-surface-container-lowest p-6 rounded-2xl ghost-border">
+                                                <h4 className="text-[10px] font-label font-bold uppercase tracking-widest text-primary mb-4 flex items-center gap-2">
+                                                    <Zap size={14} /> Training Rules
+                                                </h4>
+                                                <ul className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                                     {program.rules.map((rule, i) => (
-                                                        <li key={i} className="text-xs text-navy-300 flex items-start gap-2">
-                                                            <span className="text-gold-400 mt-0.5">•</span> {rule}
+                                                        <li key={i} className="text-sm font-body text-on-surface/70 flex items-start gap-3">
+                                                            <span className="text-primary mt-0.5">•</span> {rule}
                                                         </li>
                                                     ))}
                                                 </ul>
@@ -336,23 +333,23 @@ export const Workouts = () => {
                                         </div>
 
                                         {/* 10-day grid */}
-                                        <div className="px-5 pb-5 space-y-2">
-                                            <h4 className="text-xs font-bold uppercase text-navy-400 tracking-wider mt-3 mb-3 flex items-center gap-2">
-                                                <Calendar size={14} className="text-gold-400" /> 10-Day Rotation
+                                        <div className="px-6 md:px-8 pb-8 space-y-3">
+                                            <h4 className="text-[10px] font-label font-bold uppercase tracking-widest text-on-surface/50 mt-6 mb-4 flex items-center gap-2">
+                                                <Calendar size={14} /> 10-Day Rotation
                                             </h4>
                                             {program.rotation.map(day => {
                                                 if (day.type === 'rest') {
                                                     const isActive = day.restDayType === 'active_recovery';
                                                     return (
                                                         <div key={day.dayNumber} className={clsx(
-                                                            'flex items-center gap-4 p-3 rounded-xl border',
-                                                            isActive ? 'bg-emerald-900/10 border-emerald-400/10' : 'bg-navy-900/30 border-white/[0.02]'
+                                                            'flex items-center gap-5 p-4 rounded-xl border',
+                                                            isActive ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-surface-container-lowest border-outline-variant/30'
                                                         )}>
-                                                            <div className={clsx('w-10 h-10 rounded-xl flex items-center justify-center shrink-0', isActive ? 'bg-emerald-900/30' : 'bg-navy-800/50')}>
-                                                                <span className={clsx('text-sm font-bold', isActive ? 'text-emerald-500' : 'text-navy-500')}>{day.dayNumber}</span>
+                                                            <div className={clsx('w-12 h-12 rounded-xl flex items-center justify-center shrink-0 border', isActive ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-surface-container border-outline-variant/30')}>
+                                                                <span className={clsx('text-base font-headline font-bold', isActive ? 'text-emerald-400' : 'text-on-surface/40')}>{day.dayNumber}</span>
                                                             </div>
-                                                            {isActive ? <Activity className="text-emerald-400/60" size={18} /> : <Moon className="text-indigo-400/60" size={18} />}
-                                                            <span className={clsx('text-sm font-medium italic', isActive ? 'text-emerald-400/80' : 'text-navy-400')}>
+                                                            {isActive ? <Activity className="text-emerald-400" size={20} /> : <Moon className="text-on-surface/30" size={20} />}
+                                                            <span className={clsx('text-sm font-body font-medium italic', isActive ? 'text-emerald-400/80' : 'text-on-surface/50')}>
                                                                 {isActive ? 'Active Recovery — Light Movement, Stretching & Mobility' : 'Rest Day — Recovery & Nutrition Focus'}
                                                             </span>
                                                         </div>
@@ -363,65 +360,67 @@ export const Workouts = () => {
                                                 const isWorkoutExpanded = expandedWorkout === day.workoutId;
 
                                                 return (
-                                                    <div key={day.dayNumber} className="rounded-xl border border-white/[0.04] overflow-hidden">
+                                                    <div key={day.dayNumber} className="rounded-xl border border-outline-variant/30 overflow-hidden bg-surface-container-lowest">
                                                         {/* Workout row */}
                                                         <div
-                                                            className={clsx('flex items-center gap-4 p-3 cursor-pointer transition-colors', isWorkoutExpanded ? 'bg-navy-800/40' : 'hover:bg-white/[0.02]')}
+                                                            className={clsx('flex items-center gap-5 p-4 cursor-pointer transition-colors', isWorkoutExpanded ? 'bg-surface-container' : 'hover:bg-surface-container/50')}
                                                             onClick={() => setExpandedWorkout(isWorkoutExpanded ? null : (day.workoutId || null))}
                                                         >
-                                                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gold-400/20 to-gold-600/10 flex items-center justify-center shrink-0 border border-gold-400/20">
-                                                                <span className="text-sm font-bold text-gold-400">{day.dayNumber}</span>
+                                                            <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 border border-primary/20">
+                                                                <span className="text-base font-headline font-bold text-primary">{day.dayNumber}</span>
                                                             </div>
-                                                            <Dumbbell className="text-gold-400" size={18} />
+                                                            <Dumbbell className="text-primary hidden sm:block" size={20} />
                                                             <div className="flex-1 min-w-0">
-                                                                <span className="text-white font-medium text-sm">{day.label}</span>
-                                                                {workout && <span className="text-navy-400 text-xs ml-2">— {workout.name}</span>}
+                                                                <span className="text-on-surface font-headline font-bold text-base">{day.label}</span>
+                                                                {workout && <span className="text-on-surface/50 font-body text-sm ml-2">— {workout.name}</span>}
                                                             </div>
                                                             {/* CNS load bars */}
                                                             {day.cnsLoad && day.cnsLoad >= 3 && (
                                                                 <div className="flex items-center gap-1 shrink-0" title={`CNS Load: ${day.cnsLoad}/5`}>
                                                                     {Array.from({ length: 5 }).map((_, i) => (
-                                                                        <div key={i} className={clsx('w-1.5 h-1.5 rounded-full',
+                                                                        <div key={i} className={clsx('w-2 h-2 rounded-full',
                                                                             i < (day.cnsLoad || 0)
-                                                                                ? ((day.cnsLoad || 0) >= 4 ? 'bg-red-400' : 'bg-amber-400')
-                                                                                : 'bg-navy-700'
+                                                                                ? ((day.cnsLoad || 0) >= 4 ? 'bg-red-400' : 'bg-primary')
+                                                                                : 'bg-surface-container-highest'
                                                                         )} />
                                                                     ))}
                                                                 </div>
                                                             )}
-                                                            <div className="flex items-center gap-3 shrink-0">
+                                                            <div className="flex items-center gap-4 shrink-0">
                                                                 {workout && (
                                                                     <>
-                                                                        <span className="text-navy-400 text-xs flex items-center gap-1"><Clock size={12} />{workout.estimatedMinutes}m</span>
-                                                                        <span className="text-navy-400 text-xs flex items-center gap-1"><Target size={12} />{workout.exercises.length} ex</span>
-                                                                        <span className="text-navy-400 text-xs flex items-center gap-1"><Zap size={12} />{totalSets(workout)} sets</span>
+                                                                        <span className="text-on-surface/50 font-label text-[10px] font-bold uppercase tracking-widest hidden md:flex items-center gap-1.5"><Clock size={14} />{workout.estimatedMinutes}m</span>
+                                                                        <span className="text-on-surface/50 font-label text-[10px] font-bold uppercase tracking-widest hidden md:flex items-center gap-1.5"><Target size={14} />{workout.exercises.length} ex</span>
+                                                                        <span className="text-on-surface/50 font-label text-[10px] font-bold uppercase tracking-widest hidden md:flex items-center gap-1.5"><Zap size={14} />{totalSets(workout)} sets</span>
                                                                     </>
                                                                 )}
-                                                                {isWorkoutExpanded
-                                                                    ? <ChevronUp className="text-gold-400" size={16} />
-                                                                    : <ChevronDown className="text-navy-500" size={16} />
-                                                                }
+                                                                <div className="w-8 h-8 rounded-full bg-surface-container-highest flex items-center justify-center border border-outline-variant/30 text-on-surface/60">
+                                                                    {isWorkoutExpanded
+                                                                        ? <ChevronUp size={16} className="text-primary" />
+                                                                        : <ChevronDown size={16} />
+                                                                    }
+                                                                </div>
                                                             </div>
                                                         </div>
 
                                                         {/* Expanded: ExerciseCards */}
                                                         {isWorkoutExpanded && workout && (
-                                                            <div className="border-t border-white/[0.04] p-4 animate-in fade-in duration-150 space-y-2">
+                                                            <div className="border-t border-outline-variant/30 p-6 animate-in fade-in duration-300 bg-surface-container/30 space-y-3">
                                                                 {workout.exercises.map((ex, i) => (
                                                                     <ExerciseCard key={i} exercise={ex} index={i} />
                                                                 ))}
-                                                                <div className="flex gap-6 mt-3 pt-3 border-t border-white/[0.04]">
-                                                                    <div className="flex items-center gap-2 text-navy-300 text-xs">
-                                                                        <Award className="text-gold-400" size={14} />
-                                                                        <strong className="text-white">{workout.exercises.length}</strong> exercises
+                                                                <div className="flex gap-8 mt-6 pt-6 border-t border-outline-variant/30">
+                                                                    <div className="flex items-center gap-2 text-on-surface/50 font-body text-sm">
+                                                                        <Award className="text-primary" size={16} />
+                                                                        <strong className="text-on-surface">{workout.exercises.length}</strong> exercises
                                                                     </div>
-                                                                    <div className="flex items-center gap-2 text-navy-300 text-xs">
-                                                                        <Zap className="text-gold-400" size={14} />
-                                                                        <strong className="text-white">{totalSets(workout)}</strong> total sets
+                                                                    <div className="flex items-center gap-2 text-on-surface/50 font-body text-sm">
+                                                                        <Zap className="text-primary" size={16} />
+                                                                        <strong className="text-on-surface">{totalSets(workout)}</strong> total sets
                                                                     </div>
-                                                                    <div className="flex items-center gap-2 text-navy-300 text-xs">
-                                                                        <Clock className="text-gold-400" size={14} />
-                                                                        ~<strong className="text-white">{workout.estimatedMinutes}</strong> min
+                                                                    <div className="flex items-center gap-2 text-on-surface/50 font-body text-sm">
+                                                                        <Clock className="text-primary" size={16} />
+                                                                        ~<strong className="text-on-surface">{workout.estimatedMinutes}</strong> min
                                                                     </div>
                                                                 </div>
                                                             </div>
@@ -436,10 +435,10 @@ export const Workouts = () => {
                         );
                     })}
                     {filteredPrograms.length === 0 && (
-                        <div className="text-center py-20 clay-card p-8">
-                            <Calendar className="text-navy-500 mx-auto mb-4" size={40} />
-                            <p className="text-navy-300 text-lg">No programs found</p>
-                            <p className="text-navy-400 text-sm mt-1">Try adjusting your split or goal filters.</p>
+                        <div className="text-center py-24 bg-surface-container-low rounded-2xl ghost-border p-8">
+                            <Calendar className="text-on-surface/20 mx-auto mb-6" size={48} />
+                            <p className="text-on-surface/70 font-headline font-bold text-xl mb-2">No programs found</p>
+                            <p className="text-on-surface/40 font-body text-sm">Try adjusting your split or goal filters.</p>
                         </div>
                     )}
                 </div>
@@ -449,100 +448,103 @@ export const Workouts = () => {
                 CUSTOM WORKOUTS VIEW  (coach only)
             ════════════════════════════════════════════════ */}
             {viewMode === 'custom' && (
-                <div className="grid grid-cols-1 gap-5">
+                <div className="grid grid-cols-1 gap-6">
                     {customWorkouts.map(workout => {
                         const isExpanded = expandedWorkout === workout.id;
                         const goalConfig = GOAL_CONFIG[workout.goal];
                         return (
-                            <div key={workout.id} className="clay-card overflow-hidden transition-all">
+                            <div key={workout.id} className="bg-surface-container-low rounded-2xl ghost-border overflow-hidden transition-all duration-300">
                                 {/* Workout header */}
                                 <div
-                                    className="p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer hover:bg-white/[0.01] transition-colors"
+                                    className="p-6 md:p-8 flex flex-col md:flex-row md:items-center justify-between gap-6 cursor-pointer hover:bg-surface-container/30 transition-colors"
                                     onClick={() => setExpandedWorkout(isExpanded ? null : workout.id)}
                                 >
-                                    <div className="flex items-center gap-4 flex-1">
-                                        <div className="w-12 h-12 rounded-xl flex items-center justify-center clay-inset shrink-0">
-                                            <Dumbbell className="text-gold-400" size={22} />
+                                    <div className="flex items-center gap-5 flex-1">
+                                        <div className="w-16 h-16 rounded-2xl flex items-center justify-center bg-surface-container border border-outline-variant/30 shrink-0">
+                                            <Dumbbell className="text-primary" size={28} />
                                         </div>
                                         <div className="flex-1 min-w-0">
-                                            <h3 className="font-bold text-white text-lg truncate">{workout.name}</h3>
-                                            <p className="text-sm text-navy-300 truncate">{workout.description}</p>
+                                            <h3 className="font-headline font-extrabold text-on-surface text-2xl tracking-tight mb-1 truncate">{workout.name}</h3>
+                                            <p className="text-sm font-body text-on-surface/60 truncate">{workout.description}</p>
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-3 shrink-0 flex-wrap">
-                                        <span className="clay-card-sm px-3 py-1 text-xs font-medium text-navy-200">{workout.category}</span>
-                                        <span className={clsx('px-3 py-1 rounded-lg text-xs font-bold', goalConfig.bgColor, goalConfig.color)}>
+                                        <span className="bg-surface-container-highest px-3 py-1.5 rounded-lg text-[10px] font-label font-bold uppercase tracking-widest text-on-surface/70 border border-outline-variant/30">{workout.category}</span>
+                                        <span className={clsx('px-3 py-1.5 rounded-lg text-[10px] font-label font-bold uppercase tracking-widest border border-current/20', goalConfig.bgColor, goalConfig.color)}>
                                             {goalConfig.label}
                                         </span>
-                                        <div className="flex items-center gap-1.5 text-navy-300 text-sm"><Clock size={14} /> {workout.estimatedMinutes}m</div>
-                                        <div className="flex items-center gap-1.5 text-navy-300 text-sm"><Target size={14} /> {workout.exercises.length} ex</div>
-                                        <div className="flex items-center gap-1.5 text-navy-300 text-sm"><Zap size={14} /> {totalSets(workout)} sets</div>
+                                        <div className="flex items-center gap-1.5 text-on-surface/60 font-body text-sm ml-2"><Clock size={16} /> {workout.estimatedMinutes}m</div>
+                                        <div className="flex items-center gap-1.5 text-on-surface/60 font-body text-sm ml-2"><Target size={16} /> {workout.exercises.length} ex</div>
+                                        <div className="flex items-center gap-1.5 text-on-surface/60 font-body text-sm ml-2"><Zap size={16} /> {totalSets(workout)} sets</div>
 
                                         {/* Coach actions */}
-                                        <div className="flex gap-1 ml-1" onClick={e => e.stopPropagation()}>
+                                        <div className="flex gap-2 ml-4 pl-4 border-l border-outline-variant/30" onClick={e => e.stopPropagation()}>
                                             <button
                                                 onClick={() => openEdit(workout)}
                                                 title="Edit workout"
-                                                className="clay-button bg-navy-800 hover:bg-navy-700 text-white p-2"
+                                                className="w-10 h-10 rounded-xl bg-surface-container-highest hover:bg-primary/10 text-on-surface/70 hover:text-primary flex items-center justify-center transition-colors border border-outline-variant/30 hover:border-primary/30"
                                             >
-                                                <Edit3 size={16} />
+                                                <Edit3 size={18} />
                                             </button>
                                             {confirmDelete === workout.id ? (
-                                                <div className="flex gap-1">
-                                                    <button onClick={() => handleDelete(workout.id)} className="clay-button bg-red-600 hover:bg-red-500 text-white px-3 py-2 text-xs font-semibold">Yes</button>
-                                                    <button onClick={() => setConfirmDelete(null)}    className="clay-button bg-navy-700 text-white px-3 py-2 text-xs">No</button>
+                                                <div className="flex gap-2 items-center bg-red-500/10 rounded-xl border border-red-500/20 px-2 py-1">
+                                                    <span className="text-[10px] font-label uppercase text-red-400 font-bold px-1">Sure?</span>
+                                                    <button onClick={() => handleDelete(workout.id)} className="w-8 h-8 rounded-lg bg-red-500 text-on-surface flex items-center justify-center hover:bg-red-400 transition-colors"><Trash2 size={14}/></button>
+                                                    <button onClick={() => setConfirmDelete(null)}    className="w-8 h-8 rounded-lg bg-surface-container-highest text-on-surface hover:text-on-surface flex items-center justify-center"><X size={14}/></button>
                                                 </div>
                                             ) : (
                                                 <button
                                                     onClick={() => setConfirmDelete(workout.id)}
                                                     title="Delete workout"
-                                                    className="clay-button bg-navy-800 hover:bg-red-600/20 hover:text-red-400 text-navy-300 p-2"
+                                                    className="w-10 h-10 rounded-xl bg-surface-container-highest hover:bg-red-500/10 text-on-surface/70 hover:text-red-400 flex items-center justify-center transition-colors border border-outline-variant/30 hover:border-red-500/30"
                                                 >
-                                                    <Trash2 size={16} />
+                                                    <Trash2 size={18} />
                                                 </button>
                                             )}
                                         </div>
 
-                                        {isExpanded
-                                            ? <ChevronUp className="text-navy-400" size={20} />
-                                            : <ChevronDown className="text-navy-400" size={20} />
-                                        }
+                                        <div className="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center ml-2 border border-outline-variant/30 text-on-surface/60">
+                                            {isExpanded
+                                                ? <ChevronUp size={20} className="text-primary" />
+                                                : <ChevronDown size={20} />
+                                            }
+                                        </div>
                                     </div>
                                 </div>
 
                                 {/* Expanded exercise details */}
                                 {isExpanded && (
-                                    <div className="border-t border-white/[0.04] p-6 animate-in fade-in slide-in-from-top-2 duration-200">
+                                    <div className="border-t border-outline-variant/30 p-6 md:p-8 animate-in fade-in slide-in-from-top-2 duration-300 bg-surface-container-lowest">
                                         {/* Weekly plan: show day-by-day */}
                                         {workout.days && workout.days.length > 0 ? (
-                                            <div className="space-y-5">
+                                            <div className="space-y-6">
                                                 {workout.days.map(day => (
                                                     <div key={day.dayIndex}>
-                                                        <div className="flex items-center gap-2 mb-2">
+                                                        <div className="flex items-center gap-3 mb-4">
                                                             {day.type === 'rest'
-                                                                ? <Moon size={15} className="text-indigo-400" />
-                                                                : <Dumbbell size={15} className="text-gold-400" />
+                                                                ? <Moon size={18} className="text-indigo-400" />
+                                                                : <Dumbbell size={18} className="text-primary" />
                                                             }
-                                                            <span className="text-sm font-bold text-white">{day.label}</span>
+                                                            <span className="text-base font-headline font-bold text-on-surface">{day.label}</span>
                                                             <span className={clsx(
-                                                                'px-2 py-0.5 rounded-full text-[10px] font-semibold',
+                                                                'px-3 py-1 rounded-full text-[10px] font-label font-bold uppercase tracking-widest',
                                                                 day.type === 'rest'
-                                                                    ? 'bg-indigo-500/10 text-indigo-400'
-                                                                    : 'bg-gold-500/10 text-gold-400'
+                                                                    ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'
+                                                                    : 'bg-primary/10 text-primary border border-primary/20'
                                                             )}>
                                                                 {day.type === 'rest' ? 'Rest' : `${day.exercises.length} exercises`}
                                                             </span>
                                                         </div>
                                                         {day.type === 'training' && day.exercises.length > 0 && (
-                                                            <div className="space-y-2 pl-4 border-l border-white/[0.05]">
+                                                            <div className="space-y-3 pl-5 md:pl-6 border-l-2 border-surface-container">
                                                                 {day.exercises.map((ex, i) => (
                                                                     <ExerciseCard key={i} exercise={ex} index={i} />
                                                                 ))}
                                                             </div>
                                                         )}
                                                         {day.type === 'rest' && (
-                                                            <div className="pl-4 border-l border-white/[0.05]">
-                                                                <p className="text-navy-500 text-xs italic">Recovery &amp; Nutrition Focus</p>
+                                                            <div className="pl-5 md:pl-6 border-l-2 border-surface-container">
+                                                                <p className="text-on-surface/40 text-sm font-body italic">Recovery &amp; Nutrition Focus</p>
                                                             </div>
                                                         )}
                                                     </div>
@@ -550,7 +552,7 @@ export const Workouts = () => {
                                             </div>
                                         ) : (
                                             /* Single session */
-                                            <div className="space-y-2">
+                                            <div className="space-y-3">
                                                 {workout.exercises.map((ex, i) => (
                                                     <ExerciseCard key={i} exercise={ex} index={i} />
                                                 ))}
@@ -558,18 +560,18 @@ export const Workouts = () => {
                                         )}
 
                                         {/* Summary stats */}
-                                        <div className="flex gap-6 mt-4 pt-4 border-t border-white/[0.04]">
-                                            <div className="flex items-center gap-2 text-navy-300 text-xs">
-                                                <Award className="text-gold-400" size={14} />
-                                                <strong className="text-white">{workout.exercises.length}</strong> exercises
+                                        <div className="flex gap-8 mt-8 pt-6 border-t border-outline-variant/30">
+                                            <div className="flex items-center gap-2 text-on-surface/50 font-body text-sm">
+                                                <Award className="text-primary" size={16} />
+                                                <strong className="text-on-surface">{workout.exercises.length}</strong> exercises
                                             </div>
-                                            <div className="flex items-center gap-2 text-navy-300 text-xs">
-                                                <Zap className="text-gold-400" size={14} />
-                                                <strong className="text-white">{totalSets(workout)}</strong> total sets
+                                            <div className="flex items-center gap-2 text-on-surface/50 font-body text-sm">
+                                                <Zap className="text-primary" size={16} />
+                                                <strong className="text-on-surface">{totalSets(workout)}</strong> total sets
                                             </div>
-                                            <div className="flex items-center gap-2 text-navy-300 text-xs">
-                                                <Clock className="text-gold-400" size={14} />
-                                                ~<strong className="text-white">{workout.estimatedMinutes}</strong> min
+                                            <div className="flex items-center gap-2 text-on-surface/50 font-body text-sm">
+                                                <Clock className="text-primary" size={16} />
+                                                ~<strong className="text-on-surface">{workout.estimatedMinutes}</strong> min
                                             </div>
                                         </div>
                                     </div>
@@ -579,135 +581,12 @@ export const Workouts = () => {
                     })}
 
                     {customWorkouts.length === 0 && (
-                        <div className="text-center py-20 clay-card p-8">
-                            <Dumbbell className="text-navy-500 mx-auto mb-4" size={40} />
-                            <p className="text-navy-300 text-lg">No custom workouts yet</p>
-                            <p className="text-navy-400 text-sm mt-1">
+                        <div className="text-center py-24 bg-surface-container-low rounded-2xl ghost-border p-8">
+                            <Dumbbell className="text-on-surface/20 mx-auto mb-6" size={48} />
+                            <p className="text-on-surface/70 font-headline font-bold text-xl mb-2">No custom workouts yet</p>
+                            <p className="text-on-surface/40 font-body text-sm">
                                 {isCoach ? 'Create your first custom workout above.' : "Your coach hasn't created any custom workouts yet."}
                             </p>
-                        </div>
-                    )}
-                </div>
-            )}
-
-            {/* ═══════════════════════════════════════════════
-                MY WEEK VIEW  (clients)
-            ════════════════════════════════════════════════ */}
-            {viewMode === 'myweek' && (
-                <div className="space-y-6">
-                    {/* Week header */}
-                    <div className="clay-card p-5 flex items-center justify-between">
-                        <div>
-                            <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                                <BookOpen className="text-gold-400" size={20} />
-                                Week {currentWeekNum} — Assigned Workouts
-                            </h2>
-                            <p className="text-navy-400 text-sm mt-1">
-                                {assignedWorkouts.length
-                                    ? `${assignedWorkouts.length} workout${assignedWorkouts.length > 1 ? 's' : ''} assigned by your coach`
-                                    : 'No workouts assigned for this week yet'}
-                            </p>
-                        </div>
-                        {myWeek && (
-                            <span className={clsx(
-                                'px-3 py-1.5 rounded-xl text-xs font-bold',
-                                myWeek.status === 'reviewed' ? 'bg-emerald-500/10 text-emerald-400' :
-                                myWeek.status === 'submitted' ? 'bg-blue-500/10 text-blue-400' :
-                                'bg-navy-700/60 text-navy-300'
-                            )}>
-                                {myWeek.status === 'reviewed' ? 'Reviewed' :
-                                 myWeek.status === 'submitted' ? 'Submitted' : 'In Progress'}
-                            </span>
-                        )}
-                    </div>
-
-                    {assignedWorkouts.length === 0 ? (
-                        <div className="clay-card p-16 text-center">
-                            <Dumbbell className="text-navy-600 mx-auto mb-3" size={44} />
-                            <p className="text-navy-300 text-lg">No workouts this week</p>
-                            <p className="text-navy-500 text-sm mt-1">Your coach will assign workouts to your weekly plan.</p>
-                        </div>
-                    ) : (
-                        <div className="space-y-5">
-                            {assignedWorkouts.map(workout => {
-                                const goalConfig = GOAL_CONFIG[workout.goal];
-                                const GoalIcon   = goalConfig.icon;
-                                const isExpanded = expandedWorkout === workout.id;
-
-                                return (
-                                    <div key={workout.id} className="clay-card overflow-hidden">
-                                        {/* Header */}
-                                        <div
-                                            className="p-5 flex items-center gap-4 cursor-pointer hover:bg-white/[0.02] transition-colors"
-                                            onClick={() => setExpandedWorkout(isExpanded ? null : workout.id)}
-                                        >
-                                            <div className={clsx('w-12 h-12 rounded-xl flex items-center justify-center shrink-0', goalConfig.bgColor)}>
-                                                <GoalIcon className={goalConfig.color} size={22} />
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <h3 className="font-bold text-white text-lg truncate">{workout.name}</h3>
-                                                <p className="text-sm text-navy-300 truncate">{workout.description}</p>
-                                            </div>
-                                            <div className="flex items-center gap-3 shrink-0">
-                                                <span className={clsx('px-3 py-1 rounded-lg text-xs font-bold hidden sm:block', goalConfig.bgColor, goalConfig.color)}>
-                                                    {goalConfig.label}
-                                                </span>
-                                                <span className="text-navy-400 text-xs flex items-center gap-1"><Clock size={12} />{workout.estimatedMinutes}m</span>
-                                                <span className="text-navy-400 text-xs flex items-center gap-1"><Timer size={12} />{workout.exercises.length} ex</span>
-                                                {isExpanded
-                                                    ? <ChevronUp className="text-gold-400" size={18} />
-                                                    : <ChevronDown className="text-navy-400" size={18} />
-                                                }
-                                            </div>
-                                        </div>
-
-                                        {/* Exercise cards */}
-                                        {isExpanded && (
-                                            <div className="border-t border-white/[0.04] p-5 animate-in fade-in slide-in-from-top-2 duration-200">
-                                                {workout.days && workout.days.length > 0 ? (
-                                                    <div className="space-y-5">
-                                                        {workout.days.map(day => (
-                                                            <div key={day.dayIndex}>
-                                                                <div className="flex items-center gap-2 mb-3">
-                                                                    {day.type === 'rest'
-                                                                        ? <Moon size={15} className="text-indigo-400" />
-                                                                        : <Dumbbell size={15} className="text-gold-400" />
-                                                                    }
-                                                                    <span className="text-sm font-bold text-white">{day.label}</span>
-                                                                    <span className={clsx(
-                                                                        'px-2 py-0.5 rounded-full text-[10px] font-semibold',
-                                                                        day.type === 'rest' ? 'bg-indigo-500/10 text-indigo-400' : 'bg-gold-500/10 text-gold-400'
-                                                                    )}>
-                                                                        {day.type === 'rest' ? 'Rest Day' : `${day.exercises.length} exercises`}
-                                                                    </span>
-                                                                </div>
-                                                                {day.type === 'training' && day.exercises.length > 0 && (
-                                                                    <div className="space-y-2 pl-4 border-l border-white/[0.05]">
-                                                                        {day.exercises.map((ex, i) => (
-                                                                            <ExerciseCard key={i} exercise={ex} index={i} />
-                                                                        ))}
-                                                                    </div>
-                                                                )}
-                                                                {day.type === 'rest' && (
-                                                                    <div className="pl-4 border-l border-white/[0.05]">
-                                                                        <p className="text-navy-500 text-xs italic">Rest &amp; recovery</p>
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                ) : (
-                                                    <div className="space-y-2">
-                                                        {workout.exercises.map((ex, i) => (
-                                                            <ExerciseCard key={i} exercise={ex} index={i} />
-                                                        ))}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        )}
-                                    </div>
-                                );
-                            })}
                         </div>
                     )}
                 </div>
@@ -725,47 +604,50 @@ export const Workouts = () => {
 
             {/* ── Add category modal ────────────────────────── */}
             {showCategoryModal && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-200">
-                    <div className="clay-card p-6 max-w-sm w-full mx-4 animate-in zoom-in-95 duration-200">
-                        <div className="flex items-center justify-between mb-6">
-                            <h2 className="text-xl font-bold text-white">Add Split Type</h2>
-                            <button onClick={() => setShowCategoryModal(false)} className="text-navy-300 hover:text-white">
-                                <X size={20} />
+                <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-300">
+                    <div className="bg-surface-container-low p-8 rounded-2xl max-w-sm w-full mx-4 animate-in zoom-in-95 duration-300 ghost-border shadow-2xl">
+                        <div className="flex items-center justify-between mb-8">
+                            <h2 className="text-2xl font-headline font-bold text-on-surface tracking-tight">Add Split Type</h2>
+                            <button onClick={() => setShowCategoryModal(false)} className="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center text-on-surface/50 hover:text-on-surface hover:bg-surface-container-highest transition-colors">
+                                <X size={18} />
                             </button>
                         </div>
                         <div>
-                            <label className="block text-sm text-navy-200 mb-1">Split Type Name</label>
+                            <label className="block text-[10px] font-label font-bold uppercase tracking-widest text-on-surface/50 mb-2">Split Type Name</label>
                             <input
                                 type="text"
                                 value={newCategoryName}
                                 onChange={e => setNewCategoryName(e.target.value)}
                                 onKeyDown={e => e.key === 'Enter' && handleAddCategory()}
                                 placeholder="e.g. Arnold Split…"
-                                className="w-full clay-input p-3"
+                                className="w-full bg-surface-container-lowest border-none outline-none focus:ring-1 focus:ring-primary/30 rounded-xl px-4 py-3 text-sm font-body text-on-surface placeholder-on-surface/30"
                             />
                         </div>
-                        <div className="mt-4">
-                            <p className="text-xs text-navy-400 mb-2">Existing:</p>
+                        <div className="mt-6">
+                            <p className="text-[10px] font-label font-bold uppercase tracking-widest text-on-surface/40 mb-3">Existing Categories:</p>
                             <div className="flex flex-wrap gap-2">
                                 {workoutCategories.map(cat => (
-                                    <span key={cat} className="px-2 py-1 clay-card-sm rounded text-xs text-navy-200">{cat}</span>
+                                    <span key={cat} className="px-3 py-1.5 bg-surface-container rounded-lg text-[10px] font-label font-bold uppercase tracking-widest text-on-surface/60 border border-outline-variant/30">{cat}</span>
                                 ))}
                             </div>
                         </div>
-                        <div className="flex gap-3 mt-6">
-                            <button onClick={() => setShowCategoryModal(false)} className="flex-1 clay-button bg-navy-800 hover:bg-navy-700 text-white py-3">
+                        <div className="flex gap-3 mt-8">
+                            <button onClick={() => setShowCategoryModal(false)} className="flex-1 py-4 rounded-xl font-label text-[10px] font-bold uppercase tracking-widest bg-surface-container hover:bg-surface-container-highest text-on-surface transition-colors">
                                 Cancel
                             </button>
                             <button
                                 onClick={handleAddCategory}
                                 disabled={!newCategoryName.trim()}
-                                className="flex-1 clay-button bg-gradient-to-r from-gold-400 to-gold-600 disabled:from-navy-700 disabled:to-navy-700 disabled:cursor-not-allowed text-navy-950 py-3"
+                                className="flex-1 py-4 rounded-xl font-label text-[10px] font-bold uppercase tracking-widest text-on-primary bg-gradient-to-r from-primary to-primary-container shadow-[0_5px_15px_rgba(230,195,100,0.3)] border border-primary/20 disabled:opacity-50 disabled:shadow-none hover:scale-[1.02] active:scale-[0.98] transition-all"
                             >
-                                Add Split Type
+                                Add Split
                             </button>
                         </div>
                     </div>
                 </div>
+            )}
+
+            </> /* End of browse view wrapper */
             )}
         </div>
     );

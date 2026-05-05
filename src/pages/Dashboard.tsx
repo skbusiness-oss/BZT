@@ -1,4 +1,3 @@
-import React from 'react';
 import { useAuth } from '../context/AuthContext';
 import { CommunityDashboard } from '../components/dashboard/CommunityDashboard';
 import { ClientDashboard } from '../components/dashboard/ClientDashboard';

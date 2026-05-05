@@ -8,7 +8,8 @@ import { CoachingProvider, useCoaching } from './CoachingContext';
 import { MessagesProvider, useMessages } from './MessagesContext';
 import { CommunityProvider, useCommunity } from './CommunityContext';
 import { MediaProvider, useMedia } from './MediaContext';
-import { Client, Week, MacroTarget, Video, Workout, Message, Post } from '../types';
+import { AcademyProvider } from './AcademyContext';
+import { Client, LibraryTag, MacroTarget, Message, Post, Video, Week, Workout } from '../types';
 
 // ─── Combined type for backward compatibility ────────────────────────────────
 
@@ -17,6 +18,7 @@ interface DataContextType {
   weeks: Week[];
   videos: Video[];
   categories: string[];
+  libraryTags: LibraryTag[];
   workouts: Workout[];
   workoutCategories: string[];
   messages: Message[];
@@ -29,18 +31,20 @@ interface DataContextType {
   cascadeTargets: (
     clientId: string,
     startWeekNum: number,
-    newTargets: { highCarb: MacroTarget; lowCarb: MacroTarget }
+    newTargets: { highCarb: MacroTarget; lowCarb: MacroTarget; cardio?: number }
   ) => Promise<void>;
-  completeOnboarding: (clientId: string, initialData: Record<string, string>) => Promise<void>;
+  completeOnboarding: (clientId: string, initialData: Record<string, string>, photos?: { front?: string; side?: string; back?: string }) => Promise<void>;
   createProgram: (
     clientId: string,
-    initialTargets: { highCarb: MacroTarget; lowCarb: MacroTarget }
+    initialTargets: { highCarb: MacroTarget; lowCarb: MacroTarget; cardio?: number }
   ) => Promise<void>;
   advanceWeek: (clientId: string, reviewedWeekNum: number) => Promise<void>;
-  assignWorkout: (weekId: string, workoutId: string) => Promise<void>;
-  unassignWorkout: (weekId: string, workoutId: string) => Promise<void>;
   addVideo: (video: Omit<Video, 'id'>) => Promise<void>;
+  updateVideo: (videoId: string, updates: Partial<Video>) => Promise<void>;
+  removeVideo: (videoId: string) => Promise<void>;
   addCategory: (category: string) => Promise<void>;
+  renameCategory: (oldName: string, newName: string) => Promise<void>;
+  removeCategory: (category: string) => Promise<void>;
   addClient: (client: Omit<Client, 'id'>, uid: string) => Promise<void>;
   removeClient: (clientId: string) => Promise<void>;
   addWorkout: (workout: Omit<Workout, 'id' | 'createdAt'>) => Promise<void>;
@@ -48,6 +52,9 @@ interface DataContextType {
   removeWorkout: (workoutId: string) => Promise<void>;
   addWorkoutCategory: (category: string) => Promise<void>;
   uploadPhoto: (file: File, userId: string, weekNumber: number) => Promise<string>;
+  uploadVideoPdf: (file: File, videoId: string) => Promise<{ name: string; url: string }>;
+  removeVideoPdf: (videoId: string, pdfUrl: string) => Promise<void>;
+  extendProgram: (clientId: string, additionalWeeks: number, targets: { highCarb: MacroTarget; lowCarb: MacroTarget; cardio?: number }) => Promise<void>;
 
   sendMessage: (senderId: string, receiverId: string, senderName: string, text: string) => Promise<void>;
   markMessagesRead: (userId: string, otherUserId: string) => Promise<void>;
@@ -80,8 +87,6 @@ const DataBridge = ({ children }: { children: ReactNode }) => {
     completeOnboarding: coaching.completeOnboarding,
     createProgram: coaching.createProgram,
     advanceWeek: coaching.advanceWeek,
-    assignWorkout: coaching.assignWorkout,
-    unassignWorkout: coaching.unassignWorkout,
     addClient: coaching.addClient,
     removeClient: coaching.removeClient,
     uploadPhoto: coaching.uploadPhoto,
@@ -103,14 +108,24 @@ const DataBridge = ({ children }: { children: ReactNode }) => {
     // Media
     videos: media.videos,
     categories: media.categories,
+    libraryTags: media.libraryTags,
     workouts: media.workouts,
     workoutCategories: media.workoutCategories,
     addVideo: media.addVideo,
+    updateVideo: media.updateVideo,
+    removeVideo: media.removeVideo,
     addCategory: media.addCategory,
+    renameCategory: media.renameCategory,
+    removeCategory: media.removeCategory,
     addWorkout: media.addWorkout,
     updateWorkout: media.updateWorkout,
     removeWorkout: media.removeWorkout,
     addWorkoutCategory: media.addWorkoutCategory,
+    uploadVideoPdf: media.uploadVideoPdf,
+    removeVideoPdf: media.removeVideoPdf,
+
+    // Coaching extras
+    extendProgram: coaching.extendProgram,
 
     // Combined loading state
     loading: coaching.loading || msgs.loading || community.loading || media.loading,
@@ -130,7 +145,9 @@ export const DataProvider = ({ children }: { children: ReactNode }) => (
     <MessagesProvider>
       <CommunityProvider>
         <MediaProvider>
-          <DataBridge>{children}</DataBridge>
+          <AcademyProvider>
+            <DataBridge>{children}</DataBridge>
+          </AcademyProvider>
         </MediaProvider>
       </CommunityProvider>
     </MessagesProvider>

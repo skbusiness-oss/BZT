@@ -38,20 +38,20 @@ export const ExerciseCard = ({ exercise, index }: ExerciseCardProps) => {
     }, [exercise.name]);
 
     return (
-        <div className="flex gap-3 p-3 rounded-xl bg-navy-800/25 border border-white/[0.04] hover:border-white/[0.07] transition-colors">
+        <div className="flex gap-3 p-3 rounded-xl bg-surface-container/25 border border-white/[0.04] hover:border-white/[0.07] transition-colors">
 
             {/* ── GIF tile ─────────────────────────────────── */}
-            <div className="relative w-[72px] h-[72px] rounded-xl overflow-hidden shrink-0 bg-navy-800/60 flex items-center justify-center">
+            <div className="relative w-[72px] h-[72px] rounded-xl overflow-hidden shrink-0 bg-surface-container/60 flex items-center justify-center">
                 {/* Skeleton pulse */}
                 {status === 'loading' && (
-                    <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-navy-800 to-navy-700" />
+                    <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-surface-container to-surface-container-high" />
                 )}
 
                 {/* Animated GIF */}
                 {status === 'done' && detail?.gifUrl && (
                     <>
                         {!imgReady && (
-                            <div className="absolute inset-0 animate-pulse bg-navy-700/50" />
+                            <div className="absolute inset-0 animate-pulse bg-surface-container-high/50" />
                         )}
                         <img
                             src={detail.gifUrl}
@@ -70,11 +70,11 @@ export const ExerciseCard = ({ exercise, index }: ExerciseCardProps) => {
 
                 {/* Fallback icon */}
                 {status === 'miss' && (
-                    <Dumbbell className="text-navy-600" size={24} />
+                    <Dumbbell className="text-on-surface-variant/40" size={24} />
                 )}
 
                 {/* Number badge */}
-                <span className="absolute top-1 left-1 min-w-[14px] h-[14px] px-0.5 rounded-full bg-navy-900/80 flex items-center justify-center text-[9px] font-bold text-navy-400">
+                <span className="absolute top-1 left-1 min-w-[14px] h-[14px] px-0.5 rounded-full bg-surface-container-low/80 flex items-center justify-center text-[9px] font-bold text-on-surface-variant">
                     {index + 1}
                 </span>
             </div>
@@ -84,21 +84,21 @@ export const ExerciseCard = ({ exercise, index }: ExerciseCardProps) => {
 
                 {/* Name + sets × reps */}
                 <div className="flex items-start justify-between gap-2">
-                    <span className="font-semibold text-white text-sm leading-snug capitalize line-clamp-2">
+                    <span className="font-semibold text-on-surface text-sm leading-snug capitalize line-clamp-2">
                         {exercise.name}
                     </span>
                     <span className="flex items-center gap-0.5 shrink-0 mt-px">
-                        <span className="text-gold-400 font-bold text-sm">{exercise.sets}</span>
-                        <span className="text-navy-500 text-xs mx-0.5">×</span>
-                        <span className="text-navy-100 text-sm font-medium">{exercise.reps}</span>
+                        <span className="text-primary font-bold text-sm">{exercise.sets}</span>
+                        <span className="text-on-surface-variant/60 text-xs mx-0.5">×</span>
+                        <span className="text-on-surface text-sm font-medium">{exercise.reps}</span>
                     </span>
                 </div>
 
                 {/* Tag skeletons while loading */}
                 {status === 'loading' && (
                     <div className="flex gap-1.5 mt-1.5">
-                        <div className="h-[18px] w-14 rounded-full animate-pulse bg-navy-700/50" />
-                        <div className="h-[18px] w-10 rounded-full animate-pulse bg-navy-700/50" />
+                        <div className="h-[18px] w-14 rounded-full animate-pulse bg-surface-container-high/50" />
+                        <div className="h-[18px] w-10 rounded-full animate-pulse bg-surface-container-high/50" />
                     </div>
                 )}
 
@@ -106,12 +106,12 @@ export const ExerciseCard = ({ exercise, index }: ExerciseCardProps) => {
                 {status === 'done' && detail && (
                     <div className="flex gap-1.5 mt-1.5 flex-wrap">
                         {detail.targetMuscle && (
-                            <span className="px-2 py-0.5 rounded-full bg-gold-500/10 border border-gold-400/15 text-gold-400 text-[10px] font-medium capitalize">
+                            <span className="px-2 py-0.5 rounded-full bg-primary/10 border border-primary/15 text-primary text-[10px] font-medium capitalize">
                                 {detail.targetMuscle}
                             </span>
                         )}
                         {detail.equipment && (
-                            <span className="px-2 py-0.5 rounded-full bg-navy-700/60 text-navy-300 text-[10px] font-medium capitalize">
+                            <span className="px-2 py-0.5 rounded-full bg-surface-container-high/60 text-on-surface/70 text-[10px] font-medium capitalize">
                                 {detail.equipment}
                             </span>
                         )}
@@ -119,7 +119,7 @@ export const ExerciseCard = ({ exercise, index }: ExerciseCardProps) => {
                 )}
 
                 {/* Rest time + notes */}
-                <div className="flex items-center gap-3 mt-1.5 text-[11px] text-navy-500 flex-wrap">
+                <div className="flex items-center gap-3 mt-1.5 text-[11px] text-on-surface-variant/60 flex-wrap">
                     <span className="flex items-center gap-0.5">
                         <Timer size={10} className="shrink-0" /> {exercise.restSeconds}s rest
                     </span>

@@ -9,8 +9,10 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
+import { awardXp, XP_SOURCE } from '../lib/activityScore';
 import { useAuth } from './AuthContext';
 import { Post, Comment } from '../types';
+import { rateLimits, validateText } from '../lib/validation';
 import type { QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 
 function docToObj<T>(snap: QueryDocumentSnapshot<DocumentData>): T {
@@ -78,12 +80,22 @@ export const CommunityProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const addPost = async (authorId: string, authorName: string, authorRole: string, content: string) => {
-    await addDoc(collection(db, 'posts'), {
-      authorId, authorName, authorRole, content,
+    // Rate limit: 5 posts per 10 minutes
+    if (!rateLimits.post(authorId)) {
+      throw new Error('You are posting too frequently. Please wait a few minutes.');
+    }
+    const err = validateText(content, { min: 1, max: 5000 });
+    if (err) throw new Error(err);
+
+    const ref = await addDoc(collection(db, 'posts'), {
+      authorId, authorName, authorRole,
+      content: content.trim(),
       timestamp: serverTimestamp(),
       likes: [],
       commentCount: 0,
     });
+    // Idempotent — one POST award per post id.
+    await awardXp(authorId, XP_SOURCE.POST, ref.id);
   };
 
   const likePost = async (postId: string, userId: string) => {
@@ -96,8 +108,16 @@ export const CommunityProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const addComment = async (postId: string, authorId: string, authorName: string, content: string) => {
-    await addDoc(collection(db, 'posts', postId, 'comments'), {
-      authorId, authorName, content,
+    // Rate limit: 20 comments per 10 minutes
+    if (!rateLimits.comment(authorId)) {
+      throw new Error('You are commenting too frequently. Please wait a moment.');
+    }
+    const err = validateText(content, { min: 1, max: 1000 });
+    if (err) throw new Error(err);
+
+    const commentRef = await addDoc(collection(db, 'posts', postId, 'comments'), {
+      authorId, authorName,
+      content: content.trim(),
       timestamp: serverTimestamp(),
     });
     const post = posts.find((p) => p.id === postId);
@@ -108,6 +128,8 @@ export const CommunityProvider = ({ children }: { children: ReactNode }) => {
     }
     // Reload comments for this post
     await loadComments(postId);
+    // Idempotent — one COMMENT award per comment id.
+    await awardXp(authorId, XP_SOURCE.COMMENT, `${postId}/${commentRef.id}`);
   };
 
   return (

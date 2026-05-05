@@ -2,28 +2,62 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
 
-    // ─── Check-in photos: checkIns/{userId}/** ────────────
-    // • Users can only write to their own folder
-    // • Files must be images and max 10 MB
-    // • Any authenticated user can read (URLs are already token-protected)
-    match /checkIns/{userId}/{allPaths=**} {
+    // Coach gate — reads the custom Auth claim set by the `setUserRole`
+    // Cloud Function. No cross-service Firestore reads (those don't work
+    // in Storage rules). This is the canonical way to gate per-role
+    // access at the bucket level.
+    function isCoach() {
+      return request.auth != null
+             && request.auth.token.role in ['coach', 'admin'];
+    }
 
-      // Any logged-in user can read (download URLs include a security token)
-      allow read: if request.auth != null;
+    // ─── Check-in photos: check-ins/{userId}/** ───────────────
+    // Owner-only reads. Coaches access photos via signed download URLs
+    // stored in Firestore checkIn docs — not via direct Storage reads.
+    match /check-ins/{userId}/{allPaths=**} {
 
-      // Only the owning user can upload/overwrite their own photos
+      allow read: if request.auth != null
+                  && request.auth.uid == userId;
+
       allow write: if request.auth != null
                    && request.auth.uid == userId
                    && request.resource != null
                    && request.resource.contentType.matches('image/.*')
-                   && request.resource.size <= 10 * 1024 * 1024; // 10 MB
+                   && request.resource.size <= 10 * 1024 * 1024;
 
-      // Allow delete of own files (no resource size/type check needed)
       allow delete: if request.auth != null
                     && request.auth.uid == userId;
     }
 
-    // ─── Catch-all: deny everything else ──────────────────
+    // ─── Legacy video PDFs: video-pdfs/{videoId}/** ───────────
+    // Reads: any signed-in user (so attached PDFs play in the lesson view).
+    // Writes/deletes: coach/admin only via the custom claim.
+    match /video-pdfs/{videoId}/{allPaths=**} {
+
+      allow read: if request.auth != null;
+
+      allow write: if isCoach()
+                   && request.resource != null
+                   && request.resource.contentType.matches('application/pdf.*')
+                   && request.resource.size <= 50 * 1024 * 1024;
+
+      allow delete: if isCoach();
+    }
+
+    // ─── Academy lesson resources ─────────────────────────────
+    match /course-resources/{courseId}/{lessonId}/{allPaths=**} {
+
+      allow read: if request.auth != null;
+
+      allow write: if isCoach()
+                   && request.resource != null
+                   && request.resource.contentType.matches('application/pdf.*')
+                   && request.resource.size <= 50 * 1024 * 1024;
+
+      allow delete: if isCoach();
+    }
+
+    // ─── Catch-all: deny everything else ─────────────────────
     match /{allPaths=**} {
       allow read, write: if false;
     }

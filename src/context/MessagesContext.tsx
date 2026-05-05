@@ -10,6 +10,7 @@ import {
 import { db } from '../lib/firebase';
 import { useAuth } from './AuthContext';
 import { Message } from '../types';
+import { rateLimits, validateText } from '../lib/validation';
 import type { QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 
 function docToObj<T>(snap: QueryDocumentSnapshot<DocumentData>): T {
@@ -66,8 +67,17 @@ export const MessagesProvider = ({ children }: { children: ReactNode }) => {
   }, [user?.id]);
 
   const sendMessage = async (senderId: string, receiverId: string, senderName: string, text: string) => {
+    // Client-side rate limit: 10 messages/minute
+    if (!rateLimits.message(senderId)) {
+      throw new Error('You are sending messages too fast. Please wait a moment.');
+    }
+    // Validate content before writing
+    const err = validateText(text, { min: 1, max: 2000 });
+    if (err) throw new Error(err);
+
     await addDoc(collection(db, 'messages'), {
-      senderId, receiverId, senderName, text,
+      senderId, receiverId, senderName,
+      text: text.trim(),
       timestamp: serverTimestamp(),
       read: false,
     });

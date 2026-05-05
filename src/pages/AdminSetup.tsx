@@ -47,7 +47,7 @@ export const AdminSetup = () => {
                 { title: 'Coaching Secrets', category: 'Coaching', thumbnailUrl: 'https://placehold.co/600x400/f43f5e/ffffff?text=Secrets', isLocked: true, description: 'Insider tips from top coaches.', videoUrl: '', platform: 'youtube' },
             ];
             for (const v of videos) {
-                await addDoc(collection(db, 'courses'), { ...v, createdAt: serverTimestamp() });
+                await addDoc(collection(db, 'videos'), { ...v, createdAt: serverTimestamp() });
             }
             addLog(`✅ ${videos.length} sample videos created`);
         } catch (e: any) {
@@ -91,83 +91,89 @@ export const AdminSetup = () => {
     };
 
     return (
-        <div className="max-w-3xl mx-auto p-8 space-y-8 pb-20 fade-in">
-            <div>
-                <h1 className="text-3xl font-bold text-white mb-2">🛠 Platform Setup</h1>
-                <p className="text-navy-200">As the platform Admin, use this page to set up the system.</p>
-            </div>
+        <div className="max-w-3xl mx-auto p-8 space-y-8 pb-20 animate-in fade-in duration-500">
+            <header>
+                <span className="font-label text-[10px] font-bold uppercase tracking-widest text-primary block mb-2">Platform Operations</span>
+                <h1 className="font-headline font-extrabold text-5xl md:text-6xl text-on-surface tracking-tighter">
+                    Admin <span className="text-primary-container">Setup</span>
+                </h1>
+                <p className="text-on-surface/70 mt-4 font-body leading-relaxed max-w-xl">As the platform admin, use this page to set up the system.</p>
+            </header>
 
-            <div className="clay-card p-6 border-l-4 border-gold-500">
-                <h2 className="text-xl font-bold text-white mb-4">1. Create Coach Account</h2>
-                <p className="text-sm text-navy-200 mb-6">Create the account for Mohammed Zaki to log in and manage clients.</p>
-                
-                <div className="space-y-4 max-w-md">
+            <section className="bg-surface-container-low rounded-2xl p-8 ghost-border">
+                <span className="font-label text-[10px] font-bold uppercase tracking-widest text-on-surface/40 block mb-2">Step 01</span>
+                <h2 className="text-2xl font-headline font-bold text-on-surface mb-2">Create Coach Account</h2>
+                <p className="text-sm font-body text-on-surface/60 mb-6">Create the account for Mohammed Zaki to log in and manage clients.</p>
+
+                <div className="space-y-5 max-w-md">
                     <div>
-                        <label className="block text-sm text-navy-300 mb-1">Coach Name</label>
+                        <label className="block text-[10px] font-label font-bold text-on-surface/60 uppercase tracking-widest mb-2">Coach Name</label>
                         <input
                             type="text"
                             value={coachName}
                             onChange={e => setCoachName(e.target.value)}
                             placeholder="e.g. Mohammed Zaki"
-                            className="w-full clay-input p-3"
+                            className="w-full bg-surface-container-lowest border-none outline-none focus:ring-1 focus:ring-primary/30 rounded-xl px-4 py-3 text-sm font-body text-on-surface placeholder-on-surface/30"
                         />
                     </div>
                     <div>
-                        <label className="block text-sm text-navy-300 mb-1">Email</label>
+                        <label className="block text-[10px] font-label font-bold text-on-surface/60 uppercase tracking-widest mb-2">Email</label>
                         <input
                             type="email"
                             value={coachEmail}
                             onChange={e => setCoachEmail(e.target.value)}
                             placeholder="coach@example.com"
-                            className="w-full clay-input p-3"
+                            className="w-full bg-surface-container-lowest border-none outline-none focus:ring-1 focus:ring-primary/30 rounded-xl px-4 py-3 text-sm font-body text-on-surface placeholder-on-surface/30"
                         />
                     </div>
                     <div>
-                        <label className="block text-sm text-navy-300 mb-1">Password</label>
+                        <label className="block text-[10px] font-label font-bold text-on-surface/60 uppercase tracking-widest mb-2">Password</label>
                         <input
                             type="password"
                             value={coachPassword}
                             onChange={e => setCoachPassword(e.target.value)}
                             placeholder="At least 6 characters"
-                            className="w-full clay-input p-3"
+                            className="w-full bg-surface-container-lowest border-none outline-none focus:ring-1 focus:ring-primary/30 rounded-xl px-4 py-3 text-sm font-body text-on-surface placeholder-on-surface/30"
                         />
                     </div>
                     <button
                         onClick={handleCreateCoach}
                         disabled={isCreatingCoach || !coachName || !coachEmail || !coachPassword}
-                        className="w-full clay-button bg-gradient-to-r from-gold-400 to-gold-600 text-navy-950 py-3 mt-2 font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="w-full py-4 mt-4 font-label font-bold text-[10px] uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed text-on-primary bg-gradient-to-r from-primary to-primary-container rounded-full shadow-[0_5px_15px_rgba(230,195,100,0.3)] hover:scale-[1.02] active:scale-[0.98] transition-all"
                     >
-                        {isCreatingCoach ? 'Creating...' : 'Create Coach Account'}
+                        {isCreatingCoach ? 'Creating…' : 'Create Coach Account'}
                     </button>
                 </div>
-            </div>
+            </section>
 
-            <div className="clay-card p-6">
-                <h2 className="text-xl font-bold text-white mb-4">2. Seed System Content</h2>
-                <p className="text-sm text-navy-200 mb-6">Initialize required database configurations and samples.</p>
-                
+            <section className="bg-surface-container-low rounded-2xl p-8 ghost-border">
+                <span className="font-label text-[10px] font-bold uppercase tracking-widest text-on-surface/40 block mb-2">Step 02</span>
+                <h2 className="text-2xl font-headline font-bold text-on-surface mb-2">Seed System Content</h2>
+                <p className="text-sm font-body text-on-surface/60 mb-6">Initialize required database configurations and samples.</p>
+
                 <div className="flex flex-wrap gap-4">
-                    <button onClick={seedCategories} className="clay-button bg-navy-700 hover:bg-navy-600 text-white px-6 py-3">
+                    <button onClick={seedCategories} className="px-6 py-3 rounded-full bg-primary/10 text-primary text-[10px] font-label font-bold uppercase tracking-widest border border-primary/20 hover:bg-primary/20 transition-colors">
                         Seed Categories
                     </button>
-                    <button onClick={seedVideos} className="clay-button bg-navy-700 hover:bg-navy-600 text-white px-6 py-3">
+                    <button onClick={seedVideos} className="px-6 py-3 rounded-full bg-primary/10 text-primary text-[10px] font-label font-bold uppercase tracking-widest border border-primary/20 hover:bg-primary/20 transition-colors">
                         Seed Sample Videos
                     </button>
-                    <button onClick={seedWelcomePost} className="clay-button bg-navy-700 hover:bg-navy-600 text-white px-6 py-3">
+                    <button onClick={seedWelcomePost} className="px-6 py-3 rounded-full bg-primary/10 text-primary text-[10px] font-label font-bold uppercase tracking-widest border border-primary/20 hover:bg-primary/20 transition-colors">
                         Seed Welcome Post
                     </button>
                 </div>
-            </div>
+            </section>
 
             {log.length > 0 && (
-                <div className="clay-card p-6 bg-navy-900/50">
-                    <h3 className="text-white font-bold mb-4">Execution Log</h3>
-                    <div className="space-y-2 font-mono text-sm bg-navy-950 p-4 rounded-xl border border-white/5">
+                <section className="bg-surface-container-low rounded-2xl p-8 ghost-border">
+                    <span className="font-label text-[10px] font-bold uppercase tracking-widest text-on-surface/40 block mb-2">Console</span>
+                    <h3 className="text-2xl font-headline font-bold text-on-surface mb-6">Execution Log</h3>
+                    <div className="space-y-3 font-mono text-xs bg-surface-container-lowest p-6 rounded-xl ghost-border overflow-x-auto">
                         {log.map((l, i) => (
                             <p key={i} className={l.includes('❌') ? 'text-red-400' : 'text-emerald-400'}>{l}</p>
                         ))}
                     </div>
-                </div>
+                </section>
             )}
         </div>
     );

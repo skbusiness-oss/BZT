@@ -10,7 +10,7 @@
  * Followed by validation — if any check fails, recalculates.
  */
 
-import { ProgramDay, WorkoutGoal, WorkoutSession, MuscleGroup } from '../types';
+import { ProgramDay, WorkoutGoal, MuscleGroup } from '../types';
 
 // ═══════════════════════════════════════════
 // SESSION MUSCLE MAP — maps session labels to muscle groups + CNS load
@@ -123,9 +123,6 @@ interface ValidationResult {
 
 export function validateRotation(rotation: ProgramDay[], split: string): ValidationResult {
     const errors: string[] = [];
-    const workoutDays = rotation.filter(d => d.type === 'workout');
-    const restDays = rotation.filter(d => d.type === 'rest');
-
     // Check 1: No two full body sessions consecutive
     for (let i = 0; i < rotation.length - 1; i++) {
         if (rotation[i].type === 'workout' && rotation[i + 1].type === 'workout') {
@@ -195,8 +192,6 @@ export function calculateRestDays(
 ): ProgramDay[] {
     const target = GOAL_REST_TARGETS[goal];
     const totalDays = 10;
-    const targetRestCount = target.min; // Start with minimum
-
     // Number of workout days we need
     const workoutCount = sessions.length;
     let restCount = totalDays - workoutCount;
@@ -232,13 +227,11 @@ export function calculateRestDays(
 
 function buildRotation(
     split: string,
-    goal: WorkoutGoal,
+    _goal: WorkoutGoal,
     sessions: WorkoutSlot[],
     restCount: number
 ): ProgramDay[] {
     const totalDays = 10;
-    const workoutCount = sessions.length;
-    const days: (WorkoutSlot | 'rest' | 'active_recovery')[] = [];
 
     // Step 1: Start with the workout sequence (no rest days yet)
     const sequence = [...sessions];

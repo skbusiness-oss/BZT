@@ -1,12 +1,84 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@300;400;500;600;700;800;900&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@300;400;500;600;700;800;900&display=swap');
+/* =====================================================================
+   THEME TOKENS — dark default, [data-theme="light"] overrides.
+   Each token is a space-separated R G B triplet so Tailwind's
+   `rgb(var(--token) / <alpha-value>)` syntax can apply opacity.
+   ===================================================================== */
+
+:root,
+[data-theme="dark"] {
+  /* Primary (rich gold) */
+  --primary: 230 195 100;
+  --primary-container: 201 168 76;
+  --primary-fixed: 255 224 143;
+  --primary-fixed-dim: 230 195 100;
+  --on-primary: 36 26 0;
+  --on-primary-fixed: 36 26 0;
+  --on-primary-fixed-variant: 88 68 0;
+
+  /* Surfaces */
+  --surface: 14 19 34;
+  --surface-bright: 52 57 73;
+  --surface-dim: 14 19 34;
+  --surface-container-lowest: 9 14 28;
+  --surface-container-low: 22 27 43;
+  --surface-container: 26 31 47;
+  --surface-container-high: 37 41 58;
+  --surface-container-highest: 47 52 69;
+
+  /* Foreground */
+  --on-surface: 222 225 247;
+  --on-surface-variant: 208 197 178;
+  --outline: 153 144 126;
+  --outline-variant: 77 70 55;
+}
+
+[data-theme="light"] {
+  /* Primary (deep marble gold — Performance Atelier) */
+  --primary: 117 91 0;
+  --primary-container: 201 168 76;
+  --primary-fixed: 255 224 143;
+  --primary-fixed-dim: 230 195 100;
+  --on-primary: 255 255 255;
+  --on-primary-fixed: 36 26 0;
+  --on-primary-fixed-variant: 88 68 0;
+
+  /* Surfaces (off-white marble palette) */
+  --surface: 248 249 250;
+  --surface-bright: 248 249 250;
+  --surface-dim: 217 218 219;
+  --surface-container-lowest: 255 255 255;
+  --surface-container-low: 243 244 245;
+  --surface-container: 237 238 239;
+  --surface-container-high: 231 232 233;
+  --surface-container-highest: 225 227 228;
+
+  /* Foreground */
+  --on-surface: 25 28 29;
+  --on-surface-variant: 77 70 55;
+  --outline: 126 118 101;
+  --outline-variant: 208 197 178;
+}
 
 :root {
   font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif;
+  color-scheme: dark;
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+}
+
+/* Typography scales */
+h1, h2, h3, h4, h5, h6, .font-headline {
+  font-family: 'Manrope', 'Noto Sans Arabic', system-ui, sans-serif;
+  letter-spacing: -0.02em;
 }
 
 /* RTL / Arabic support */
@@ -30,123 +102,194 @@ html[dir="rtl"] table td {
 }
 
 body {
-  background-color: #060814;
-  color: #e0e0e0;
+  background-color: rgb(var(--surface));
+  color: rgb(var(--on-surface));
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
-/* Claymorphism base utilities — true dark theme */
+/* BioZackTeam — Glassmorphism System */
 @layer components {
+  /* Level 2: Glass Cards */
   .clay-card {
-    @apply rounded-2xl border border-white/[0.05];
-    background: linear-gradient(145deg, rgba(14, 19, 56, 0.7), rgba(6, 8, 20, 0.9));
-    box-shadow:
-      8px 8px 20px rgba(0, 0, 0, 0.6),
-      -4px -4px 12px rgba(255, 255, 255, 0.015),
-      inset 1px 1px 2px rgba(255, 255, 255, 0.04);
+    @apply rounded-2xl;
+    background: rgb(var(--surface-container) / 0.6);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid rgb(var(--primary) / 0.15); /* Ghost Border */
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
   }
 
   .clay-card-sm {
-    @apply rounded-xl border border-white/[0.05];
-    background: linear-gradient(145deg, rgba(14, 19, 56, 0.5), rgba(6, 8, 20, 0.8));
-    box-shadow:
-      4px 4px 10px rgba(0, 0, 0, 0.5),
-      -2px -2px 6px rgba(255, 255, 255, 0.015),
-      inset 1px 1px 1px rgba(255, 255, 255, 0.03);
+    @apply rounded-xl;
+    background: rgb(var(--surface-container) / 0.6);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid rgb(var(--primary) / 0.15);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
   }
 
+  /* Level 1: Sections (Recessed or Flat) */
   .clay-inset {
     @apply rounded-xl;
-    background: rgba(4, 5, 14, 0.8);
-    box-shadow:
-      inset 4px 4px 10px rgba(0, 0, 0, 0.6),
-      inset -2px -2px 6px rgba(255, 255, 255, 0.015);
+    background: rgb(var(--surface-container-low));
+    border-bottom: 1px solid rgb(var(--primary) / 0.1);
   }
 
+  /* Buttons: High-Performance Triggers */
   .clay-button {
-    @apply rounded-xl font-bold transition-all duration-200 active:scale-[0.97];
-    box-shadow:
-      4px 4px 12px rgba(0, 0, 0, 0.5),
-      -2px -2px 6px rgba(255, 255, 255, 0.015),
-      inset 1px 1px 2px rgba(255, 255, 255, 0.05);
+    @apply rounded-full font-bold transition-all duration-300 active:scale-[0.97];
+    background: linear-gradient(135deg, rgb(var(--primary)) 0%, rgb(var(--primary-container)) 100%);
+    color: rgb(var(--on-primary));
+    box-shadow: 0 4px 12px rgb(var(--primary) / 0.15);
   }
 
   .clay-button:hover {
-    box-shadow:
-      2px 2px 8px rgba(0, 0, 0, 0.4),
-      -1px -1px 4px rgba(255, 255, 255, 0.015),
-      inset 1px 1px 2px rgba(255, 255, 255, 0.06);
+    box-shadow: 0 6px 20px rgb(var(--primary) / 0.25);
+    filter: brightness(1.1);
   }
 
+  /* Destructive buttons */
+  .clay-button.bg-red-600 {
+    background: linear-gradient(135deg, #ffb4ab 0%, #93000a 100%);
+    color: #fff;
+    border: none;
+  }
+
+  /* Input Fields: Minimalist Precision */
   .clay-input {
-    @apply rounded-xl border border-white/[0.06] text-white focus:outline-none transition-all;
-    background: rgba(4, 5, 14, 0.9);
-    box-shadow: inset 3px 3px 8px rgba(0, 0, 0, 0.6), inset -1px -1px 4px rgba(255, 255, 255, 0.015);
+    @apply rounded-md border-b focus:outline-none transition-all;
+    background: rgb(var(--surface-container-low));
+    color: rgb(var(--on-surface));
+    border-top: none;
+    border-left: none;
+    border-right: none;
+    border-bottom: 2px solid rgb(var(--outline-variant));
   }
 
   .clay-input:focus {
-    border-color: rgba(212, 160, 23, 0.4);
-    box-shadow: inset 3px 3px 8px rgba(0, 0, 0, 0.6), inset -1px -1px 4px rgba(255, 255, 255, 0.015), 0 0 15px rgba(212, 160, 23, 0.08);
+    border-bottom-color: rgb(var(--primary));
+    box-shadow: 0 4px 15px rgb(var(--primary) / 0.08);
   }
 
   .gold-glow {
-    box-shadow: 0 0 24px rgba(212, 160, 23, 0.12), 0 0 60px rgba(212, 160, 23, 0.04);
+    box-shadow: 0 0 24px rgb(var(--primary) / 0.12), 0 0 60px rgb(var(--primary) / 0.04);
+  }
+
+  /* Stitch BioZackTeam aliases — same look as clay-card */
+  .glass-card {
+    @apply rounded-2xl;
+    background: rgb(var(--surface-container-highest) / 0.6);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid rgb(var(--primary) / 0.15);  /* Ghost Border */
+    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.25);
+  }
+
+  .glass-panel {
+    @apply rounded-2xl;
+    background: rgb(var(--surface-container) / 0.7);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgb(var(--primary) / 0.12);
+  }
+
+  .gold-gradient {
+    background: linear-gradient(135deg, rgb(var(--primary)) 0%, rgb(var(--primary-container)) 100%);
+  }
+
+  /* Editorial eyebrow: tiny uppercase, gold, wide letterspacing */
+  .eyebrow {
+    @apply text-xs font-headline font-bold uppercase tracking-[0.3em] text-primary;
+  }
+
+  /* Editorial display headline */
+  .display-headline {
+    @apply font-headline font-extrabold tracking-tighter leading-none;
+  }
+
+  /* Pill chip — Stitch filter chip */
+  .pill-chip {
+    @apply px-6 py-2 rounded-full text-xs font-bold uppercase tracking-widest whitespace-nowrap transition-colors;
+    background: rgb(var(--surface-container));
+    border: 1px solid rgb(var(--outline-variant) / 0.4);
+    color: rgb(var(--on-surface-variant));
+  }
+  .pill-chip:hover {
+    border-color: rgb(var(--primary) / 0.4);
+  }
+  .pill-chip-active {
+    @apply px-6 py-2 rounded-full text-xs font-bold uppercase tracking-widest whitespace-nowrap;
+    background: rgb(var(--surface-container));
+    border: 1px solid rgb(var(--primary) / 0.4);
+    color: rgb(var(--primary));
+  }
+
+  /* No-scrollbar for horizontal chip rows */
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+  /* Ghost Border */
+  .ghost-border {
+    border: 1px solid rgb(var(--primary) / 0.15);
   }
 
   .text-gradient-gold {
     @apply bg-clip-text text-transparent;
-    background-image: linear-gradient(135deg, #ffd740, #d4a017, #c9942a);
+    background-image: linear-gradient(135deg, rgb(var(--primary)) 0%, rgb(var(--primary-container)) 100%);
   }
 
   .text-gradient-blue {
     @apply bg-clip-text text-transparent;
-    background-image: linear-gradient(135deg, #7986cb, #5c6bc0, #3f51b5);
+    background-image: linear-gradient(135deg, #b9c4ff 0%, #3f51b5 100%);
   }
 }
 
-/* Custom scrollbar — dark */
+/* Custom scrollbar — theme-aware */
 ::-webkit-scrollbar {
   width: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(4, 5, 14, 0.8);
+  background: rgb(var(--surface-container-lowest) / 0.8);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(63, 81, 181, 0.2);
+  background: rgb(var(--outline) / 0.3);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(63, 81, 181, 0.35);
+  background: rgb(var(--outline) / 0.6);
 }
 
 /* Selection color */
 ::selection {
-  background: rgba(212, 160, 23, 0.25);
-  color: white;
+  background: rgb(var(--primary) / 0.25);
+  color: rgb(var(--on-surface));
 }
 
 /* Range slider styling */
 input[type="range"] {
   -webkit-appearance: none;
+  appearance: none;
   height: 6px;
   border-radius: 3px;
-  background: rgba(14, 19, 56, 0.6);
+  background: rgb(var(--surface-container-lowest) / 0.6);
 }
 
 input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
+  appearance: none;
   height: 18px;
   width: 18px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #ffd740, #d4a017);
+  background: linear-gradient(135deg, rgb(var(--primary)), rgb(var(--primary-container)));
   cursor: pointer;
-  box-shadow: 0 2px 10px rgba(212, 160, 23, 0.25);
+  box-shadow: 0 2px 10px rgb(var(--primary) / 0.25);
 }
 
 /* Select dropdown styling */
 select option {
-  background: #0a0d24;
-  color: white;
+  background: rgb(var(--surface-container));
+  color: rgb(var(--on-surface));
 }

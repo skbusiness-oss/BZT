@@ -1,0 +1,1246 @@
+# CLAUDE.md — BioZackTeam (BZT) Fitness Platform
+# Source of Truth for Claude Code
+# Last Updated: April 2026
+
+---
+
+## ⚠️ CRITICAL RULES — READ BEFORE ANYTHING ELSE
+
+```
+1. NEVER modify existing working features
+2. NEVER change Firebase Auth logic in AuthContext.tsx
+3. NEVER change existing Firestore rules without explicit instruction
+4. NEVER change existing data files unless replacing bad exercise names (see Section 8)
+5. ALWAYS build new features as NEW files first, wire in last
+6. ALWAYS respect the existing TypeScript types in src/types/index.ts
+7. ALWAYS support both English and Arabic (RTL) in every new UI component
+8. ALWAYS use the existing LanguageContext for language detection — never add new language toggles
+9. ALWAYS use localStorage first for new data, structured for easy Firestore migration
+10. When in doubt — ask, don't assume
+```
+
+---
+
+## 1. PROJECT OVERVIEW
+
+**Name**: BioZackTeam (BZT) Fitness Platform  
+**Purpose**: Fitness coaching platform with 3 user roles  
+**Revenue Goal**: €10k/month by end 2026  
+**Stack**: React 18 + TypeScript + Vite + Tailwind CSS + Firebase  
+
+### User Roles
+```
+coach      → Full access. Manages clients, reviews check-ins, assigns workouts, posts content
+coaching   → Paying coaching clients. Check-ins, assigned workouts, messages, community
+community  → Free members. Browse programs, community feed, video library (locked videos hidden)
+```
+
+### What's Working (DO NOT TOUCH)
+```
+✅ Firebase Authentication (email/password)
+✅ AuthContext.tsx — role detection, session management
+✅ DataContext.tsx — all app state via localStorage
+✅ LanguageContext.tsx — EN/AR bilingual + RTL
+✅ Login.tsx — sign-in only (no self-registration)
+✅ Dashboard.tsx — role-based dashboard router
+✅ CheckIn.tsx — client weekly check-in form
+✅ CoachReview.tsx — coach reviews client check-ins
+✅ Clients.tsx — coach manages client list
+✅ Messages.tsx — coach ↔ client messaging
+✅ Community.tsx — community feed (posts, likes, comments)
+✅ VideoLibrary.tsx — video library with lock/unlock
+✅ Profile.tsx — user profile page
+✅ All 7 training data files (264 workouts across 42 programs)
+✅ restDayEngine.ts — rest day calculation (rewrite only, keep exports identical)
+✅ AppRoutes.tsx — protected routes with role-based access
+✅ Layout.tsx — sidebar navigation + background
+✅ Firebase hosting, Firestore rules, Storage rules
+```
+
+---
+
+## 2. TECH STACK
+
+```
+Frontend:     React 18, TypeScript, Vite
+Styling:      Tailwind CSS — clay/glassmorphism design system (see Section 6)
+Auth:         Firebase Authentication (email/password)
+Database:     Firebase Firestore (+ localStorage for new features during migration)
+Storage:      Firebase Storage (progress photos)
+Icons:        Lucide React
+Charts:       Recharts
+Bilingual:    English + Arabic with RTL support via LanguageContext
+Deployment:   Firebase Hosting → dist/ folder
+```
+
+---
+
+## 3. PROJECT FILE STRUCTURE
+
+```
+BZT/
+├── public/
+├── src/
+│   ├── lib/
+│   │   └── firebase.ts              # Firebase app + auth init — DO NOT TOUCH
+│   ├── context/
+│   │   ├── AuthContext.tsx          # Firebase Auth — DO NOT TOUCH
+│   │   ├── DataContext.tsx          # App state — DO NOT TOUCH
+│   │   └── LanguageContext.tsx      # EN/AR — DO NOT TOUCH
+│   ├── pages/
+│   │   ├── Login.tsx                # DO NOT TOUCH
+│   │   ├── Dashboard.tsx            # MODIFY: add <ActiveProgramCard /> at top only
+│   │   ├── CheckIn.tsx              # DO NOT TOUCH
+│   │   ├── CoachReview.tsx          # DO NOT TOUCH
+│   │   ├── Clients.tsx              # DO NOT TOUCH
+│   │   ├── Messages.tsx             # DO NOT TOUCH
+│   │   ├── Community.tsx            # DO NOT TOUCH
+│   │   ├── VideoLibrary.tsx         # DO NOT TOUCH
+│   │   ├── Workouts.tsx             # REPLACE content with new WorkoutsPage logic
+│   │   └── Profile.tsx              # DO NOT TOUCH
+│   ├── components/
+│   │   ├── layout/
+│   │   │   └── Layout.tsx           # DO NOT TOUCH
+│   │   ├── dashboard/               # Existing dashboard components — DO NOT TOUCH
+│   │   ├── checkin/                 # Existing check-in components — DO NOT TOUCH
+│   │   └── workouts/                # NEW FOLDER — create all workout components here
+│   │       ├── WorkoutWizard.tsx    # NEW
+│   │       ├── ProgramCard.tsx      # NEW
+│   │       ├── ProgramDetail.tsx    # NEW
+│   │       ├── WorkoutDayView.tsx   # NEW
+│   │       ├── ExerciseModal.tsx    # NEW
+│   │       ├── ActiveProgramCard.tsx# NEW — also used in Dashboard
+│   │       └── RestDayCard.tsx      # NEW
+│   ├── data/
+│   │   ├── trainingPrograms.ts      # MODIFY: replace bad exercise names only
+│   │   ├── upperLowerPrograms.ts    # MODIFY: replace bad exercise names only
+│   │   ├── pplPrograms.ts           # MODIFY: replace bad exercise names only
+│   │   ├── broSplitPrograms.ts      # MODIFY: replace bad exercise names only
+│   │   ├── strengthPrograms.ts      # MODIFY: replace bad exercise names only
+│   │   ├── hiitCardioPrograms.ts    # MODIFY: replace bad exercise names only
+│   │   ├── programData.ts           # DO NOT TOUCH (program metadata)
+│   │   ├── restDayEngine.ts         # REWRITE — keep identical exports
+│   │   ├── index.ts                 # DO NOT TOUCH
+│   │   ├── programUtils.ts          # NEW — difficulty + assignment logic
+│   │   └── exerciseLibrary.ts       # NEW — GIF mapping + EN/AR instructions
+│   ├── hooks/
+│   │   └── useActiveProgram.ts      # NEW — save/load/complete program tracking
+│   ├── types/
+│   │   └── index.ts                 # MODIFY: add new types only, never remove existing
+│   └── AppRoutes.tsx                # MODIFY: add new routes only
+├── firebase.json                    # DO NOT TOUCH
+├── firestore.rules                  # DO NOT TOUCH unless explicitly instructed
+├── storage.rules                    # DO NOT TOUCH
+└── CLAUDE.md                        # This file
+```
+
+---
+
+## 4. FIREBASE CONFIGURATION
+
+### Hosting
+```json
+{
+  "hosting": {
+    "public": "dist",
+    "rewrites": [{ "source": "**", "destination": "/index.html" }]
+  }
+}
+```
+
+### Firestore Collections (Existing)
+```
+users/{uid}           → user profiles, roles, macro targets
+clients/{clientId}    → legacy client data
+weeks/{weekId}        → weekly check-in submissions
+videos/{videoId}      → video library entries
+workouts/{workoutId}  → coach-assigned workouts
+messages/{messageId}  → coach ↔ client messages
+posts/{postId}        → community feed posts
+posts/{postId}/comments/{commentId} → post comments
+settings/{docId}      → app configuration
+```
+
+### New Firestore Collection (ADD — do not modify existing rules)
+```
+userPrograms/{userId}
+  Fields:
+    userId: string
+    programId: string           // e.g. 'prog13'
+    programName: string
+    goal: WorkoutGoal
+    split: string
+    difficulty: 'beginner' | 'intermediate' | 'advanced'
+    startDate: string           // ISO date string
+    currentCycle: number        // starts at 1
+    completedDays: number[]     // [1, 2, 3, 4]
+    rotation: ProgramDay[]      // full 10-day array from restDayEngine
+    assignedByCoach: boolean    // true if coach assigned, false if self-selected
+    createdAt: Timestamp
+    updatedAt: Timestamp
+```
+
+### Firestore Rules to ADD (append to existing firestore.rules)
+```javascript
+// ─── userPrograms/{userId} ─────────────────────────
+// • User reads/writes their own program
+// • Coach can read/write any user's program (for assignment)
+match /userPrograms/{userId} {
+  allow read: if isSignedIn() && (isOwner(userId) || isCoach());
+  allow write: if isSignedIn() && (isOwner(userId) || isCoach());
+}
+```
+
+### localStorage Keys (used until Firestore migration)
+```
+activeProgram_{userId}    → JSON of UserActiveProgram object
+```
+
+---
+
+## 5. TYPESCRIPT TYPES
+
+### Existing Types (from src/types/index.ts — DO NOT REMOVE)
+```typescript
+// These already exist — reference them, don't redefine
+type WorkoutGoal = 'fat_loss' | 'muscle_gain' | 'strength' | 'recomp' | 'maintenance' | 'endurance'
+type MuscleGroup = 'chest' | 'back' | 'shoulders' | 'arms' | 'quads' | 'hamstrings' | 'glutes' | 'calves' | 'core' | 'full_body'
+
+interface Exercise {
+  name: string
+  sets: number
+  reps: string
+  restSeconds: number
+  notes?: string
+}
+
+interface Workout {
+  id: string
+  name: string
+  description: string
+  category: string
+  goal: WorkoutGoal
+  estimatedMinutes: number
+  exercises: Exercise[]
+  createdAt: string
+}
+
+interface ProgramDay {
+  dayNumber: number
+  type: 'workout' | 'rest'
+  label: string
+  workoutId?: string
+  cnsLoad?: number
+  restDayType?: 'full_rest' | 'active_recovery'
+}
+
+interface TrainingProgram {
+  id: string
+  name: string
+  split: string
+  goal: WorkoutGoal
+  description: string
+  rotation: ProgramDay[]
+  rules: string[]
+}
+```
+
+### New Types to ADD to src/types/index.ts
+```typescript
+type Difficulty = 'beginner' | 'intermediate' | 'advanced'
+
+interface UserActiveProgram {
+  userId: string
+  programId: string
+  programName: string
+  goal: WorkoutGoal
+  split: string
+  difficulty: Difficulty
+  startDate: string           // ISO date
+  currentCycle: number        // starts at 1
+  completedDays: number[]     // day numbers completed e.g. [1,2,3]
+  rotation: ProgramDay[]      // full 10-day rotation
+  assignedByCoach: boolean
+}
+
+interface ExerciseDetail {
+  canonicalName: string
+  canonicalNameAr: string
+  gifUrl: string              // from free-exercise-db GitHub CDN or exercise.db
+  muscles: {
+    primary: string[]
+    primaryAr: string[]
+    secondary: string[]
+    secondaryAr: string[]
+  }
+  instructions: string[]      // English step-by-step
+  instructionsAr: string[]    // Arabic step-by-step
+  tips: string[]
+  tipsAr: string[]
+  commonMistakes: string[]
+  commonMistakesAr: string[]
+  equipment: string
+  equipmentAr: string
+}
+
+interface ProgramAssignmentResult {
+  program: TrainingProgram
+  recommendedSplits: string[]   // ordered by best match
+  difficulty: Difficulty
+  goal: WorkoutGoal
+}
+```
+
+---
+
+## 6. DESIGN SYSTEM
+
+### Style: Clay / Glassmorphism
+```
+The app uses a dark background with frosted glass cards.
+Every new component MUST match this aesthetic.
+
+Background:   Dark gradient (already set in Layout.tsx)
+Cards:        bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl
+              OR bg-black/40 backdrop-blur-md border border-white/10 rounded-2xl
+Buttons:      Primary → bg-orange-500 hover:bg-orange-600 text-white rounded-xl
+              Secondary → bg-white/10 hover:bg-white/20 border border-white/20
+              Danger → bg-red-500/20 hover:bg-red-500/40 border border-red-500/40
+Text:         Primary → text-white
+              Secondary → text-white/70
+              Muted → text-white/40
+Goal colors:
+  fat_loss    → orange  (bg-orange-500, border-orange-400)
+  muscle_gain → blue    (bg-blue-500, border-blue-400)
+  strength    → red     (bg-red-500, border-red-400)
+  recomp      → purple  (bg-purple-500, border-purple-400)
+  maintenance → green   (bg-green-500, border-green-400)
+  endurance   → teal    (bg-teal-500, border-teal-400)
+Difficulty colors:
+  beginner     → green  (bg-green-500/20 text-green-300)
+  intermediate → yellow (bg-yellow-500/20 text-yellow-300)
+  advanced     → red    (bg-red-500/20 text-red-300)
+```
+
+### Tailwind Classes to Use
+```
+Card wrapper:     className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-4"
+Selected card:    className="bg-orange-500/20 border-orange-400 ring-2 ring-orange-400"
+Section title:    className="text-white font-bold text-xl mb-4"
+Body text:        className="text-white/70 text-sm"
+Icon+label row:   className="flex items-center gap-2 text-white/80"
+Progress bar bg:  className="bg-white/10 rounded-full h-2"
+Progress bar fill:className="bg-orange-500 h-2 rounded-full transition-all"
+```
+
+### RTL Support
+```typescript
+// Always wrap with direction based on language
+import { useLanguage } from '../../context/LanguageContext'
+const { language } = useLanguage()
+const isRTL = language === 'ar'
+
+// Apply to containers
+<div dir={isRTL ? 'rtl' : 'ltr'} className={isRTL ? 'font-arabic' : ''}>
+```
+
+---
+
+## 7. FEATURE: WORKOUT WIZARD + PROGRAM TRACKING
+
+### Complete User Flow
+
+```
+FLOW A — New user / No active program:
+
+Workouts page opens
+    ↓
+STEP 1: Goal Selection
+  6 goal cards displayed in 2×3 grid
+  Each card: emoji + goal name + short description (EN or AR)
+  User taps one card → highlights → [NEXT] button activates
+    ↓
+STEP 2: Difficulty Selection
+  3 level cards displayed vertically
+  Beginner: "New to training / returning after break / machine-based"
+  Intermediate: "1-2 years / comfortable with free weights"
+  Advanced: "3+ years / percentage-based lifting / heavy compounds"
+  User taps one → [NEXT]
+    ↓
+STEP 3: Split Selection
+  Cards filtered by goal + difficulty
+  Each card shows: split name + sessions count + avg duration + "best for" tag
+  ★ RECOMMENDED badge on top match
+  User taps one → [SEE PROGRAM]
+    ↓
+STEP 4: Program Preview
+  Shows 10-day rotation (day names only, no exercise detail)
+  Program name + description
+  Two buttons: [ASSIGN THIS PROGRAM] and [← BACK]
+    ↓
+STEP 5: Confirmation screen
+  "Your program is ready!"
+  Shows: goal + split + difficulty + cycle info
+  [START MY PROGRAM 🚀]
+    ↓
+Saved to localStorage + Firestore userPrograms collection
+Redirect to Dashboard
+ActiveProgramCard now visible on Dashboard
+
+─────────────────────────────────────────────────
+
+FLOW B — Has active program:
+
+Workouts page opens
+    ↓
+Shows current program banner:
+  Program name + goal + difficulty
+  Day X/10 progress
+  [DELETE & CHOOSE NEW PROGRAM] button (with confirmation dialog)
+    ↓
+Below: Browse mode (Netflix-style rows by goal)
+  All 42 programs browsable (read-only, no assign button)
+
+─────────────────────────────────────────────────
+
+FLOW C — Workout Day View:
+
+User taps [START TODAY'S WORKOUT] from dashboard
+    ↓
+WorkoutDayView opens:
+  Header: day name + goal banner
+  Goal banner: mode label + today's focus + rest guidance + weight guidance
+  Exercise list: each exercise as a card
+    ↓
+Exercise card shows:
+  Exercise name (tappable)
+  Sets × reps
+  Rest time with timer icon
+  Notes badge (REST PAUSE, etc.) if present
+  Rep scheme explanation (parsed from reps string)
+    ↓
+Tap exercise name → ExerciseModal slides up from bottom:
+  GIF (full width, auto-loops)
+  Muscle groups (primary + secondary)
+  Instructions (in user's language from LanguageContext)
+  Coach tips
+  Common mistakes
+  Language auto from LanguageContext — no manual toggle
+    ↓
+Bottom of workout:
+  [✅ MARK DAY AS COMPLETE] button
+    ↓
+  For rest days: RestDayCard (education + acknowledgment button)
+    ↓
+Completion screen:
+  Celebration animation
+  "Day X complete!"
+  Show tomorrow's session name
+  [BACK TO DASHBOARD]
+    ↓
+After Day 10:
+  "Cycle N complete! 🎉"
+  cycle counter increments
+  completedDays resets to []
+  same program continues
+
+─────────────────────────────────────────────────
+
+FLOW D — Coach assigns program to coaching client:
+
+Coach goes to client profile
+Selects a program from the 42 programs
+Clicks [ASSIGN TO CLIENT]
+  → writes to Firestore userPrograms/{clientId}
+  → assignedByCoach: true
+  → overrides any self-selected program
+Client's dashboard shows assigned program
+Client CANNOT delete coach-assigned program
+  (delete button hidden if assignedByCoach === true)
+```
+
+### Dashboard Integration
+```
+In Dashboard.tsx — ADD at the very top of the page content:
+
+import { ActiveProgramCard } from '../components/workouts/ActiveProgramCard'
+
+// Inside Dashboard JSX, before existing content:
+<ActiveProgramCard />
+
+The ActiveProgramCard component handles:
+- Loading from localStorage / Firestore
+- Showing nothing if no program assigned
+- Showing program name, today's day, progress bar, streak
+- [START TODAY'S WORKOUT] button → navigates to /workouts/day/:dayNumber
+- Coach-assigned programs show a lock icon (cannot delete)
+```
+
+### New Routes to ADD in AppRoutes.tsx
+```typescript
+// Add these routes (all require isSignedIn):
+/workouts                    → Workouts.tsx (already exists, replace content)
+/workouts/day/:dayNumber     → WorkoutDayView.tsx (NEW)
+/workouts/program/:programId → ProgramDetail.tsx (NEW, browse-only)
+```
+
+---
+
+## 8. EXERCISE NAME REPLACEMENTS
+
+### Problem
+Several exercise names in the data files are ambiguous, misspelled, or
+use abbreviations that won't match any exercise database. Replace them
+with clean, standard names. Keep the same ex() function signature.
+Only change the name string (first argument).
+
+### Replacement Map (find → replace in ALL 7 program files)
+```
+'Crusifixed Triceps'           → 'Cable Overhead Tricep Extension'
+'High Rows'                    → 'Seated High Cable Row'
+'Rowing Machine'               → 'Chest-Supported Machine Row'
+'Rowing Machine Chest Supported' → 'Chest-Supported Machine Row'
+'Abs Circuit'                  → 'Core Circuit (Plank / Crunch / Leg Raise)'
+'Abs Training'                 → 'Core Circuit (Ab Wheel / Decline Crunch)'
+'ABS Circuit'                  → 'Core Circuit (Plank / Crunch / Leg Raise)'
+'ABS'                          → 'Core Circuit (Plank / Crunch / Leg Raise)'
+'DB SLDL'                      → 'Dumbbell Romanian Deadlift'
+'Dumbbell SLDL'                → 'Dumbbell Romanian Deadlift'
+'DB Straight Leg Deadlift'     → 'Dumbbell Romanian Deadlift'
+'SLDL'                         → 'Romanian Deadlift'
+'RDL'                          → 'Romanian Deadlift'
+'OHP'                          → 'Overhead Press'
+'Calf'                         → 'Standing Calf Raise'
+'DB Press' (shoulder context)  → 'Dumbbell Shoulder Press'
+'DB Press' (chest context)     → 'Dumbbell Chest Press'
+'Flat Machine'                 → 'Flat Chest Press Machine'
+'Flat Bench'                   → 'Flat Barbell Bench Press'
+'Incline Hammer'               → 'Incline Hammer Strength Press'
+'Wide Pulldown'                → 'Wide Grip Lat Pulldown'
+'Wide Grip Pull Down'          → 'Wide Grip Lat Pulldown'
+'Lat Pull Down'                → 'Wide Grip Lat Pulldown'
+'Lat Pulldown'                 → 'Wide Grip Lat Pulldown'
+'Cable Pulldown'               → 'Wide Grip Lat Pulldown'
+'EZ Reverse Curl'              → 'EZ Bar Reverse Curl'
+'Barbell OHP'                  → 'Barbell Overhead Press'
+'DB Fly'                       → 'Dumbbell Chest Fly'
+'Pull-Overs'                   → 'Dumbbell Pullover'
+'Push-Up Drop Set'             → 'Max Effort Push-Up Set'
+'Push-Up Burnout'              → 'Max Effort Push-Up Set'
+'Chin-Ups Max'                 → 'Chin-Up (Max Reps)'
+'Treadmill Intervals'          → 'Treadmill HIIT'
+'HIIT Bike'                    → 'Bike HIIT Intervals'
+'Easy Bike/Walk'               → 'Low Intensity Cardio Warm-Up'
+'Zone 2 Steady State'          → 'Zone 2 Steady State Cardio'
+'Moderate Steady State'        → 'Moderate Steady State Cardio'
+'Light Cardio'                 → 'Low Intensity Steady State Cardio'
+'Moderate Cardio'              → 'Moderate Steady State Cardio'
+'Sustained Zone 2-3 Cardio'    → 'Zone 2-3 Sustained Cardio'
+'Row Machine'                  → 'Rowing Machine Cardio'
+'Hamstring Curl'               → 'Lying Leg Curl'
+'DB Lateral Raise Drop Set'    → 'Dumbbell Lateral Raise Drop Set'
+'DB Lateral Raises'            → 'Dumbbell Lateral Raises'
+'Lateral Raise'                → 'Dumbbell Lateral Raises'
+'Bent-Over Lateral Raise'      → 'Bent-Over Dumbbell Lateral Raise'
+'Bent-Over Lateral'            → 'Bent-Over Dumbbell Lateral Raise'
+'Bent Over Lateral Raises'     → 'Bent-Over Dumbbell Lateral Raise'
+'DB Chest Press'               → 'Dumbbell Chest Press'
+'Flat DB Press'                → 'Flat Dumbbell Bench Press'
+'Cable Lat Pulldown'           → 'Wide Grip Lat Pulldown'
+'Chest-Supported Row'          → 'Chest-Supported Dumbbell Row'
+'Overhead Press Barbell'       → 'Barbell Overhead Press'
+'EZ Bar Curl'                  → 'EZ Bar Bicep Curl'
+'EZ Curl'                      → 'EZ Bar Bicep Curl'
+'EZ Curl Heavy'                → 'EZ Bar Bicep Curl'
+'EZ Bar Curl Heavy'            → 'EZ Bar Bicep Curl'
+'EZ Bar Reverse Curl'          → 'EZ Bar Reverse Curl'  (keep)
+'Cable Reverse Curl'           → 'Cable Reverse Curl'    (keep)
+'Barbell Preacher Curl'        → 'Barbell Preacher Curl' (keep)
+'Scott Curls'                  → 'Barbell Preacher Curl' (same exercise)
+'Concentration Curls'          → 'Dumbbell Concentration Curl'
+'Donkey Calf Raise'            → 'Donkey Calf Raise' (keep)
+'Donkey Calf'                  → 'Donkey Calf Raise'
+'Seated Calf'                  → 'Seated Calf Raise'
+'Calf Raise'                   → 'Standing Calf Raise'
+'Calf Raise Heavy'             → 'Standing Calf Raise'
+'Abductor'                     → 'Hip Abductor Machine'
+'Adductor'                     → 'Hip Adductor Machine'
+'Abductor Machine'             → 'Hip Abductor Machine'
+'Adductor Machine'             → 'Hip Adductor Machine'
+'Shrugs Heavy'                 → 'Barbell Shrugs'
+'Shrugs'                       → 'Barbell Shrugs'
+'Barbell Shrugs Heavy'         → 'Barbell Shrugs'
+'Close Grip Bench'             → 'Close Grip Barbell Bench Press'
+'Skull Crushers'               → 'EZ Bar Skull Crushers'
+'Kickbacks'                    → 'Dumbbell Tricep Kickback'
+'Kick Backs'                   → 'Dumbbell Tricep Kickback'
+'Weighted Dips'                → 'Weighted Parallel Bar Dips'
+'Dips Weighted'                → 'Weighted Parallel Bar Dips'
+'Weighted Triceps Dips'        → 'Weighted Parallel Bar Dips'
+'Triceps Dips Weighted'        → 'Weighted Parallel Bar Dips'
+'Triceps Dips'                 → 'Parallel Bar Dips'
+'Dips'                         → 'Parallel Bar Dips'
+'Overhead Triceps'             → 'Overhead Dumbbell Tricep Extension'
+'Overhead Triceps Extension'   → 'Overhead Dumbbell Tricep Extension'
+'Cable Triceps Pushdowns'      → 'Cable Tricep Pushdown'
+'Triceps Pushdown'             → 'Cable Tricep Pushdown'
+'Push Press'                   → 'Barbell Push Press'
+'Power Clean'                  → 'Barbell Power Clean'
+'Power Clean (light)'          → 'Barbell Power Clean (Light)'
+'Good Morning'                 → 'Barbell Good Morning'
+'Face Pull'                    → 'Cable Face Pull'
+'Upright Row'                  → 'Barbell Upright Row'
+'Upright Row Heavy'            → 'Barbell Upright Row'
+'Hip Thrust'                   → 'Barbell Hip Thrust'
+'Nordic Hamstring Curl'        → 'Nordic Hamstring Curl' (keep)
+'Pause Squat'                  → 'Barbell Pause Squat'
+'Box Squat'                    → 'Barbell Box Squat'
+'Front Squat'                  → 'Barbell Front Squat'
+'Back Squat'                   → 'Barbell Back Squat'
+'Barbell Squat'                → 'Barbell Back Squat'
+'Barbell Back Squat'           → 'Barbell Back Squat' (keep)
+'Smith Machine Squat'          → 'Smith Machine Squat' (keep)
+'Smith Squat'                  → 'Smith Machine Squat'
+'Hack Squat'                   → 'Hack Squat Machine'
+'Hack Squat Machine'           → 'Hack Squat Machine' (keep)
+'Leg Press Heavy'              → 'Leg Press'
+'Single Leg Press'             → 'Single Leg Press Machine'
+'Barbell Row Heavy'            → 'Barbell Bent-Over Row'
+'Barbell Row'                  → 'Barbell Bent-Over Row'
+'T-Bar Row'                    → 'T-Bar Row' (keep)
+'Chest-Supported Row'          → 'Chest-Supported Dumbbell Row'
+'Cable Pull-Over'              → 'Cable Pullover'
+'Deadlift Variation'           → 'Romanian Deadlift'
+'Romanian Deadlift Heavy'      → 'Romanian Deadlift'
+'Conventional Deadlift'        → 'Conventional Deadlift' (keep)
+'Rack Pull Heavy'              → 'Rack Pull'
+'Barbell Row Heavy'            → 'Barbell Bent-Over Row'
+'Weighted Chin-Up'             → 'Weighted Chin-Up'
+'Chin Ups Weighted'            → 'Weighted Chin-Up'
+'Chin Ups'                     → 'Chin-Up (Max Reps)'
+'Weighted Pull-Up'             → 'Weighted Pull-Up'
+'Weighted Chin-Up'             → 'Weighted Chin-Up' (keep)
+'Wide Grip Pulldown'           → 'Wide Grip Lat Pulldown'
+'Chest Supported Row'          → 'Chest-Supported Dumbbell Row'
+'Incline Barbell Press'        → 'Incline Barbell Bench Press'
+'Barbell Preacher Curl'        → 'Barbell Preacher Curl' (keep)
+'Cable Row'                    → 'Seated Cable Row'
+'Seated DB Press'              → 'Seated Dumbbell Shoulder Press'
+'Barbell Overhead Press'       → 'Barbell Overhead Press' (keep)
+'Side Lateral'                 → 'Dumbbell Lateral Raises'
+'Side Lateral Raises'          → 'Dumbbell Lateral Raises'
+'Side Lateral Dumbbells'       → 'Dumbbell Lateral Raises'
+'Reverse Butterfly'            → 'Reverse Pec Deck (Rear Delt)'
+'Pec Dec'                      → 'Pec Deck Fly'
+'Cable Fly'                    → 'Cable Chest Fly'
+'Cable Flys'                   → 'Cable Chest Fly'
+'Cable Flys Standing'          → 'Standing Cable Chest Fly'
+'Cable Fly Standing'           → 'Standing Cable Chest Fly'
+'Cable Chest Fly'              → 'Cable Chest Fly' (keep)
+'Decline DB Press'             → 'Decline Dumbbell Press'
+'Decline Dumbbell'             → 'Decline Dumbbell Press'
+'Incline DB Press'             → 'Incline Dumbbell Press'
+'Flat Bench Press'             → 'Flat Barbell Bench Press'
+'Flat Bench'                   → 'Flat Barbell Bench Press'
+'Bench Press'                  → 'Flat Barbell Bench Press'
+'Incline Bench'                → 'Incline Barbell Bench Press'
+'Seated Military Press'        → 'Seated Barbell Military Press'
+'Shoulder Press Barbell'       → 'Barbell Overhead Press'
+'Overhead Press Heavy'         → 'Barbell Overhead Press'
+'Overhead Press'               → 'Barbell Overhead Press'
+'Military Press'               → 'Barbell Overhead Press'
+'DB Shoulder Press'            → 'Seated Dumbbell Shoulder Press'
+'Barbell OHP'                  → 'Barbell Overhead Press'
+```
+
+### DO NOT replace these (they are fine as-is):
+```
+'Nordic Hamstring Curl', 'Farmer\'s Walk', 'Battle Ropes',
+'Box Jump', 'Jump Squat', 'Burpee', 'Mountain Climbers',
+'High Knees', 'Plank', 'Bicycle Crunch', 'Hanging Leg Raise',
+'Band Pull-Apart', 'Face Pull', 'T-Bar Row', 'Goblet Squat',
+'Bulgarian Split Squat', 'Walking Lunges', 'Hip Thrust (Barbell)',
+'Kettlebell Swing', 'Power Clean', 'Push Press', 'Floor Press',
+'Board Press', 'Rack Pull', 'Safety Bar Squat', 'Pause Bench',
+'Conventional Deadlift', 'Romanian Deadlift', 'Deadlift'
+```
+
+---
+
+## 9. PROGRAM ASSIGNMENT LOGIC
+
+### Difficulty Tags (derive from existing data — no new fields needed)
+```typescript
+function getDifficulty(program: TrainingProgram): Difficulty {
+  // Advanced: percentage-based powerlifting
+  if (program.goal === 'strength' && program.split === 'Powerlifting') return 'advanced'
+  if (program.goal === 'strength' && program.split === 'Push / Pull / Legs') return 'advanced'
+  if (program.goal === 'strength' && program.split === 'Bro Split') return 'advanced'
+  if (program.goal === 'strength' && program.split === 'Upper / Lower') return 'intermediate'
+
+  // Beginner: full body, HIIT, cardio, maintenance, endurance
+  if (program.split === 'Full Body') return 'beginner'
+  if (program.split === 'HIIT / Circuit') return 'beginner'
+  if (program.split === 'Cardio-Focused') return 'beginner'
+  if (program.goal === 'maintenance') return 'beginner'
+  if (program.goal === 'endurance') return 'beginner'
+
+  // Everything else: intermediate
+  return 'intermediate'
+}
+```
+
+### Split Recommendations (ordered by suitability per goal+difficulty)
+```typescript
+const SPLIT_RECOMMENDATIONS: Record<WorkoutGoal, Record<Difficulty, string[]>> = {
+  fat_loss: {
+    beginner:     ['Full Body', 'HIIT / Circuit', 'Cardio-Focused'],
+    intermediate: ['Push / Pull / Legs', 'Upper / Lower', 'Bro Split'],
+    advanced:     ['Push / Pull / Legs', 'Bro Split', 'Upper / Lower'],
+  },
+  muscle_gain: {
+    beginner:     ['Full Body', 'Upper / Lower'],
+    intermediate: ['Push / Pull / Legs', 'Bro Split', 'Upper / Lower'],
+    advanced:     ['Bro Split', 'Push / Pull / Legs', 'Powerlifting'],
+  },
+  strength: {
+    beginner:     ['Full Body', 'Upper / Lower'],
+    intermediate: ['Upper / Lower', 'Push / Pull / Legs'],
+    advanced:     ['Powerlifting', 'Push / Pull / Legs'],
+  },
+  recomp: {
+    beginner:     ['Full Body', 'Upper / Lower'],
+    intermediate: ['Push / Pull / Legs', 'Upper / Lower', 'Bro Split'],
+    advanced:     ['Push / Pull / Legs', 'Bro Split'],
+  },
+  maintenance: {
+    beginner:     ['Full Body', 'Cardio-Focused'],
+    intermediate: ['Upper / Lower', 'Push / Pull / Legs'],
+    advanced:     ['Bro Split', 'Powerlifting'],
+  },
+  endurance: {
+    beginner:     ['Cardio-Focused', 'HIIT / Circuit', 'Full Body'],
+    intermediate: ['HIIT / Circuit', 'Cardio-Focused', 'Upper / Lower'],
+    advanced:     ['HIIT / Circuit', 'Powerlifting', 'Push / Pull / Legs'],
+  },
+}
+```
+
+---
+
+## 10. REST DAY ENGINE (REWRITE SPEC)
+
+### CRITICAL: Keep these exports identical
+```typescript
+export function calculateRestDays(
+  split: string,
+  goal: WorkoutGoal,
+  sessions: WorkoutSlot[]
+): ProgramDay[]
+
+export interface WorkoutSlot {
+  label: string
+  workoutId: string
+}
+```
+
+### Science-Based Patterns Per Split
+
+```
+These are based on biochemistry + biomechanics research:
+
+CNS Recovery:          24-72h after heavy compound work
+Muscle Protein Synthesis: peaks 24-48h, resolves 48-72h
+Cortisol normalization: 24-48h post heavy session
+Connective tissue:     slowest recovery — 48-72h minimum
+Glycogen resynthesis:  24-48h depending on depletion
+
+POWERLIFTING (highest CNS demand):
+  Pattern: 1 ON → 1 OUT → 1 ON → 1 OUT → 1 ON → 1 OUT → 1 ON → 1 OUT → 1 ON → 1 OUT
+  Rationale: @85-95% training requires full 48h CNS clearance
+  Critical: Squat day and Deadlift day NEVER within 48h of each other
+  Bench can follow Squat (different CNS pathway)
+  OHP can follow Bench (low additional CNS demand)
+
+  Cycle: Squat→REST→Bench→REST→Deadlift→REST→OHP→REST→Squat2→REST
+  Then: Bench2→REST→Deadlift2→REST (continues in next cycle)
+
+FULL BODY (high CNS, all groups):
+  Pattern: 1 ON → 1 OUT → 1 ON → 1 OUT → 1 ON → 1 OUT → 1 ON → 1 OUT → 1 ON → 1 OUT
+  Rationale: Every session hits all muscle groups, need 48h between ANY two sessions
+  Never two full body sessions consecutive — non-negotiable
+
+  Cycle: FB-A→REST→FB-B→REST→FB-C→REST→FB-D→REST→FB-E→REST
+
+PUSH/PULL/LEGS (moderate CNS):
+  Pattern: 3 ON → 1 OUT → 3 ON → 1 OUT → 1 ON → 1 OUT
+  Rationale:
+    Push+Pull = antagonist pairing = safe consecutive
+    Legs = high CNS (squats/deadlifts) = needs rest after
+    Arms day = lowest CNS = placed strategically after Pull
+  
+  Cycle: Push1→Pull1→Legs1→REST→Push2→Pull2→Legs2→REST→Arms→REST
+
+UPPER/LOWER (moderate CNS):
+  Pattern: 2 ON → 1 OUT → 2 ON → 1 OUT → 2 ON → 1 OUT → rest fills remaining
+  Rationale:
+    Upper+Lower alternates non-competing groups = safe pairing
+    Lower day always needs rest after (quad/hamstring CNS demand)
+    Upper days lower CNS can be closer together
+  
+  Cycle: Upper1→Lower1→REST→Upper2→Lower2→REST→Upper3→Lower3→REST→REST
+
+BRO SPLIT (moderate, isolated groups):
+  Pattern: 2 ON → 1 OUT → 2 ON → 1 OUT → 3 ON → 1 OUT
+  Rationale:
+    Chest+Back = antagonists = safe pairing
+    Legs always isolated with rest after
+    Shoulders = lowest CNS of compound days
+    Arms = lowest overall CNS = can follow anything
+  
+  Cycle: Chest→Back→REST→Legs→REST→Shoulders→Arms→Chest2→REST→BackTraps
+
+HIIT/CIRCUIT (metabolic not mechanical):
+  Pattern: 1 ON → 1 OUT → 1 ON → 1 OUT → 1 ON → rest fills
+  Rationale:
+    Metabolic stress > mechanical = cortisol stays elevated 24-36h
+    Full body HIIT back-to-back = overtraining
+    Shorter sessions but higher metabolic cost
+  
+  Cycle: Circuit-A→REST→Circuit-B→REST→Circuit-C→REST→Circuit-D→REST→Circuit-E→REST
+
+CARDIO-FOCUSED (lowest CNS):
+  Pattern: 3 ON → 1 OUT → 3 ON → 1 OUT (aggressive, cardio recovers faster)
+  Rationale:
+    Zone 2 cardio = minimal mechanical damage
+    Can train 5-6x/week at low intensity
+    Higher intensity sessions (HIIT cardio) need 48h
+  
+  Cycle: Session-A→Session-B→Session-C→REST→Session-D→Session-E→Session-F→REST→REST→REST
+
+GOAL MODIFIER (applied after split pattern):
+  fat_loss:    standard pattern (higher rep = faster recovery)
+  muscle_gain: standard pattern
+  strength:    add +1 rest day vs standard (heaviest loading)
+  recomp:      standard pattern
+  maintenance: can reduce rest by 1 (lower intensity)
+  endurance:   can reduce rest by 1 (high rep = less mechanical damage)
+```
+
+---
+
+## 11. EXERCISE LIBRARY (exerciseLibrary.ts)
+
+### GIF Source Strategy
+```
+PRIMARY: Free Exercise DB (MIT License, GitHub CDN)
+URL format: https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/{id}/images/0.jpg
+
+FALLBACK: exercise.db already in project
+FINAL FALLBACK: placeholder SVG showing muscle diagram
+
+Map YOUR exercise names → exercise IDs in free-exercise-db
+One-time mapping. Result: high quality GIFs free forever.
+```
+
+### Entry Structure (per exercise)
+```typescript
+{
+  // Keys = all possible name variations (lowercase, normalized)
+  // Multiple keys can point to same entry
+  
+  canonicalName: string           // Clean EN display name
+  canonicalNameAr: string         // Arabic display name
+  gifId: string                   // free-exercise-db ID for GIF URL
+  muscles: {
+    primary: string[]             // English
+    primaryAr: string[]           // Arabic
+    secondary: string[]
+    secondaryAr: string[]
+  }
+  instructions: string[]          // English steps
+  instructionsAr: string[]        // Arabic steps (right to left)
+  tips: string[]                  // English coach cues
+  tipsAr: string[]                // Arabic
+  commonMistakes: string[]        // English
+  commonMistakesAr: string[]      // Arabic
+  equipment: string               // English
+  equipmentAr: string             // Arabic
+}
+```
+
+### Lookup Function
+```typescript
+export function getExerciseDetail(exerciseName: string): ExerciseDetail | null {
+  const key = exerciseName.toLowerCase().trim()
+  return EXERCISE_LIBRARY[key] ?? null
+}
+
+// GIF URL helper
+export function getGifUrl(gifId: string): string {
+  return `https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/${gifId}/images/0.jpg`
+}
+```
+
+### Cardio/Protocol exercises (NO modal needed)
+```
+These show a simple info card instead of the full modal:
+'Treadmill HIIT', 'Bike HIIT Intervals', 'Stairmaster',
+'Zone 2 Steady State Cardio', 'Moderate Steady State Cardio',
+'Low Intensity Steady State Cardio', 'Zone 2-3 Sustained Cardio',
+'Rowing Machine Cardio', 'Jump Rope', 'Battle Ropes',
+'Sprint Intervals', 'Treadmill Intervals', 'Core Circuit (any)',
+'Abs Training', 'ABS Circuit'
+```
+
+---
+
+## 12. REP SCHEME PARSER (programUtils.ts)
+
+### Parse Logic
+```typescript
+function parseRepScheme(reps: string, goal: WorkoutGoal): RepSchemeInfo {
+
+  // DUAL SET: '5-9 + 10-15'
+  if (reps.includes('+')) → {
+    type: 'dual',
+    set1: { reps: s1, weight: '~80%', label: 'HEAVY' },
+    set2: { reps: s2, weight: '~50%', label: 'PUMP' },
+    set1Ar: { label: 'ثقيل' },
+    set2Ar: { label: 'ضخ' }
+  }
+
+  // PERCENTAGE: '5 @80%' or '3 @85-88%'
+  if (reps.includes('@')) → {
+    type: 'percentage',
+    reps: repCount,
+    percentage: pct,
+    explanation: `Use ${pct} of your 1 rep max`,
+    explanationAr: `استخدم ${pct} من أقصى طاقتك`
+  }
+
+  // RECOMP DUAL: 'S1×6, S2×12' or 'S1×6@80%, S2×12@65%'
+  if (reps.includes('S1') && reps.includes('S2')) → {
+    type: 'recomp',
+    explanation: 'Set 1 strength. Set 2 volume.',
+    explanationAr: 'الشوط الأول: قوة. الشوط الثاني: حجم.'
+  }
+
+  // FAILURE: 'Until Failure' or 'Max'
+  if failure keyword → {
+    type: 'failure',
+    explanation: 'Go until you cannot complete another clean rep',
+    explanationAr: 'استمر حتى لا تستطيع إكمال تكرار نظيف'
+  }
+
+  // TIMED: '40s Work / 20s Rest'
+  if timed keyword → {
+    type: 'timed',
+    explanation: 'Work for the full time. Quality over speed.',
+    explanationAr: 'اعمل طوال الوقت المحدد. الجودة قبل السرعة.'
+  }
+
+  // STANDARD: '10-15', '8-12'
+  default → {
+    type: 'standard',
+    explanation: goalExplanations[goal],
+    explanationAr: goalExplanationsAr[goal]
+  }
+}
+```
+
+---
+
+## 13. GOAL CONTEXT (programUtils.ts)
+
+### EN + AR per goal
+```typescript
+const GOAL_CONTEXT = {
+  fat_loss: {
+    label: '🔥 Fat Loss Mode',
+    labelAr: '🔥 وضع حرق الدهون',
+    focus: 'High reps, short rest, elevated heart rate. Burn is the goal.',
+    focusAr: 'تكرارات عالية، راحة قصيرة، رفع معدل ضربات القلب. الحرق هو الهدف.',
+    restGuidance: 'Keep rest SHORT — 60-90s max. Stay moving.',
+    restGuidanceAr: 'أبق فترة الراحة قصيرة — 60-90 ثانية كحد أقصى. لا تتوقف.',
+    weightGuidance: 'Moderate weight. If form breaks, it\'s too heavy.',
+    weightGuidanceAr: 'وزن متوسط. إذا انكسر الشكل، الوزن ثقيل جداً.',
+    color: 'orange',
+  },
+  muscle_gain: {
+    label: '💪 Muscle Building Mode',
+    labelAr: '💪 وضع بناء العضلات',
+    focus: 'Progressive overload. Beat last session\'s numbers.',
+    focusAr: 'زيادة تدريجية في الحمل. تفوق على أرقام الجلسة الماضية.',
+    restGuidance: 'Full rest 90-180s. You need it to lift heavy next set.',
+    restGuidanceAr: 'راحة كاملة 90-180 ثانية. تحتاجها للرفع الثقيل في الشوط القادم.',
+    weightGuidance: 'Set 1 heavy (80%). Set 2 drop to 50-60% for volume.',
+    weightGuidanceAr: 'الشوط الأول ثقيل (80%). الشوط الثاني اخفض إلى 50-60% للحجم.',
+    color: 'blue',
+  },
+  strength: {
+    label: '🏋️ Strength Mode',
+    labelAr: '🏋️ وضع القوة',
+    focus: 'Heavy weight, low reps. Every rep is maximum effort.',
+    focusAr: 'أوزان ثقيلة، تكرارات قليلة. كل تكرار بأقصى جهد.',
+    restGuidance: 'Full rest 3-5 min on main lifts. Do not rush.',
+    restGuidanceAr: 'راحة كاملة 3-5 دقائق على التمارين الرئيسية. لا تتسرع.',
+    weightGuidance: 'Percentages matter. 85% means 85% of your tested 1RM.',
+    weightGuidanceAr: 'النسب مهمة. 85% تعني 85% من أقصى رفعة تستطيعها.',
+    color: 'red',
+  },
+  recomp: {
+    label: '⚖️ Recomposition Mode',
+    labelAr: '⚖️ وضع إعادة التركيب',
+    focus: 'Build muscle AND burn fat. Dual purpose every set.',
+    focusAr: 'بناء العضلات وحرق الدهون في آن واحد. كل شوط له غرضان.',
+    restGuidance: 'Rest 90-120s. Not too long, not too short.',
+    restGuidanceAr: 'استرح 90-120 ثانية. لا طويل جداً ولا قصير جداً.',
+    weightGuidance: 'S1 at ~80%. S2 drop to 60-65% immediately after.',
+    weightGuidanceAr: 'الشوط الأول بـ 80%. الشوط الثاني اخفض إلى 60-65% مباشرة.',
+    color: 'purple',
+  },
+  maintenance: {
+    label: '🔄 Maintenance Mode',
+    labelAr: '🔄 وضع المحافظة',
+    focus: 'Preserve what you built. Consistent effort, no need to push limits.',
+    focusAr: 'حافظ على ما بنيته. جهد منتظم، لا حاجة لدفع الحدود.',
+    restGuidance: 'Normal rest 60-120s. Comfortable pace.',
+    restGuidanceAr: 'راحة عادية 60-120 ثانية. وتيرة مريحة.',
+    weightGuidance: 'Same weights as usual. Steady quality work.',
+    weightGuidanceAr: 'نفس الأوزان المعتادة. عمل منتظم بجودة عالية.',
+    color: 'green',
+  },
+  endurance: {
+    label: '🏃 Endurance Mode',
+    labelAr: '🏃 وضع التحمل',
+    focus: 'High reps, minimal rest. Train your body to keep going.',
+    focusAr: 'تكرارات عالية، راحة قليلة. درّب جسمك على الاستمرار.',
+    restGuidance: 'Rest 30-45s MAXIMUM. Short rest IS the training.',
+    restGuidanceAr: 'راحة 30-45 ثانية كحد أقصى. الراحة القصيرة هي التدريب.',
+    weightGuidance: 'Very light weight. 20+ reps = much lighter than you think.',
+    weightGuidanceAr: 'وزن خفيف جداً. 20+ تكرار = أخف مما تتوقع بكثير.',
+    color: 'teal',
+  },
+}
+```
+
+---
+
+## 14. BUILD ORDER (PHASES)
+
+### Phase 1 — Logic Foundation (no UI, zero risk)
+```
+1. Add new types to src/types/index.ts
+2. Write src/data/programUtils.ts
+   - getDifficulty()
+   - getSplitRecommendations()
+   - getGoalContext()
+   - parseRepScheme()
+   - assignProgram()
+3. Write src/hooks/useActiveProgram.ts
+   - load() from localStorage
+   - save() to localStorage + Firestore
+   - completeDay()
+   - deleteProgram()
+   - isCoachAssigned check
+4. Rewrite src/data/restDayEngine.ts
+   - Keep identical exports
+   - Replace scoring algorithm with patterns from Section 10
+5. Apply exercise name replacements across all 7 data files
+   - Use the replacement map in Section 8
+   - Never change sets/reps/rest values
+   - Only change the name string
+
+Test: console.log(assignProgram('fat_loss', 'intermediate'))
+Expected: returns PPL Fat Loss program with rotation
+```
+
+### Phase 2 — UI Components (new files, used nowhere yet)
+```
+6. Write src/components/workouts/ExerciseModal.tsx
+   - GIF display (full width, looping)
+   - Uses LanguageContext for EN/AR
+   - Muscles + instructions + tips + mistakes
+   - Graceful fallback if no GIF found
+
+7. Write src/components/workouts/RestDayCard.tsx
+   - Education content about rest
+   - EN/AR from LanguageContext
+   - Acknowledgment button
+
+8. Write src/components/workouts/WorkoutDayView.tsx
+   - Goal banner (from GOAL_CONTEXT)
+   - Exercise list with cards
+   - Rep scheme display (from parseRepScheme)
+   - Mark complete button
+   - Triggers ExerciseModal on exercise tap
+
+9. Write src/components/workouts/ProgramCard.tsx
+   - Used in browse mode and wizard result
+   - Shows: name, goal, difficulty, split, sessions, duration
+   - Recommended badge support
+
+10. Write src/components/workouts/ProgramDetail.tsx
+    - 10-day rotation list
+    - Day cards (workout vs rest)
+    - Assign button (for wizard) OR view-only (for browse)
+
+11. Write src/components/workouts/WorkoutWizard.tsx
+    - Step 1: Goal cards (6, 2×3 grid)
+    - Step 2: Difficulty cards (3, vertical list)
+    - Step 3: Split cards (filtered, with recommended badge)
+    - Step 4: Program preview (ProgramDetail in read-only)
+    - Step 5: Confirm + save
+    - Progress indicator (Step 1/4, Step 2/4, etc.)
+    - Back button on every step
+
+12. Write src/components/workouts/ActiveProgramCard.tsx
+    - Shows current program or nothing
+    - 10-day mini rotation view
+    - Today's day highlighted
+    - Progress bar + streak counter
+    - START TODAY'S WORKOUT button
+    - DELETE button (hidden if coach assigned)
+```
+
+### Phase 3 — Wire In (minimal edits to existing files)
+```
+13. Add route to AppRoutes.tsx:
+    /workouts/day/:dayNumber → WorkoutDayView
+    /workouts/program/:programId → ProgramDetail (browse mode)
+
+14. Edit Dashboard.tsx:
+    Add <ActiveProgramCard /> at top of page content
+    Import from '../components/workouts/ActiveProgramCard'
+    No other changes to Dashboard.tsx
+
+15. Edit Workouts.tsx:
+    Replace page content with:
+    - If active program: show current program + delete option + browse mode
+    - If no program: show WorkoutWizard
+    Keep the page wrapper/layout exactly as-is
+```
+
+### Phase 4 — Exercise Library (content, not logic)
+```
+16. Write src/data/exerciseLibrary.ts
+    Start with top 30 most-used exercises across all programs
+    Add EN/AR instructions for each
+    Map to free-exercise-db GIF IDs
+    App works without it (graceful fallback = no modal)
+    Add more exercises incrementally
+```
+
+---
+
+## 15. WHAT NOT TO DO
+
+```
+❌ Do NOT add a language toggle inside ExerciseModal — use LanguageContext
+❌ Do NOT add self-registration — Login.tsx is sign-in only
+❌ Do NOT add the difficulty field to program data files — derive it in code
+❌ Do NOT break existing DataContext — add new state separately
+❌ Do NOT use any localStorage keys that conflict with existing ones
+   Existing keys: check DataContext.tsx for current keys
+   New key: 'activeProgram_' + userId
+❌ Do NOT add Firestore calls to components directly — use hooks
+❌ Do NOT change Firestore rules without noting the change here
+❌ Do NOT use percentage-based Tailwind classes (not in base CSS)
+❌ Do NOT install new npm packages without checking if existing ones cover it
+   Already available: recharts, lucide-react, firebase
+❌ Do NOT hard-code user IDs or program IDs
+❌ Do NOT make community members able to submit check-ins
+❌ Do NOT show coach-only features to community/coaching roles
+❌ Do NOT allow community members to delete coach-assigned programs
+```
+
+---
+
+## 16. TESTING CHECKLIST (before committing any phase)
+
+```
+Phase 1:
+□ assignProgram('fat_loss', 'beginner') → Full Body program
+□ assignProgram('strength', 'advanced') → Powerlifting program
+□ getDifficulty on all 42 programs → no undefined
+□ calculateRestDays PPL muscle_gain → Push1→Pull1→Legs1→REST→...
+□ calculateRestDays Powerlifting strength → Squat→REST→Bench→REST→...
+□ No TypeScript errors
+
+Phase 2:
+□ ExerciseModal renders in English correctly
+□ ExerciseModal renders in Arabic (RTL) correctly
+□ WorkoutWizard: all 3 steps navigate forward/back
+□ WorkoutWizard: filtered splits match goal+difficulty
+□ ActiveProgramCard: shows nothing when no program saved
+□ ActiveProgramCard: shows today's day correctly
+
+Phase 3:
+□ Dashboard still loads with no errors
+□ Workouts.tsx renders wizard for new user
+□ Workouts.tsx renders current program for returning user
+□ Route /workouts/day/1 loads WorkoutDayView
+□ Mark complete increments completedDays correctly
+□ Day 10 complete → cycle resets correctly
+□ Coach-assigned program: delete button hidden
+□ Self-selected program: delete button visible
+
+Phase 4:
+□ Exercise tap opens modal with GIF
+□ GIF loads (network request succeeds)
+□ Fallback works when GIF not found
+□ Instructions show in correct language
+```
+
+---
+
+## 17. QUICK REFERENCE
+
+### Key imports to use
+```typescript
+import { useAuth } from '../../context/AuthContext'
+import { useLanguage } from '../../context/LanguageContext'
+import { ALL_PROGRAMS } from '../../data/programData'
+import { ALL_TRAINING_PROGRAMS } from '../../data'
+import { useActiveProgram } from '../../hooks/useActiveProgram'
+import { getDifficulty, assignProgram, getGoalContext } from '../../data/programUtils'
+import { getExerciseDetail, getGifUrl } from '../../data/exerciseLibrary'
+```
+
+### User role checks
+```typescript
+const { user } = useAuth()
+const isCoach = user?.role === 'coach' || user?.role === 'admin'
+const isCoachingClient = user?.role === 'coaching'
+const isCommunity = user?.role === 'community'
+const canDeleteProgram = !activeProgram?.assignedByCoach
+```
+
+### Language usage
+```typescript
+const { language } = useLanguage()
+const isAr = language === 'ar'
+
+// Use for content
+const label = isAr ? item.labelAr : item.label
+const instructions = isAr ? exercise.instructionsAr : exercise.instructions
+
+// Use for direction
+<div dir={isAr ? 'rtl' : 'ltr'}>
+```
+
+### Firestore (when saving program)
+```typescript
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore'
+import { db } from '../../lib/firebase'
+
+// Save
+await setDoc(doc(db, 'userPrograms', userId), {
+  ...programData,
+  updatedAt: serverTimestamp()
+})
+
+// Always mirror to localStorage for offline/speed
+localStorage.setItem(`activeProgram_${userId}`, JSON.stringify(programData))
+```

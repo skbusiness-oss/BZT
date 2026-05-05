@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -sL -o /tmp/wc_exercises.csv -w \"HTTP:%{http_code} SIZE:%{size_download}\\\\n\" \"https://raw.githubusercontent.com/Snouzy/workout-cool/main/data/sample-exercises.csv\")",
+      "Bash(node -e ' *)",
+      "Bash(curl -sL -o wc_exercises.csv \"https://raw.githubusercontent.com/Snouzy/workout-cool/main/data/sample-exercises.csv\")",
+      "Bash(curl -sL \"https://www.youtube.com/@fit-distance\" -A \"Mozilla/5.0\" -o /tmp/chan.html -w \"HTTP:%{http_code} SIZE:%{size_download}\\\\n\")",
+      "Bash(curl -sL \"https://www.youtube.com/feeds/videos.xml?channel_id=UCcI0GmkD068idv12NRusuEw\" -o /tmp/feed.xml -w \"HTTP:%{http_code} SIZE:%{size_download}\\\\n\")",
+      "Bash(curl -sL \"https://www.youtube.com/@fit-distance/videos\" -A \"Mozilla/5.0\" -o /tmp/vids.html -w \"HTTP:%{http_code} SIZE:%{size_download}\\\\n\")",
+      "Bash(curl -sL \"https://www.youtube.com/@fit-distance/videos\" -A \"Mozilla/5.0\" -o fit_vids.html -w \"HTTP:%{http_code}\\\\n\")",
+      "Bash(node match.cjs)",
+      "Bash(node refine.cjs \"pec deck\" \"face pull\" \"farmer\" \"bicycle\" \"crunch velo\" \"pedale\" \"velo\" \"chest press\" \"leg curl\" \"hack squat\" \"power clean\" \"arrache\" \"epaule barre\" \"rowing barre\" \"tractions\" \"pompes\" \"pompe\")",
+      "Bash(node refine.cjs \"butterfly\" \"pectoraux machine\" \"rowing haltere\" \"soulev terre classique\" \"soulev terre\" \"squat barre\" \"squat arriere\" \"squat nuque\" \"plank\" \"planche abdos\" \"gainage\" \"crunch\" \"abdominaux\" \"elevation mollet\" \"mollets debout\" \"tirage vertical\" \"tirage haut\" \"tirage horizontal\" \"biceps barre\" \"curl pupitre\" \"step up\" \"montee banc\" \"pont fessier\" \"presse cuisse\")",
+      "Bash(node refine.cjs \"developpe incline barre\" \"developpe serre\" \"close grip\" \"prise serree\" \"soulev terre barre\" \"hyperextension\" \"lombaire\" \"banc lombaire\" \"ecarte haltere\" \"ecarte couche\" \"pompes au sol\" \"pompes classique\" \"farmer walk\" \"charges lourdes\" \"porter\" \"clean barre\" \"epaule jete\" \"barbell power\" \"incline barbell\")",
+      "Bash(git commit -m ' *)",
+      "Bash(npx firebase *)",
+      "Read(//c/Users/MED/Downloads/**)",
+      "Bash(firebase --version)",
+      "Bash(firebase projects:list)",
+      "Bash(cat .env)",
+      "Bash(cat .env.local)",
+      "Bash(grep -E \"^java\\(c?\\)\\\\.exe$\")",
+      "Bash(echo \"Exit: $?\")",
+      "Bash(echo \"EXIT=$?\")"
+    ]
+  }
+}

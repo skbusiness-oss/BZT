@@ -1,9 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { doc, deleteDoc, onSnapshot } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 import { useData } from '../context/DataContext';
 import { useLanguage } from '../context/LanguageContext';
 import { DailyTrackingTable } from '../components/checkin/DailyTrackingTable';
 import { ProgressCharts } from '../components/dashboard/ProgressCharts';
+import { ClientInfoPanel } from '../components/checkin/ClientInfoPanel';
+import { CheckInCompare } from '../components/checkin/CheckInCompare';
+import { WorkoutWizard } from '../components/workouts/WorkoutWizard';
+import type { UserActiveProgram } from '../types';
 import {
     ChevronLeft,
     ChevronRight,
@@ -16,7 +22,13 @@ import {
     X,
     Camera,
     AlertCircle,
-    Loader2
+    Loader2,
+    Plus,
+    Activity,
+    Info,
+    Shield,
+    Zap,
+    Flame,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { MacroTarget } from '../types';
@@ -24,7 +36,7 @@ import { MacroTarget } from '../types';
 export const CoachReview = () => {
     const { clientId } = useParams<{ clientId: string }>();
     const navigate = useNavigate();
-    const { clients, getClientWeeks, updateWeek, updateClient, cascadeTargets, createProgram, advanceWeek, workouts, assignWorkout, unassignWorkout } = useData();
+    const { clients, getClientWeeks, updateWeek, updateClient, cascadeTargets, createProgram, advanceWeek, extendProgram } = useData();
     const { t } = useLanguage();
 
     const client = clients.find(c => c.id === clientId);
@@ -38,10 +50,16 @@ export const CoachReview = () => {
 
     const [feedback, setFeedback] = useState('');
     const [changeTargets, setChangeTargets] = useState(false);
+    const [showInfo, setShowInfo] = useState(false);
+    const [showProgramWizard, setShowProgramWizard] = useState(false);
+    const [clientProgram, setClientProgram] = useState<UserActiveProgram | null>(null);
 
     const [newHighCarb, setNewHighCarb] = useState<MacroTarget>({ carbs: 250, protein: 180, fats: 60, calories: 2260 });
     const [newLowCarb, setNewLowCarb] = useState<MacroTarget>({ carbs: 120, protein: 180, fats: 80, calories: 1920 });
+    const [newCardio, setNewCardio] = useState<number>(0);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isExtending, setIsExtending] = useState(false);
+    const [additionalWeeks, setAdditionalWeeks] = useState(4);
     const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
 
     const showToast = (type: 'success' | 'error', msg: string) => {
@@ -54,26 +72,55 @@ export const CoachReview = () => {
             setFeedback(weekData.coachFeedback || '');
             setNewHighCarb({ ...weekData.activeTargets.highCarb });
             setNewLowCarb({ ...weekData.activeTargets.lowCarb });
+            setNewCardio(weekData.activeTargets.cardio ?? 0);
             setChangeTargets(false);
         }
     }, [weekData]);
 
+    // Live subscription to the client's active training program (whatever
+    // the coach assigns here also shows up on the client's dashboard via
+    // useActiveProgram, which reads userPrograms/{uid}).
+    useEffect(() => {
+        if (!client?.userId) {
+            setClientProgram(null);
+            return;
+        }
+        const ref = doc(db, 'userPrograms', client.userId);
+        const unsub = onSnapshot(ref, (snap) => {
+            setClientProgram(snap.exists() ? (snap.data() as UserActiveProgram) : null);
+        }, () => setClientProgram(null));
+        return unsub;
+    }, [client?.userId]);
+
+    const removeAssignedProgram = async () => {
+        if (!client?.userId) return;
+        try {
+            await deleteDoc(doc(db, 'userPrograms', client.userId));
+            showToast('success', 'Program removed.');
+        } catch (e: unknown) {
+            const err = e as { code?: string; message?: string };
+            // eslint-disable-next-line no-console
+            console.error('Remove program failed:', err);
+            showToast('error', err?.message ?? 'Failed to remove program.');
+        }
+    };
+
     if (!client) {
-        return <div className="text-white p-8">{t('clientNotFound')}</div>;
+        return <div className="text-on-surface p-8 font-body">{t('clientNotFound')}</div>;
     }
 
     const handleAction = async () => {
         setIsSubmitting(true);
         try {
             if (isProgramCreation) {
-                await createProgram(client.id, { highCarb: newHighCarb, lowCarb: newLowCarb });
+                await createProgram(client.id, { highCarb: newHighCarb, lowCarb: newLowCarb, cardio: newCardio });
                 showToast('success', `Program created! ${client.name} is now on Week 1.`);
                 setTimeout(() => navigate('/'), 1000);
             } else if (weekData) {
                 await updateWeek(weekData.id, { coachFeedback: feedback, status: 'reviewed' });
 
                 if (changeTargets) {
-                    await cascadeTargets(client.id, weekData.weekNumber + 1, { highCarb: newHighCarb, lowCarb: newLowCarb });
+                    await cascadeTargets(client.id, weekData.weekNumber + 1, { highCarb: newHighCarb, lowCarb: newLowCarb, cardio: newCardio });
                 }
 
                 await advanceWeek(client.id, weekData.weekNumber);
@@ -85,10 +132,30 @@ export const CoachReview = () => {
                 );
                 setTimeout(() => navigate('/'), 1000);
             }
-        } catch {
-            showToast('error', 'Action failed. Please try again.');
+        } catch (e: unknown) {
+            const err = e as { code?: string; message?: string };
+            // eslint-disable-next-line no-console
+            console.error('Coach review action failed:', err);
+            showToast('error', err?.message ?? t('actionFailed'));
         } finally {
             setIsSubmitting(false);
+        }
+    };
+
+    const handleExtendProgram = async () => {
+        if (!client) return;
+        setIsExtending(true);
+        try {
+            await extendProgram(client.id, additionalWeeks, { highCarb: newHighCarb, lowCarb: newLowCarb, cardio: newCardio });
+            showToast('success', `Program extended by ${additionalWeeks} weeks!`);
+            setChangeTargets(false);
+        } catch (e: unknown) {
+            const err = e as { code?: string; message?: string };
+            // eslint-disable-next-line no-console
+            console.error('Extend program failed:', err);
+            showToast('error', err?.message ?? 'Failed to extend program.');
+        } finally {
+            setIsExtending(false);
         }
     };
 
@@ -112,101 +179,190 @@ export const CoachReview = () => {
             <div className={clsx(
                 "fixed top-6 right-6 z-[200] flex items-center gap-3 px-5 py-4 rounded-xl shadow-2xl border animate-in slide-in-from-top-2 duration-300",
                 toast.type === 'success'
-                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
-                    : 'bg-red-500/10 border-red-500/30 text-red-300'
+                    ? 'bg-surface-container border border-emerald-500/20 text-emerald-400'
+                    : 'bg-surface-container border border-red-500/20 text-red-400'
             )}>
                 {toast.type === 'success' ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
-                <span className="font-medium text-sm">{toast.msg}</span>
+                <span className="font-body text-sm">{toast.msg}</span>
             </div>
         )}
         <div className="max-w-7xl mx-auto pb-20 space-y-6 animate-in fade-in duration-500">
 
-            {/* Header */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 clay-card p-4">
+            {/* ── Editorial Header ── */}
+            {/* Will be rendered below; this comment kept for grep continuity. */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-surface-container-low rounded-2xl p-6 ghost-border">
                 <div className="flex items-center gap-4">
-                    <button onClick={() => navigate('/')} className="hover:bg-navy-700 p-2 rounded-lg text-navy-300 hover:text-white transition-colors">
+                    <button onClick={() => navigate('/')} className="hover:bg-surface-container-highest p-3 rounded-full text-on-surface/50 hover:text-primary transition-colors">
                         <ChevronLeft />
                     </button>
                     <div>
-                        <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-                            {isProgramCreation ? t('programCreation') : t('coachReviewTitle')}: {client.name}
-                            {!isProgramCreation && <span className="text-sm font-normal text-navy-300 clay-card-sm px-2 py-1">{t('week')} {selectedWeekNum}</span>}
-                            {isProgramCreation && <span className="text-sm font-bold text-gold-400 bg-gold-500/10 px-2 py-1 rounded">Intake Data</span>}
+                        <p className="text-primary font-label uppercase tracking-[0.3em] text-[10px] font-bold mb-1">{isProgramCreation ? t('programCreation') : t('coachReviewTitle')}</p>
+                        <h1 className="text-3xl font-headline font-extrabold text-on-surface flex items-center gap-3 flex-wrap">
+                            {client.name}
+                            {!isProgramCreation && <span className="px-3 py-1 rounded-full font-label text-[10px] font-bold uppercase tracking-widest bg-surface-container-highest text-on-surface/50 border border-outline-variant/30">{t('week')} {selectedWeekNum}</span>}
+                            {isProgramCreation && <span className="px-3 py-1 rounded-full font-label text-[10px] font-bold uppercase tracking-widest bg-primary/10 text-primary border border-primary/20">{t('intakeDataLabel')}</span>}
                         </h1>
                     </div>
                 </div>
 
                 {!isProgramCreation && (
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-1 bg-surface-container-highest/50 rounded-full p-1">
                         <button
                             onClick={() => setSelectedWeekNum(prev => Math.max(0, prev - 1))}
                             disabled={selectedWeekNum <= 0}
-                            className="text-navy-300 hover:text-white disabled:opacity-30"
+                            className="p-2.5 rounded-full hover:bg-surface-container-highest text-on-surface/50 hover:text-primary disabled:opacity-20 transition-colors"
                         >
-                            <ChevronLeft />
+                            <ChevronLeft size={18} />
                         </button>
-                        <span className="text-navy-400 text-sm">
-                            {selectedWeekNum === 0 ? 'Intake Week' : `Week ${selectedWeekNum}`}
+                        <span className="font-headline font-bold text-on-surface min-w-[120px] text-center text-sm">
+                            {selectedWeekNum === 0 ? t('intakeWeek') : `${t('week')} ${selectedWeekNum}`}
                         </span>
                         <button
                             onClick={() => setSelectedWeekNum(prev => Math.min(client.programLength, prev + 1))}
                             disabled={selectedWeekNum >= client.programLength}
-                            className="text-navy-300 hover:text-white disabled:opacity-30"
+                            className="p-2.5 rounded-full hover:bg-surface-container-highest text-on-surface/50 hover:text-primary disabled:opacity-20 transition-colors"
                         >
-                            <ChevronRight />
+                            <ChevronRight size={18} />
                         </button>
                     </div>
                 )}
             </div>
 
+            {/* ── Prominent client-info CTA ── */}
+            <button
+                onClick={() => setShowInfo(true)}
+                className="w-full flex items-center justify-between gap-4 bg-surface-container-low hover:bg-surface-container ghost-border rounded-2xl p-4 md:p-5 transition-colors group active:scale-[0.99]"
+            >
+                <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-11 h-11 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0">
+                        <Info size={20} />
+                    </div>
+                    <div className="text-start min-w-0">
+                        <p className="font-headline font-bold text-on-surface text-base md:text-lg leading-tight truncate">
+                            {t('clientInfoCtaTitle') ?? 'View client overall info'}
+                        </p>
+                        <p className="text-[11px] md:text-xs text-on-surface-variant truncate">
+                            {t('clientInfoCtaDesc') ?? 'Personal info, measurements, history, photos & reports'}
+                        </p>
+                    </div>
+                </div>
+                <span className="text-primary text-[10px] font-label font-bold uppercase tracking-widest shrink-0 group-hover:translate-x-1 transition-transform">
+                    {t('view')} →
+                </span>
+            </button>
+
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* LEFT COLUMN - Client Data */}
+                {/* ── LEFT COLUMN - Client Data ── */}
                 <div className="lg:col-span-2 space-y-6">
 
                     {/* Week 0 Intake VIEW */}
                     {isProgramCreation ? (
-                        <div className="clay-card p-8 space-y-8">
-                            <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                                <FileText className="text-gold-400" /> {t('clientSummary')}
+                        <div className="bg-surface-container-low rounded-2xl p-8 ghost-border space-y-8">
+                            <h2 className="text-xl font-headline font-bold text-on-surface flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+                                    <FileText size={20} />
+                                </div>
+                                {t('clientSummary')}
                             </h2>
 
-                            <div className="grid grid-cols-2 gap-6">
-                                <div className="clay-inset p-4">
-                                    <div className="text-navy-400 text-sm mb-1">{t('startingWeight')}</div>
-                                    <div className="text-2xl font-bold text-white">{client.intakeData?.startingWeight || '--'} kg</div>
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
+                                <div className="bg-surface-container-lowest rounded-xl p-5 ghost-border">
+                                    <div className="text-[10px] font-label uppercase tracking-widest text-on-surface/50 mb-1">{t('startingWeight')}</div>
+                                    <div className="text-2xl font-headline font-bold text-on-surface">{client.intakeData?.startingWeight || '--'} <span className="text-sm font-normal text-on-surface/40">kg</span></div>
                                 </div>
-                                <div className="clay-inset p-4">
-                                    <div className="text-navy-400 text-sm mb-1">{t('height')}</div>
-                                    <div className="text-2xl font-bold text-white">{client.intakeData?.height || '--'} cm</div>
+                                <div className="bg-surface-container-lowest rounded-xl p-5 ghost-border">
+                                    <div className="text-[10px] font-label uppercase tracking-widest text-on-surface/50 mb-1">{t('height')}</div>
+                                    <div className="text-2xl font-headline font-bold text-on-surface">{client.intakeData?.height || '--'} <span className="text-sm font-normal text-on-surface/40">cm</span></div>
                                 </div>
-                                <div className="clay-inset p-4">
-                                    <div className="text-navy-400 text-sm mb-1">{t('goal')}</div>
-                                    <div className="text-2xl font-bold text-white capitalize">{client.intakeData?.goal?.replace('_', ' ') || '--'}</div>
+                                <div className="bg-surface-container-lowest rounded-xl p-5 ghost-border">
+                                    <div className="text-[10px] font-label uppercase tracking-widest text-on-surface/50 mb-1">{t('age')}</div>
+                                    <div className="text-2xl font-headline font-bold text-on-surface">
+                                        {client.birthdate
+                                            ? (() => {
+                                                const birth = new Date(client.birthdate);
+                                                const today = new Date();
+                                                let age = today.getFullYear() - birth.getFullYear();
+                                                const m = today.getMonth() - birth.getMonth();
+                                                if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+                                                return `${age}`;
+                                            })()
+                                            : '--'} <span className="text-sm font-normal text-on-surface/40">{client.birthdate ? t('yearsOld') : ''}</span>
+                                    </div>
                                 </div>
-                                <div className="clay-inset p-4">
-                                    <div className="text-navy-400 text-sm mb-1">{t('activityLevel')}</div>
-                                    <div className="text-2xl font-bold text-white capitalize">{client.intakeData?.activityLevel || '--'}</div>
+                                <div className="bg-surface-container-lowest rounded-xl p-5 ghost-border">
+                                    <div className="text-[10px] font-label uppercase tracking-widest text-on-surface/50 mb-1">{t('gender')}</div>
+                                    <div className="text-2xl font-headline font-bold text-on-surface capitalize">
+                                        {client.gender ? `${client.gender === 'male' ? '♂️' : '♀️'} ${t(client.gender as any)}` : '--'}
+                                    </div>
+                                </div>
+                                <div className="bg-surface-container-lowest rounded-xl p-5 ghost-border">
+                                    <div className="text-[10px] font-label uppercase tracking-widest text-on-surface/50 mb-1">{t('goal')}</div>
+                                    <div className="text-2xl font-headline font-bold text-on-surface capitalize">{client.intakeData?.goal?.replace('_', ' ') || '--'}</div>
+                                </div>
+                                <div className="bg-surface-container-lowest rounded-xl p-5 ghost-border">
+                                    <div className="text-[10px] font-label uppercase tracking-widest text-on-surface/50 mb-1">{t('fitnessLevel')}</div>
+                                    <div className="text-xl font-headline font-bold text-on-surface">
+                                        {client.fitnessLevel === 'beginner' && `🟢 ${t('beginner')}`}
+                                        {client.fitnessLevel === 'intermediate' && `🟡 ${t('intermediate')}`}
+                                        {client.fitnessLevel === 'pro_competitions' && `🔴 ${t('proCompetitions')}`}
+                                        {!client.fitnessLevel && '--'}
+                                    </div>
                                 </div>
                             </div>
 
-                            {/* Photos Placeholder */}
-                            <div className="clay-inset p-6">
-                                <h3 className="font-bold text-white mb-4">{t('photos')}</h3>
-                                <div className="grid grid-cols-3 gap-2">
-                                    {['Front', 'Side', 'Back'].map(i => (
-                                        <div key={i} className="aspect-[3/4] bg-navy-950 rounded border border-navy-700 flex items-center justify-center text-navy-500 font-medium hover:border-gold-500/30 transition-colors">
-                                            {i} Raw
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
+                            {/* Onboarding Photos */}
+                            {(() => {
+                                // Get photos from Week 0 check-in doc, or fall back to intakeData
+                                const w0 = weeks.find(w => w.weekNumber === 0);
+                                const photoMap: Record<string, string | undefined> = {
+                                    front: w0?.photos?.front || client.intakeData?.frontPhoto || undefined,
+                                    side: w0?.photos?.side || client.intakeData?.sidePhoto || undefined,
+                                    back: w0?.photos?.back || client.intakeData?.backPhoto || undefined,
+                                };
+                                const hasPhotos = Object.values(photoMap).some(Boolean);
+
+                                return (
+                                    <div className="bg-surface-container-lowest rounded-xl p-8 ghost-border">
+                                        <h3 className="font-headline font-bold text-on-surface mb-6 flex items-center gap-3 text-lg">
+                                            <Camera size={20} className="text-primary" /> {t('photos')}
+                                        </h3>
+                                        {hasPhotos ? (
+                                            <div className="grid grid-cols-3 gap-4">
+                                                {(['front', 'side', 'back'] as const).map(angle => (
+                                                    photoMap[angle] ? (
+                                                        <div key={angle} className="relative">
+                                                            <img
+                                                                src={photoMap[angle]}
+                                                                alt={angle}
+                                                                className="aspect-[3/4] w-full rounded-xl object-cover ghost-border"
+                                                            />
+                                                            <div className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-surface/80 backdrop-blur-sm text-[10px] font-label uppercase tracking-widest text-on-surface/60 capitalize">{angle}</div>
+                                                        </div>
+                                                    ) : (
+                                                        <div key={angle} className="aspect-[3/4] bg-surface-container rounded-xl border border-dashed border-outline-variant/30 flex items-center justify-center text-on-surface/30 font-label text-[10px] uppercase tracking-widest text-center px-4">
+                                                            {angle} — {t('notUploadedLabel')}
+                                                        </div>
+                                                    )
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <div className="text-center py-8 text-on-surface/40 font-body text-sm">
+                                                {t('noPhotosDuringOnboarding')}
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })()}
 
                         </div>
                     ) : (
-                        <div className="clay-card p-6">
-                            <div className="flex justify-between mb-6">
-                                <h3 className="font-bold text-white flex items-center gap-2">
-                                    <History className="text-gold-400" size={20} /> {t('dailyEntries')}
+                        <div className="bg-surface-container-low rounded-2xl p-8 ghost-border">
+                            <div className="flex justify-between mb-8">
+                                <h3 className="text-xl font-headline font-bold text-on-surface flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+                                        <History size={20} />
+                                    </div>
+                                    {t('dailyEntries')}
                                 </h3>
                             </div>
                             {weekData && <DailyTrackingTable entries={weekData.dailyEntries} readOnly={true} onChange={() => { }} />}
@@ -215,20 +371,23 @@ export const CoachReview = () => {
 
                     {/* Client Photos */}
                     {!isProgramCreation && weekData?.photos && Object.values(weekData.photos).some(Boolean) && (
-                        <div className="clay-card p-6">
-                            <h3 className="font-bold text-white mb-4 flex items-center gap-2">
-                                <Camera className="text-gold-400" size={20} /> Progress Photos
+                        <div className="bg-surface-container-low rounded-2xl p-8 ghost-border">
+                            <h3 className="text-xl font-headline font-bold text-on-surface mb-6 flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+                                    <Camera size={20} />
+                                </div>
+                                {t('progressPhotos')}
                             </h3>
-                            <div className="grid grid-cols-4 gap-3">
+                            <div className="grid grid-cols-4 gap-4">
                                 {(['front', 'side', 'back', 'face'] as const).map(angle => (
                                     weekData.photos?.[angle] ? (
                                         <div key={angle} className="relative">
                                             <img
                                                 src={weekData.photos[angle]}
                                                 alt={angle}
-                                                className="aspect-[3/4] w-full rounded-lg object-cover"
+                                                className="aspect-[3/4] w-full rounded-xl object-cover ghost-border"
                                             />
-                                            <div className="absolute bottom-1 left-1 px-2 py-0.5 rounded bg-black/60 text-xs text-white capitalize">{angle}</div>
+                                            <div className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-surface/80 backdrop-blur-sm text-[10px] font-label uppercase tracking-widest text-on-surface/60 capitalize">{angle}</div>
                                         </div>
                                     ) : null
                                 ))}
@@ -238,48 +397,86 @@ export const CoachReview = () => {
 
                     {/* Progress Charts */}
                     {!isProgramCreation && <ProgressCharts weeks={weeks} />}
+
+                    {/* Client Weekly Metrics */}
+                    {!isProgramCreation && weekData && (
+                        <div className="bg-surface-container-low rounded-2xl p-8 ghost-border">
+                            <h3 className="text-xl font-headline font-bold text-on-surface mb-6 flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+                                    <Activity size={20} />
+                                </div>
+                                {t('weeklySummary')}
+                            </h3>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                <div className="bg-surface-container-lowest rounded-xl p-5 ghost-border text-center">
+                                    <div className="text-[10px] font-label uppercase tracking-widest text-on-surface/50 mb-2 flex items-center justify-center gap-1.5"><Shield size={12} className="text-blue-400" /> {t('strengthScale')}</div>
+                                    <div className="text-2xl font-headline font-bold text-blue-400">{weekData.strengthScale ?? '--'}<span className="text-sm font-normal text-on-surface/40">/10</span></div>
+                                </div>
+                                <div className="bg-surface-container-lowest rounded-xl p-5 ghost-border text-center">
+                                    <div className="text-[10px] font-label uppercase tracking-widest text-on-surface/50 mb-2 flex items-center justify-center gap-1.5"><Target size={12} className="text-primary" /> {t('hungerScale')}</div>
+                                    <div className="text-2xl font-headline font-bold text-primary">{weekData.hungerScale ?? '--'}<span className="text-sm font-normal text-on-surface/40">/10</span></div>
+                                </div>
+                                <div className="bg-surface-container-lowest rounded-xl p-5 ghost-border text-center">
+                                    <div className="text-[10px] font-label uppercase tracking-widest text-on-surface/50 mb-2 flex items-center justify-center gap-1.5"><Zap size={12} className="text-yellow-400" /> {t('energyScale')}</div>
+                                    <div className="text-2xl font-headline font-bold text-yellow-400">{weekData.energyScale ?? '--'}<span className="text-sm font-normal text-on-surface/40">/10</span></div>
+                                </div>
+                                <div className="bg-surface-container-lowest rounded-xl p-5 ghost-border text-center">
+                                    <div className="text-[10px] font-label uppercase tracking-widest text-on-surface/50 mb-2 flex items-center justify-center gap-1.5"><Flame size={12} className="text-orange-400" /> {t('cardioCalories')}</div>
+                                    <div className="text-2xl font-headline font-bold text-orange-400">{weekData.cardioCalories ?? 0}<span className="text-sm font-normal text-on-surface/40"> kcal</span></div>
+                                </div>
+                            </div>
+                            {weekData.weeklySummary && (
+                                <div className="mt-6 bg-surface-container rounded-xl p-6 border-l-4 border-outline-variant/50 relative overflow-hidden">
+                                    <div className="text-[10px] font-label uppercase tracking-widest text-on-surface/40 mb-3">{t('weeklyReflection')}</div>
+                                    <p className="text-on-surface/90 text-sm leading-relaxed font-body">"{weekData.weeklySummary}"</p>
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
 
-                {/* RIGHT COLUMN - Coach Actions */}
+                {/* ── RIGHT COLUMN - Coach Actions ── */}
                 <div className="lg:col-span-1 space-y-6">
                     {/* Target Adjustment / Program Builder */}
-                    <div className="clay-card p-6">
-                        <div className="flex items-center justify-between mb-6">
-                            <h3 className="font-bold text-white flex items-center gap-2">
-                                {isProgramCreation ? <Dumbbell className="text-gold-400" size={20} /> : <Target className="text-gold-400" size={20} />}
+                    <div className="bg-surface-container-low rounded-2xl p-6 ghost-border">
+                        <div className="flex items-center justify-between mb-8">
+                            <h3 className="font-headline font-bold text-on-surface flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+                                    {isProgramCreation ? <Dumbbell size={16} /> : <Target size={16} />}
+                                </div>
                                 {isProgramCreation ? t('setInitialTargets') : t('adjustTargets')}
                             </h3>
 
                             {!isProgramCreation && (
-                                <label className="flex items-center gap-2 cursor-pointer">
+                                <label className="flex items-center gap-2 cursor-pointer bg-surface-container-lowest px-3 py-1.5 rounded-full ghost-border">
                                     <input
                                         type="checkbox"
                                         checked={changeTargets}
                                         onChange={(e) => setChangeTargets(e.target.checked)}
-                                        className="accent-gold-500 w-4 h-4"
+                                        className="accent-primary w-4 h-4"
                                     />
-                                    <span className="text-sm text-gold-400 font-medium">Change?</span>
+                                    <span className="text-[10px] font-label uppercase tracking-widest text-primary font-bold">{t('changeQuestion')}</span>
                                 </label>
                             )}
                         </div>
 
                         {/* Program Builder / Target Inputs */}
-                        <div className={`space-y-6 transition-all ${(isProgramCreation || changeTargets) ? 'opacity-100' : 'opacity-60 pointer-events-none grayscale'}`}>
+                        <div className={`space-y-6 transition-all duration-300 ${(isProgramCreation || changeTargets) ? 'opacity-100' : 'opacity-40 grayscale'}`}>
                             {/* High Carb Inputs */}
-                            <div className="clay-inset p-4">
-                                <div className="flex justify-between text-xs text-navy-300 font-bold mb-3 uppercase">
+                            <div className="bg-surface-container-lowest rounded-xl p-5 ghost-border">
+                                <div className="flex justify-between font-label text-[10px] uppercase tracking-widest text-on-surface/50 font-bold mb-4">
                                     {t('highCarb')} {t('adjustTargets')}
-                                    <span>{newHighCarb.calories} kcal</span>
+                                    <span className="text-primary">{newHighCarb.calories} kcal</span>
                                 </div>
-                                <div className="grid grid-cols-3 gap-2">
+                                <div className="grid grid-cols-3 gap-3">
                                     {['carbs', 'protein', 'fats'].map((macro) => (
                                         <div key={macro}>
-                                            <label className="text-[10px] text-navy-400 uppercase">{macro.charAt(0)}</label>
+                                            <label className="text-[10px] font-label uppercase tracking-widest text-on-surface/40 mb-1 block text-center">{macro.charAt(0)}</label>
                                             <input
                                                 type="number"
                                                 value={newHighCarb[macro as keyof MacroTarget]}
                                                 onChange={(e) => updateTarget('high', macro as keyof MacroTarget, parseInt(e.target.value))}
-                                                className="w-full clay-input px-2 py-1 text-sm"
+                                                className="w-full bg-surface-container rounded-lg px-2 py-2 text-center text-sm font-headline font-bold text-on-surface border-none outline-none focus:ring-1 focus:ring-primary/30"
                                             />
                                         </div>
                                     ))}
@@ -287,114 +484,230 @@ export const CoachReview = () => {
                             </div>
 
                             {/* Low Carb Inputs */}
-                            <div className="clay-inset p-4">
-                                <div className="flex justify-between text-xs text-gold-500 font-bold mb-3 uppercase">
+                            <div className="bg-surface-container-lowest rounded-xl p-5 ghost-border">
+                                <div className="flex justify-between font-label text-[10px] uppercase tracking-widest text-primary font-bold mb-4">
                                     {t('lowCarb')} {t('adjustTargets')}
                                     <span>{newLowCarb.calories} kcal</span>
                                 </div>
-                                <div className="grid grid-cols-3 gap-2">
+                                <div className="grid grid-cols-3 gap-3">
                                     {['carbs', 'protein', 'fats'].map((macro) => (
                                         <div key={macro}>
-                                            <label className="text-[10px] text-navy-400 uppercase">{macro.charAt(0)}</label>
+                                            <label className="text-[10px] font-label uppercase tracking-widest text-on-surface/40 mb-1 block text-center">{macro.charAt(0)}</label>
                                             <input
                                                 type="number"
                                                 value={newLowCarb[macro as keyof MacroTarget]}
                                                 onChange={(e) => updateTarget('low', macro as keyof MacroTarget, parseInt(e.target.value))}
-                                                className="w-full clay-input px-2 py-1 text-sm"
+                                                className="w-full bg-surface-container rounded-lg px-2 py-2 text-center text-sm font-headline font-bold text-on-surface border-none outline-none focus:ring-1 focus:ring-primary/30"
                                             />
                                         </div>
                                     ))}
                                 </div>
                             </div>
+
+                            {/* Cardio Target */}
+                            <div className="bg-surface-container-lowest rounded-xl p-5 ghost-border">
+                                <div className="flex justify-between items-center font-label text-[10px] uppercase tracking-widest text-on-surface/50 font-bold mb-4">
+                                    <span className="flex items-center gap-1.5">
+                                        <Flame size={12} className="text-orange-400" />
+                                        {t('cardioTargetLabel')} {t('adjustTargets')}
+                                    </span>
+                                    <span className="text-orange-400">{newCardio} {t('kcalUnit')}</span>
+                                </div>
+                                <input
+                                    type="number"
+                                    min={0}
+                                    max={5000}
+                                    value={newCardio}
+                                    onChange={(e) => setNewCardio(Math.max(0, parseInt(e.target.value) || 0))}
+                                    className="w-full bg-surface-container rounded-lg px-3 py-2.5 text-center text-base font-headline font-bold text-on-surface border-none outline-none focus:ring-1 focus:ring-primary/30"
+                                />
+                                <p className="text-[10px] font-body text-on-surface/40 mt-2 text-center">
+                                    {t('cardioTargetHint')}
+                                </p>
+                            </div>
                         </div>
 
                         {changeTargets && !isProgramCreation && (
-                            <div className="mt-4 p-3 bg-navy-500/10 border border-navy-400/20 rounded-lg text-xs text-navy-200 flex items-start gap-2">
-                                <TrendingUp size={14} className="mt-0.5 shrink-0" />
-                                Changes will cascade from Next Week (Week {(weekData?.weekNumber || 0) + 1}) onwards.
+                            <div className="mt-6 p-4 bg-primary/5 border border-primary/15 rounded-xl flex items-start gap-3 text-sm font-body text-primary">
+                                <TrendingUp size={16} className="mt-0.5 shrink-0" />
+                                {t('cascadeNote')} ({t('week')} {(weekData?.weekNumber || 0) + 1})
                             </div>
                         )}
 
                         {isProgramCreation && (
-                            <div className="mt-4 p-3 bg-gold-500/5 border border-gold-500/15 rounded-lg text-xs text-gold-300 flex items-start gap-2">
-                                <CheckCircle2 size={14} className="mt-0.5 shrink-0" />
-                                This will generate Weeks 1-12 with these targets.
+                            <div className="mt-6 p-4 bg-primary/5 border border-primary/15 rounded-xl flex items-start gap-3 text-sm font-body text-primary">
+                                <CheckCircle2 size={16} className="mt-0.5 shrink-0" />
+                                {t('generateWeeksNote')}
                             </div>
                         )}
 
                     </div>
 
                     {/* Feedback & Actions */}
-                    <div className="clay-card p-6">
+                    <div className="bg-surface-container-low rounded-2xl p-6 ghost-border">
                         {!isProgramCreation && (
                             <>
-                                <h3 className="font-bold text-white mb-4">{t('coachFeedback')}</h3>
+                                <h3 className="font-headline font-bold text-on-surface mb-4 text-sm uppercase tracking-wider">{t('coachFeedback')}</h3>
                                 <textarea
                                     value={feedback}
                                     onChange={(e) => setFeedback(e.target.value)}
                                     placeholder={t('writeYourFeedback')}
-                                    className="w-full h-32 clay-input p-4 placeholder-navy-500 resize-none mb-6"
+                                    className="w-full h-32 bg-surface-container-lowest rounded-xl p-4 text-on-surface placeholder-on-surface/30 resize-none border-none outline-none focus:ring-1 focus:ring-primary/30 font-body text-sm transition-all mb-6"
                                 />
                             </>
                         )}
 
-                        <div className="flex flex-col gap-3">
+                        <div className="flex flex-col gap-4">
                             <button
                                 onClick={handleAction}
                                 disabled={isSubmitting}
-                                className="w-full clay-button bg-gradient-to-r from-gold-400 to-gold-600 text-navy-950 py-3 flex items-center justify-center gap-2 gold-glow disabled:opacity-50"
+                                className="w-full px-6 py-4 rounded-xl font-label text-[12px] font-bold uppercase tracking-widest bg-gradient-to-r from-primary to-primary-container text-on-primary border border-primary/20 shadow-[0_5px_15px_rgba(230,195,100,0.3)] hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                             >
-                                {isSubmitting ? <Loader2 size={20} className="animate-spin" /> : <CheckCircle2 size={20} />}
+                                {isSubmitting ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
                                 {isProgramCreation ? t('createProgram') : t('markReviewed')}
                             </button>
-                            <button className="w-full clay-button bg-navy-800 hover:bg-navy-700 text-navy-200 py-3">
+                            <button className="w-full py-4 rounded-xl text-on-surface/60 hover:text-on-surface bg-surface-container-lowest hover:bg-surface-container transition-colors font-label uppercase tracking-widest text-[10px] font-bold">
                                 {t('saveProgress')}
                             </button>
                         </div>
                     </div>
 
-                    {/* Workout Assignment */}
-                    {!isProgramCreation && weekData && (
-                        <div className="clay-card p-6">
-                            <h3 className="font-bold text-white mb-4 flex items-center gap-2">
-                                <Dumbbell className="text-gold-400" size={20} /> Assign Workouts
+                    {/* Training Program Assignment — full program, lands on the client's
+                        dashboard via useActiveProgram. */}
+                    {!isProgramCreation && weekData && client.userId && (
+                        <div className="bg-surface-container-low rounded-2xl p-6 ghost-border">
+                            <h3 className="font-headline font-bold text-on-surface flex items-center gap-3 mb-6">
+                                <div className="w-8 h-8 rounded-lg bg-surface-container-highest flex items-center justify-center text-on-surface/60">
+                                    <Dumbbell size={16} />
+                                </div>
+                                {t('assignWorkouts')}
                             </h3>
-                            <div className="space-y-2 mb-4">
-                                {(weekData.assignedWorkoutIds || []).map(wId => {
-                                    const w = workouts.find(x => x.id === wId);
-                                    if (!w) return null;
-                                    return (
-                                        <div key={w.id} className="flex items-center justify-between clay-inset p-3 rounded-lg">
-                                            <div>
-                                                <p className="text-white text-sm font-medium">{w.name}</p>
-                                                <p className="text-navy-400 text-xs">{w.exercises.length} exercises · {w.estimatedMinutes}min</p>
+
+                            {clientProgram ? (
+                                <div className="space-y-3">
+                                    <div className="bg-surface-container-lowest p-4 rounded-xl ghost-border">
+                                        <div className="flex items-start justify-between gap-3">
+                                            <div className="min-w-0">
+                                                <p className="text-on-surface font-headline font-bold text-sm truncate">{clientProgram.programName}</p>
+                                                <p className="text-on-surface/40 text-[10px] font-label uppercase tracking-widest mt-1">
+                                                    {clientProgram.split} · {clientProgram.difficulty} · {clientProgram.goal.replace('_', ' ')}
+                                                </p>
+                                                <p className="text-on-surface/60 text-xs font-body mt-2">
+                                                    Cycle {clientProgram.currentCycle} · Day {(clientProgram.completedDays.length % clientProgram.rotation.length) + 1} of {clientProgram.rotation.length}
+                                                    {clientProgram.assignedByCoach && <span className="text-primary ms-2">· Coach-assigned</span>}
+                                                </p>
                                             </div>
-                                            <button onClick={() => unassignWorkout(weekData.id, w.id)} className="text-red-400 hover:text-red-300 p-1">
+                                            <button
+                                                onClick={removeAssignedProgram}
+                                                className="text-red-400 hover:text-red-300 p-2 bg-red-400/10 rounded-lg transition-colors shrink-0"
+                                                title="Remove program"
+                                            >
                                                 <X size={16} />
                                             </button>
                                         </div>
-                                    );
-                                })}
-                                {(!weekData.assignedWorkoutIds || weekData.assignedWorkoutIds.length === 0) && (
-                                    <p className="text-navy-400 text-sm text-center py-4">No workouts assigned yet</p>
-                                )}
+                                    </div>
+                                    <button
+                                        onClick={() => setShowProgramWizard(true)}
+                                        className="w-full px-4 py-3 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface text-sm font-bold border border-outline-variant/30 hover:border-primary/30 transition-colors flex items-center justify-center gap-2"
+                                    >
+                                        <Dumbbell size={16} />
+                                        Replace program
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="space-y-3">
+                                    <p className="text-on-surface/40 text-sm font-body text-center py-6 border border-dashed border-outline-variant/30 rounded-xl">
+                                        {t('noWorkoutsAssigned')}
+                                    </p>
+                                    <button
+                                        onClick={() => setShowProgramWizard(true)}
+                                        className="w-full px-4 py-3 rounded-xl bg-gradient-to-r from-primary to-primary-container text-on-primary text-sm font-bold flex items-center justify-center gap-2 hover:scale-[1.01] active:scale-[0.99] transition-all"
+                                    >
+                                        <Dumbbell size={16} />
+                                        Assign Training Program
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Program assignment modal — embeds the same WorkoutWizard the
+                        client uses, but writes to the client's userPrograms doc. */}
+                    {showProgramWizard && client.userId && (
+                        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-start md:items-center justify-center p-4 overflow-y-auto">
+                            <div className="bg-surface-container-low rounded-2xl ghost-border shadow-2xl max-w-3xl w-full my-8">
+                                <div className="flex items-center justify-between p-6 border-b border-outline-variant/20">
+                                    <h2 className="font-headline font-bold text-on-surface text-lg">
+                                        Assign program to {client.name}
+                                    </h2>
+                                    <button
+                                        onClick={() => setShowProgramWizard(false)}
+                                        className="text-on-surface-variant hover:text-on-surface p-2"
+                                    >
+                                        <X size={20} />
+                                    </button>
+                                </div>
+                                <div className="p-4 md:p-6">
+                                    <WorkoutWizard
+                                        targetUserId={client.userId}
+                                        onAssigned={() => {
+                                            setTimeout(() => setShowProgramWizard(false), 1500);
+                                            showToast('success', `Program assigned to ${client.name}.`);
+                                        }}
+                                    />
+                                </div>
                             </div>
-                            <select
-                                onChange={(e) => { if (e.target.value) { assignWorkout(weekData.id, e.target.value); e.target.value = ''; } }}
-                                defaultValue=""
-                                className="w-full clay-input px-3 py-2 text-sm"
+                        </div>
+                    )}
+
+                    {/* Extend Program Section */}
+                    {!isProgramCreation && client.programLength && selectedWeekNum === client.programLength && (
+                        <div className="bg-primary/5 rounded-2xl p-6 border border-primary/20">
+                            <h3 className="font-headline font-bold text-primary mb-4 flex items-center gap-2">
+                                <Plus size={20} /> Extend Program
+                            </h3>
+                            <p className="text-sm text-on-surface/70 font-body mb-6">
+                                This client has reached the final week of their current program ({client.programLength} weeks). Add more weeks using the targets defined above.
+                            </p>
+                            <div className="flex gap-3 mb-6">
+                                {[4, 8, 12].map(weeks => (
+                                    <button
+                                        key={weeks}
+                                        onClick={() => setAdditionalWeeks(weeks)}
+                                        className={clsx(
+                                            "flex-1 py-3 rounded-xl text-sm font-bold transition-all",
+                                            additionalWeeks === weeks
+                                                ? "bg-primary text-on-primary"
+                                                : "bg-surface-container text-on-surface/60 hover:bg-surface-container-high hover:text-on-surface"
+                                        )}
+                                    >
+                                        +{weeks} Weeks
+                                    </button>
+                                ))}
+                            </div>
+                            <button
+                                onClick={handleExtendProgram}
+                                disabled={isExtending}
+                                className="w-full px-6 py-4 rounded-xl font-label text-[12px] font-bold uppercase tracking-widest bg-gradient-to-r from-primary to-primary-container text-on-primary border border-primary/20 shadow-[0_5px_15px_rgba(230,195,100,0.3)] hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                             >
-                                <option value="" disabled>+ Add a workout...</option>
-                                {workouts
-                                    .filter(w => !(weekData.assignedWorkoutIds || []).includes(w.id))
-                                    .map(w => (<option key={w.id} value={w.id}>{w.name} ({w.category})</option>))
-                                }
-                            </select>
+                                {isExtending ? <Loader2 size={18} className="animate-spin" /> : <Plus size={18} />}
+                                Extend to {client.programLength + additionalWeeks} Weeks
+                            </button>
                         </div>
                     )}
                 </div>
             </div>
+
+            {/* Compare check-ins — visible whenever there are ≥2 weeks */}
+            {!isProgramCreation && weeks.filter(w => w.weekNumber > 0).length >= 2 && (
+                <CheckInCompare weeks={weeks} />
+            )}
         </div>
+
+        {/* Info panel modal */}
+        {showInfo && client && (
+            <ClientInfoPanel client={client} weeks={weeks} onClose={() => setShowInfo(false)} />
+        )}
         </>
     );
 };

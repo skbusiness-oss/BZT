@@ -4,18 +4,30 @@ import {
 import {
   collection, doc,
   onSnapshot, query, where,
-  setDoc, updateDoc, deleteDoc,
+  setDoc, updateDoc, deleteDoc, addDoc,
   serverTimestamp,
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from '../lib/firebase';
+import { httpsCallable } from 'firebase/functions';
+import { db, storage, functions } from '../lib/firebase';
 import { useAuth } from './AuthContext';
+
+// `setUserRole` Cloud Function — sets a custom Auth claim AND mirrors the
+// role to Firestore. Used when the coach flips a user's accessLevel.
+const callSetUserRole = httpsCallable<
+  { targetUid: string; role: 'community' | 'client' | 'coach' | 'admin' },
+  { ok: boolean }
+>(functions, 'setUserRole');
 import { Client, Week, MacroTarget } from '../types';
+import { validateImageFile } from '../lib/validation';
 import { DEFAULT_TARGETS } from '../lib/constants';
 import type { QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 
 function docToObj<T>(snap: QueryDocumentSnapshot<DocumentData>): T {
-  return { id: snap.id, ...snap.data() } as T;
+  const data = snap.data();
+  if (data.role === 'coaching') data.role = 'client';
+  if (data.accessLevel === 'coaching') data.accessLevel = 'client';
+  return { id: snap.id, ...data } as T;
 }
 
 export interface CoachingContextType {
@@ -28,19 +40,18 @@ export interface CoachingContextType {
   cascadeTargets: (
     clientId: string,
     startWeekNum: number,
-    newTargets: { highCarb: MacroTarget; lowCarb: MacroTarget }
+    newTargets: { highCarb: MacroTarget; lowCarb: MacroTarget; cardio?: number }
   ) => Promise<void>;
-  completeOnboarding: (clientId: string, initialData: Record<string, string>) => Promise<void>;
+  completeOnboarding: (clientId: string, initialData: Record<string, string>, photos?: { front?: string; side?: string; back?: string }) => Promise<void>;
   createProgram: (
     clientId: string,
-    initialTargets: { highCarb: MacroTarget; lowCarb: MacroTarget }
+    initialTargets: { highCarb: MacroTarget; lowCarb: MacroTarget; cardio?: number }
   ) => Promise<void>;
   advanceWeek: (clientId: string, reviewedWeekNum: number) => Promise<void>;
-  assignWorkout: (weekId: string, workoutId: string) => Promise<void>;
-  unassignWorkout: (weekId: string, workoutId: string) => Promise<void>;
   addClient: (client: Omit<Client, 'id'>, uid: string) => Promise<void>;
   removeClient: (clientId: string) => Promise<void>;
   uploadPhoto: (file: File, userId: string, weekNumber: number) => Promise<string>;
+  extendProgram: (clientId: string, additionalWeeks: number, targets: { highCarb: MacroTarget; lowCarb: MacroTarget; cardio?: number }) => Promise<void>;
 }
 
 const CoachingContext = createContext<CoachingContextType | undefined>(undefined);
@@ -93,12 +104,34 @@ export const CoachingProvider = ({ children }: { children: ReactNode }) => {
 
   const updateClient = async (clientId: string, updates: Partial<Client>) => {
     await updateDoc(doc(db, 'clients', clientId), { ...updates, updatedAt: serverTimestamp() });
+
+    // When the coach changes accessLevel, mirror it onto the user's auth claim
+    // (via Cloud Function) so:
+    //   1. Storage rules (which read `request.auth.token.role`) start
+    //      enforcing the new role.
+    //   2. The user's existing tokens are revoked — they re-authenticate
+    //      and pick up the new role within ~5s.
+    //   3. The Firestore mirror happens server-side, atomic with the claim.
+    if (updates.accessLevel) {
+      const client = clients.find(c => c.id === clientId);
+      const userId = client?.userId;
+      if (userId) {
+        const newRole = updates.accessLevel === 'community' ? 'community' : 'client';
+        try {
+          await callSetUserRole({ targetUid: userId, role: newRole });
+        } catch (e) {
+          // Non-fatal: client doc was updated even if claim write fails. The
+          // coach can retry by toggling accessLevel back and forth.
+          console.error('Failed to sync user role claim with accessLevel:', e);
+        }
+      }
+    }
   };
 
   const cascadeTargets = async (
     clientId: string,
     startWeekNum: number,
-    newTargets: { highCarb: MacroTarget; lowCarb: MacroTarget }
+    newTargets: { highCarb: MacroTarget; lowCarb: MacroTarget; cardio?: number }
   ) => {
     const affected = weeks.filter((w) => w.clientId === clientId && w.weekNumber >= startWeekNum);
     await Promise.all(
@@ -123,8 +156,14 @@ export const CoachingProvider = ({ children }: { children: ReactNode }) => {
     await Promise.all(ops);
   };
 
-  const completeOnboarding = async (clientId: string, initialData: Record<string, string>) => {
+  const completeOnboarding = async (clientId: string, initialData: Record<string, string>, photos?: { front?: string; side?: string; back?: string }) => {
     const weekRef = doc(db, 'checkIns', `${clientId}-w0`);
+    // Build photos object from uploaded URLs (filter out empty strings)
+    const weekPhotos: Record<string, string> = {};
+    if (photos?.front) weekPhotos.front = photos.front;
+    if (photos?.side) weekPhotos.side = photos.side;
+    if (photos?.back) weekPhotos.back = photos.back;
+
     await setDoc(weekRef, {
       clientId,
       userId: clients.find((c) => c.id === clientId)?.userId || null,
@@ -133,22 +172,30 @@ export const CoachingProvider = ({ children }: { children: ReactNode }) => {
       activeTargets: { ...DEFAULT_TARGETS },
       dailyEntries: Array.from({ length: 7 }, () => ({ date: '' })),
       coachFeedback: '',
-      photos: [],
-      assignedWorkoutIds: [],
+      photos: weekPhotos,
       createdAt: serverTimestamp(),
     });
-    await updateDoc(doc(db, 'clients', clientId), {
+
+    // Build the update object — include new profile fields at top-level for querying/filtering
+    const clientUpdate: Record<string, unknown> = {
       isOnboarding: false,
       intakeData: { ...initialData, submittedAt: new Date().toISOString() },
       currentWeek: 0,
       needsReview: true,
       updatedAt: serverTimestamp(),
-    });
+    };
+
+    // Persist birthdate, gender, fitnessLevel as top-level fields on the client doc
+    if (initialData.birthdate) clientUpdate.birthdate = initialData.birthdate;
+    if (initialData.gender) clientUpdate.gender = initialData.gender;
+    if (initialData.fitnessLevel) clientUpdate.fitnessLevel = initialData.fitnessLevel;
+
+    await updateDoc(doc(db, 'clients', clientId), clientUpdate);
   };
 
   const createProgram = async (
     clientId: string,
-    initialTargets: { highCarb: MacroTarget; lowCarb: MacroTarget }
+    initialTargets: { highCarb: MacroTarget; lowCarb: MacroTarget; cardio?: number }
   ) => {
     const client = clients.find((c) => c.id === clientId);
     const programLength = client?.programLength || 12;
@@ -162,8 +209,7 @@ export const CoachingProvider = ({ children }: { children: ReactNode }) => {
         activeTargets: weekNum === 1 ? initialTargets : { ...DEFAULT_TARGETS },
         dailyEntries: Array.from({ length: 7 }, () => ({ date: '' })),
         coachFeedback: '',
-        photos: [],
-        assignedWorkoutIds: [],
+        photos: {},
         createdAt: serverTimestamp(),
       });
     });
@@ -171,23 +217,6 @@ export const CoachingProvider = ({ children }: { children: ReactNode }) => {
       ...weekWrites,
       updateDoc(doc(db, 'clients', clientId), { currentWeek: 1, needsReview: false, updatedAt: serverTimestamp() }),
     ]);
-  };
-
-  const assignWorkout = async (weekId: string, workoutId: string) => {
-    const week = weeks.find((w) => w.id === weekId);
-    if (!week) return;
-    const existing = week.assignedWorkoutIds || [];
-    if (existing.includes(workoutId)) return;
-    await updateDoc(doc(db, 'checkIns', weekId), { assignedWorkoutIds: [...existing, workoutId], updatedAt: serverTimestamp() });
-  };
-
-  const unassignWorkout = async (weekId: string, workoutId: string) => {
-    const week = weeks.find((w) => w.id === weekId);
-    if (!week) return;
-    await updateDoc(doc(db, 'checkIns', weekId), {
-      assignedWorkoutIds: (week.assignedWorkoutIds || []).filter((id) => id !== workoutId),
-      updatedAt: serverTimestamp(),
-    });
   };
 
   const addClient = async (client: Omit<Client, 'id'>, uid: string) => {
@@ -200,17 +229,120 @@ export const CoachingProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const removeClient = async (clientId: string) => {
+    // Capture the user's auth uid before we drop the client doc
+    const client = clients.find(c => c.id === clientId);
+    const userId = client?.userId;
+
     await deleteDoc(doc(db, 'clients', clientId));
     const clientWeeks = weeks.filter((w) => w.clientId === clientId);
     await Promise.all(clientWeeks.map((w) => deleteDoc(doc(db, 'checkIns', w.id))));
+
+    if (userId) {
+      // Revoke web app access: flip users/{uid}.disabled = true.
+      // AuthContext live-subscribes to this doc and will sign them out
+      // immediately, even from active sessions in other tabs.
+      try {
+        await updateDoc(doc(db, 'users', userId), {
+          disabled: true,
+          disabledAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      } catch (e) {
+        console.error('Failed to disable user account:', e);
+      }
+
+      // Audit log — who deleted whom, and when
+      try {
+        await setDoc(doc(db, 'deletionLogs', userId), {
+          deletedUserId: userId,
+          deletedClientId: clientId,
+          clientName: client?.name || 'unknown',
+          clientEmail: client?.email || 'unknown',
+          deletedBy: user?.id || 'unknown',
+          deletedByEmail: user?.email || 'unknown',
+          reason: 'coach_removed',
+          deletedAt: serverTimestamp(),
+        });
+      } catch (e) {
+        console.error('Failed to write deletion audit log:', e);
+      }
+      // Clear any active program assignment
+      try {
+        await deleteDoc(doc(db, 'userPrograms', userId));
+      } catch {
+        // ok if it didn't exist
+      }
+    }
+
+    // Audit log: who deleted whom, when. Keeps a coach-readable trail.
+    try {
+      await addDoc(collection(db, 'auditLog'), {
+        action: 'delete_client',
+        clientId,
+        targetUserId: userId ?? null,
+        targetName: client?.name ?? null,
+        targetEmail: client?.email ?? null,
+        actorUid: user?.id ?? null,
+        actorName: user?.name ?? null,
+        weeksDeleted: clientWeeks.length,
+        timestamp: serverTimestamp(),
+      });
+    } catch (e) {
+      console.error('Failed to write audit log entry:', e);
+    }
   };
 
   const uploadPhoto = async (file: File, userId: string, weekNumber: number): Promise<string> => {
-    const ext = file.name.split('.').pop();
+    const err = validateImageFile(file);
+    if (err) throw new Error(err);
+
+    // Use the browser-reported MIME type for the extension, not the filename,
+    // to prevent extension spoofing (e.g. evil.exe renamed to photo.jpg).
+    const mimeToExt: Record<string, string> = {
+      'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp',
+      'image/gif': 'gif', 'image/heic': 'heic', 'image/heif': 'heif',
+    };
+    const ext = mimeToExt[file.type] ?? 'jpg';
     const path = `check-ins/${userId}/week${weekNumber}/${Date.now()}.${ext}`;
     const storageRef = ref(storage, path);
-    const snapshot = await uploadBytes(storageRef, file);
+    // Force the contentType. iOS Safari can send `application/octet-stream`
+    // for files picked from Files app, and our storage rule denies that.
+    const snapshot = await uploadBytes(storageRef, file, { contentType: file.type || `image/${ext}` });
     return getDownloadURL(snapshot.ref);
+  };
+
+  const extendProgram = async (
+    clientId: string,
+    additionalWeeks: number,
+    targets: { highCarb: MacroTarget; lowCarb: MacroTarget; cardio?: number }
+  ) => {
+    const client = clients.find((c) => c.id === clientId);
+    if (!client) return;
+    const currentLength = client.programLength;
+    const newLength = currentLength + additionalWeeks;
+
+    const weekWrites = Array.from({ length: additionalWeeks }, (_, i) => {
+      const weekNum = currentLength + i + 1;
+      return setDoc(doc(db, 'checkIns', `${clientId}-w${weekNum}`), {
+        clientId,
+        userId: client.userId || null,
+        weekNumber: weekNum,
+        status: 'pending',
+        activeTargets: targets,
+        dailyEntries: Array.from({ length: 7 }, () => ({ date: '' })),
+        coachFeedback: '',
+        photos: {},
+        createdAt: serverTimestamp(),
+      });
+    });
+
+    await Promise.all([
+      ...weekWrites,
+      updateDoc(doc(db, 'clients', clientId), {
+        programLength: newLength,
+        updatedAt: serverTimestamp(),
+      }),
+    ]);
   };
 
   return (
@@ -218,8 +350,7 @@ export const CoachingProvider = ({ children }: { children: ReactNode }) => {
       clients, weeks, loading,
       getClientWeeks, updateWeek, updateClient, cascadeTargets,
       completeOnboarding, createProgram, advanceWeek,
-      assignWorkout, unassignWorkout,
-      addClient, removeClient, uploadPhoto,
+      addClient, removeClient, uploadPhoto, extendProgram,
     }}>
       {children}
     </CoachingContext.Provider>

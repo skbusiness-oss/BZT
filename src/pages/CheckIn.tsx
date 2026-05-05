@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { useLanguage } from '../context/LanguageContext';
 import { DayEntry, WeekPhotos } from '../types';
+import { awardXp, XP_SOURCE } from '../lib/activityScore';
 import { DailyTrackingTable } from '../components/checkin/DailyTrackingTable';
 import {
     ChevronLeft,
@@ -13,17 +14,20 @@ import {
     MessageSquare,
     Target,
     AlertCircle,
-    Dumbbell,
     X,
     CheckCircle,
-    Loader2
+    Loader2,
+    Flame,
+    Zap,
+    Shield,
+    Lightbulb,
 } from 'lucide-react';
 import clsx from 'clsx';
 
 export const CheckIn = () => {
     const { user } = useAuth();
     const { t } = useLanguage();
-    const { clients, getClientWeeks, updateWeek, updateClient, workouts, uploadPhoto } = useData();
+    const { clients, getClientWeeks, updateWeek, updateClient, uploadPhoto } = useData();
 
     const client = clients.find(c => c.userId === user?.id);
     const weeks = client ? getClientWeeks(client.id) : [];
@@ -38,6 +42,9 @@ export const CheckIn = () => {
     const [photoModal, setPhotoModal] = useState<string | null>(null);
     const [uploadingAngle, setUploadingAngle] = useState<string | null>(null);
     const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
+    const [strength, setStrength] = useState(5);
+    const [energy, setEnergy] = useState(5);
+    const [cardioCalories, setCardioCalories] = useState(0);
 
     const showToast = (type: 'success' | 'error', msg: string) => {
         setToast({ type, msg });
@@ -49,11 +56,14 @@ export const CheckIn = () => {
             setEntries(weekData.dailyEntries || Array.from({ length: 7 }, () => ({} as DayEntry)));
             setSummary(weekData.weeklySummary || '');
             setHunger(weekData.hungerScale || 5);
+            setStrength(weekData.strengthScale || 5);
+            setEnergy(weekData.energyScale || 5);
+            setCardioCalories(weekData.cardioCalories || 0);
             setPhotos(weekData.photos || {});
         }
     }, [weekData]);
 
-    if (!client || !weekData) return <div className="text-white">{t('loading')}</div>;
+    if (!client || !weekData) return <div className="text-on-surface">{t('loading')}</div>;
 
     const isReadOnly = weekData.status === 'submitted' || weekData.status === 'reviewed' || weekData.status === 'locked';
 
@@ -70,28 +80,55 @@ export const CheckIn = () => {
                 dailyEntries: entries,
                 weeklySummary: summary,
                 hungerScale: hunger,
+                strengthScale: strength,
+                energyScale: energy,
+                cardioCalories: cardioCalories,
                 photos,
             });
             showToast('success', t('progressSaved'));
-        } catch {
-            showToast('error', 'Failed to save. Please try again.');
+        } catch (e: unknown) {
+            const err = e as { code?: string; message?: string };
+            // eslint-disable-next-line no-console
+            console.error('CheckIn save failed:', err);
+            showToast('error', err?.message ?? t('failedToSave'));
         }
     };
 
     const handleSubmit = async () => {
         if (!client) return;
+        // Photos required: front, side, back must all be uploaded before submitting.
+        const missing: string[] = [];
+        if (!photos.front) missing.push(t('front') ?? 'front');
+        if (!photos.side) missing.push(t('side') ?? 'side');
+        if (!photos.back) missing.push(t('back') ?? 'back');
+        if (missing.length > 0) {
+            const list = missing.join(', ');
+            showToast('error', `${t('photosRequired') ?? 'Photos required:'} ${list}`);
+            return;
+        }
         try {
             await updateWeek(weekData.id, {
                 dailyEntries: entries,
                 weeklySummary: summary,
                 hungerScale: hunger,
+                strengthScale: strength,
+                energyScale: energy,
+                cardioCalories: cardioCalories,
                 photos,
                 status: 'submitted'
             });
             await updateClient(client.id, { needsReview: true });
+            // Idempotent — one WEEKLY_CHECKIN award per week submission.
+            await awardXp(user?.id, XP_SOURCE.WEEKLY_CHECKIN, weekData.id);
             showToast('success', t('checkInSubmitted'));
-        } catch {
-            showToast('error', 'Submission failed. Please try again.');
+        } catch (e: unknown) {
+            const err = e as { code?: string; message?: string };
+            // eslint-disable-next-line no-console
+            console.error('CheckIn submit failed:', err);
+            const msg = err?.code === 'permission-denied'
+                ? (t('permissionDeniedSubmit') ?? 'Permission denied. Please refresh and try again.')
+                : err?.message ?? t('submissionFailed') ?? 'Submission failed.';
+            showToast('error', msg);
         }
     };
 
@@ -102,8 +139,14 @@ export const CheckIn = () => {
         try {
             const downloadUrl = await uploadPhoto(file, user.id, selectedWeekNum);
             setPhotos(prev => ({ ...prev, [angle]: downloadUrl }));
-        } catch {
-            showToast('error', 'Photo upload failed. Please try again.');
+        } catch (e: unknown) {
+            const err = e as { code?: string; message?: string };
+            // eslint-disable-next-line no-console
+            console.error('Photo upload failed:', err);
+            const msg = err?.code === 'storage/unauthorized'
+                ? (t('photoUploadUnauthorized') ?? 'Permission denied. Sign in again or check the file type.')
+                : err?.message ?? t('photoUploadFailed') ?? 'Photo upload failed.';
+            showToast('error', msg);
         } finally {
             setUploadingAngle(null);
         }
@@ -113,162 +156,198 @@ export const CheckIn = () => {
         setPhotos(prev => { const next = { ...prev }; delete next[angle]; return next; });
     };
 
-    // Assigned workouts for this week
-    const assignedWorkouts = (weekData.assignedWorkoutIds || []).map(id => workouts.find(w => w.id === id)).filter(Boolean);
-
     return (
         <>
             {/* Toast Notification */}
             {toast && (
                 <div className={clsx(
-                    "fixed top-6 right-6 z-[200] flex items-center gap-3 px-5 py-4 rounded-xl shadow-2xl border animate-in slide-in-from-top-2 duration-300",
+                    "fixed top-6 right-6 z-[200] flex items-center gap-3 px-5 py-4 rounded-xl shadow-2xl animate-in slide-in-from-top-2 duration-300",
                     toast.type === 'success'
-                        ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
-                        : 'bg-red-500/10 border-red-500/30 text-red-300'
+                        ? 'bg-surface-container border border-emerald-500/20 text-emerald-400'
+                        : 'bg-surface-container border border-red-500/20 text-red-400'
                 )}>
                     {toast.type === 'success' ? <CheckCircle size={18} /> : <AlertCircle size={18} />}
-                    <span className="font-medium text-sm">{toast.msg}</span>
+                    <span className="font-body text-sm">{toast.msg}</span>
                 </div>
             )}
-            <div className="max-w-6xl mx-auto pb-20 space-y-6 animate-in fade-in duration-500">
+            <div className="max-w-6xl mx-auto pb-20 space-y-8 animate-in fade-in duration-500">
 
-                {/* Header & Navigation */}
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div>
-                        <h1 className="text-3xl font-bold text-white flex items-center gap-3">
-                            {t('checkInTitle')}
-                            <span className={clsx("px-3 py-1 rounded-full text-sm font-bold border",
-                                weekData.status === 'pending' ? "bg-navy-500/20 text-navy-300 border-navy-500/30" :
-                                    weekData.status === 'submitted' ? "bg-gold-500/15 text-gold-400 border-gold-500/30" :
-                                        weekData.status === 'reviewed' ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" :
-                                            weekData.status === 'locked' ? "bg-navy-400/20 text-navy-200 border-navy-400/30" :
-                                                "bg-navy-400/20 text-navy-200 border-navy-400/30"
-                            )}>
-                                {weekData.status === 'locked' ? '✓ COMPLETED' : weekData.status === 'reviewed' ? '★ REVIEWED' : weekData.status.toUpperCase()}
-                            </span>
-                        </h1>
-                        <p className="text-navy-200">{t('week')} {selectedWeekNum} / {client.programLength}</p>
-                    </div>
+                {/* ── Editorial Header ── */}
+                <header className="text-center md:text-start">
+                    <p className="text-primary font-label uppercase tracking-[0.3em] text-[10px] font-bold mb-2">Weekly Protocol</p>
+                    <h1 className="text-4xl md:text-5xl font-headline font-extrabold text-on-surface tracking-tighter leading-tight">
+                        {t('checkInTitle')}
+                    </h1>
+                </header>
 
-                    <div className="flex items-center gap-4 clay-card-sm p-2">
-                        <button
-                            disabled={selectedWeekNum <= 1}
-                            onClick={() => setSelectedWeekNum(prev => prev - 1)}
-                            className="p-2 hover:bg-navy-700 rounded-lg text-navy-300 hover:text-white disabled:opacity-30 transition-colors"
-                        >
-                            <ChevronLeft size={20} />
-                        </button>
-                        <span className="font-bold text-white min-w-[100px] text-center">{t('week')} {selectedWeekNum}</span>
-                        <button
-                            disabled={selectedWeekNum >= client.programLength}
-                            onClick={() => setSelectedWeekNum(prev => prev + 1)}
-                            className="p-2 hover:bg-navy-700 rounded-lg text-navy-300 hover:text-white disabled:opacity-30 transition-colors"
-                        >
-                            <ChevronRight size={20} />
-                        </button>
-                    </div>
-                </div>
+                {/* ── Big Week Switcher (centered, lock-aware) ── */}
+                {(() => {
+                    const maxUnlocked = client.currentWeek; // forward stops here until coach reviews
+                    const canGoBack = selectedWeekNum > 1;
+                    const canGoForward = selectedWeekNum < maxUnlocked;
+                    const statusBadge =
+                        weekData.status === 'locked' ? `✓ ${t('done').toUpperCase()}`
+                            : weekData.status === 'reviewed' ? `★ ${t('reviewed').toUpperCase()}`
+                                : weekData.status.toUpperCase();
+                    const statusClass =
+                        weekData.status === 'pending' ? "bg-primary/10 text-primary border-primary/20"
+                            : weekData.status === 'submitted' ? "bg-primary/10 text-primary border-primary/20"
+                                : weekData.status === 'reviewed' ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                                    : "bg-surface-container-highest text-on-surface/50 border-outline-variant/30";
+
+                    return (
+                        <div className="flex flex-col items-center gap-3">
+                            <div className="flex items-center justify-center gap-3 bg-surface-container-low rounded-full p-1.5 ghost-border shadow-lg w-full max-w-md">
+                                <button
+                                    disabled={!canGoBack}
+                                    onClick={() => setSelectedWeekNum(prev => prev - 1)}
+                                    className="w-12 h-12 rounded-full bg-surface-container hover:bg-surface-container-high disabled:opacity-20 disabled:cursor-not-allowed text-on-surface flex items-center justify-center transition-colors shrink-0"
+                                    aria-label="Previous week"
+                                >
+                                    <ChevronLeft size={22} />
+                                </button>
+                                <div className="flex-1 text-center px-2">
+                                    <div className="text-[10px] font-label font-bold uppercase tracking-[0.3em] text-on-surface/40 mb-0.5">{t('week')}</div>
+                                    <div className="text-3xl md:text-4xl font-headline font-extrabold text-primary tracking-tighter leading-none">
+                                        {selectedWeekNum}
+                                        <span className="text-on-surface/30 text-base font-normal mx-1">/</span>
+                                        <span className="text-on-surface/50 text-xl">{client.programLength}</span>
+                                    </div>
+                                </div>
+                                <button
+                                    disabled={!canGoForward}
+                                    onClick={() => setSelectedWeekNum(prev => prev + 1)}
+                                    className="w-12 h-12 rounded-full bg-surface-container hover:bg-surface-container-high disabled:opacity-20 disabled:cursor-not-allowed text-on-surface flex items-center justify-center transition-colors shrink-0"
+                                    aria-label="Next week"
+                                    title={!canGoForward && selectedWeekNum >= maxUnlocked && maxUnlocked < client.programLength ? (t('weekLockedHint') ?? 'Awaiting coach review') : undefined}
+                                >
+                                    <ChevronRight size={22} />
+                                </button>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                                <span className={clsx("px-3 py-1 rounded-full font-label text-[10px] font-bold uppercase tracking-widest border", statusClass)}>
+                                    {statusBadge}
+                                </span>
+                                {/* Lock notice when at the cap and not the final week */}
+                                {selectedWeekNum >= maxUnlocked && maxUnlocked < client.programLength && (
+                                    <span className="text-[10px] font-label uppercase tracking-widest text-on-surface/50">
+                                        {t('weekLockedHint') ?? 'Awaiting coach review'}
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+                    );
+                })()}
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
-                    {/* LEFT COLUMN - Coach Zone */}
+                    {/* ── LEFT COLUMN — Coach Zone ── */}
                     <div className="lg:col-span-1 space-y-6">
                         {/* Targets Panel */}
-                        <div className="clay-card p-6">
-                            <div className="flex items-center gap-2 mb-6">
-                                <Target className="text-gold-400" size={20} />
-                                <h3 className="font-bold text-white">{t('currentTargets')}</h3>
+                        <div className="bg-surface-container-low rounded-2xl p-8 ghost-border">
+                            <div className="flex items-center gap-3 mb-8">
+                                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+                                    <Target size={20} />
+                                </div>
+                                <h3 className="font-headline font-bold text-on-surface text-lg">{t('currentTargets')}</h3>
                             </div>
 
-                            <div className="space-y-6">
+                            <div className="space-y-8">
                                 <div>
-                                    <div className="flex justify-between mb-2">
-                                        <span className="text-sm font-medium text-navy-300">{t('highCarbDay')}</span>
-                                        <span className="text-sm text-navy-300">{weekData.activeTargets.highCarb.calories} Cal</span>
+                                    <div className="flex justify-between mb-3">
+                                        <span className="font-label text-[10px] uppercase tracking-widest text-on-surface/50 font-bold">{t('highCarbDay')}</span>
+                                        <span className="font-headline font-bold text-primary text-sm">{weekData.activeTargets.highCarb.calories} Cal</span>
                                     </div>
-                                    <div className="grid grid-cols-3 gap-2 text-center text-sm">
-                                        <div className="clay-inset p-2">
-                                            <div className="text-navy-400 text-xs">C</div>
-                                            <div className="text-white font-bold">{weekData.activeTargets.highCarb.carbs}</div>
+                                    <div className="grid grid-cols-3 gap-3 text-center">
+                                        <div className="bg-surface-container-lowest rounded-xl p-3">
+                                            <div className="text-[10px] font-label uppercase tracking-widest text-on-surface/40 mb-1">C</div>
+                                            <div className="text-lg font-headline font-bold text-on-surface">{weekData.activeTargets.highCarb.carbs}</div>
                                         </div>
-                                        <div className="clay-inset p-2">
-                                            <div className="text-navy-400 text-xs">P</div>
-                                            <div className="text-white font-bold">{weekData.activeTargets.highCarb.protein}</div>
+                                        <div className="bg-surface-container-lowest rounded-xl p-3">
+                                            <div className="text-[10px] font-label uppercase tracking-widest text-on-surface/40 mb-1">P</div>
+                                            <div className="text-lg font-headline font-bold text-on-surface">{weekData.activeTargets.highCarb.protein}</div>
                                         </div>
-                                        <div className="clay-inset p-2">
-                                            <div className="text-navy-400 text-xs">F</div>
-                                            <div className="text-white font-bold">{weekData.activeTargets.highCarb.fats}</div>
+                                        <div className="bg-surface-container-lowest rounded-xl p-3">
+                                            <div className="text-[10px] font-label uppercase tracking-widest text-on-surface/40 mb-1">F</div>
+                                            <div className="text-lg font-headline font-bold text-on-surface">{weekData.activeTargets.highCarb.fats}</div>
                                         </div>
                                     </div>
                                 </div>
 
-                                <div className="border-t border-white/[0.04] pt-4">
-                                    <div className="flex justify-between mb-2">
-                                        <span className="text-sm font-medium text-gold-500">{t('lowCarbDay')}</span>
-                                        <span className="text-sm text-navy-300">{weekData.activeTargets.lowCarb.calories} Cal</span>
+                                <div className="pt-6">
+                                    <div className="flex justify-between mb-3">
+                                        <span className="font-label text-[10px] uppercase tracking-widest text-primary font-bold">{t('lowCarbDay')}</span>
+                                        <span className="font-headline font-bold text-primary text-sm">{weekData.activeTargets.lowCarb.calories} Cal</span>
                                     </div>
-                                    <div className="grid grid-cols-3 gap-2 text-center text-sm">
-                                        <div className="clay-inset p-2">
-                                            <div className="text-navy-400 text-xs">C</div>
-                                            <div className="text-white font-bold">{weekData.activeTargets.lowCarb.carbs}</div>
+                                    <div className="grid grid-cols-3 gap-3 text-center">
+                                        <div className="bg-surface-container-lowest rounded-xl p-3">
+                                            <div className="text-[10px] font-label uppercase tracking-widest text-on-surface/40 mb-1">C</div>
+                                            <div className="text-lg font-headline font-bold text-on-surface">{weekData.activeTargets.lowCarb.carbs}</div>
                                         </div>
-                                        <div className="clay-inset p-2">
-                                            <div className="text-navy-400 text-xs">P</div>
-                                            <div className="text-white font-bold">{weekData.activeTargets.lowCarb.protein}</div>
+                                        <div className="bg-surface-container-lowest rounded-xl p-3">
+                                            <div className="text-[10px] font-label uppercase tracking-widest text-on-surface/40 mb-1">P</div>
+                                            <div className="text-lg font-headline font-bold text-on-surface">{weekData.activeTargets.lowCarb.protein}</div>
                                         </div>
-                                        <div className="clay-inset p-2">
-                                            <div className="text-navy-400 text-xs">F</div>
-                                            <div className="text-white font-bold">{weekData.activeTargets.lowCarb.fats}</div>
+                                        <div className="bg-surface-container-lowest rounded-xl p-3">
+                                            <div className="text-[10px] font-label uppercase tracking-widest text-on-surface/40 mb-1">F</div>
+                                            <div className="text-lg font-headline font-bold text-on-surface">{weekData.activeTargets.lowCarb.fats}</div>
                                         </div>
                                     </div>
                                 </div>
+
+                                {/* Cardio Target — coach-prescribed weekly target */}
+                                {(weekData.activeTargets.cardio ?? 0) > 0 && (
+                                    <div className="pt-6">
+                                        <div className="flex justify-between items-center mb-3">
+                                            <span className="font-label text-[10px] uppercase tracking-widest text-orange-400 font-bold flex items-center gap-1.5">
+                                                <Flame size={12} />
+                                                {t('cardioTargetLabel')}
+                                            </span>
+                                            <span className="font-headline font-bold text-orange-400 text-sm">
+                                                {weekData.activeTargets.cardio} {t('kcalUnit')}
+                                            </span>
+                                        </div>
+                                        <p className="text-[10px] font-body text-on-surface/40">
+                                            {cardioCalories} / {weekData.activeTargets.cardio} {t('kcalUnit')}
+                                        </p>
+                                    </div>
+                                )}
                             </div>
                         </div>
 
                         {/* Coach Feedback */}
-                        <div className="clay-card p-6">
-                            <div className="flex items-center gap-2 mb-4">
-                                <MessageSquare className="text-gold-400" size={20} />
-                                <h3 className="font-bold text-white">{t('coachFeedback')}</h3>
+                        <div className="bg-surface-container-low rounded-2xl p-8 ghost-border">
+                            <div className="flex items-center gap-3 mb-6">
+                                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+                                    <MessageSquare size={20} />
+                                </div>
+                                <h3 className="font-headline font-bold text-on-surface text-lg">{t('coachFeedback')}</h3>
                             </div>
                             {weekData.coachFeedback ? (
-                                <div className="bg-gold-500/5 border border-gold-500/15 rounded-xl p-4">
-                                    <p className="text-navy-100 text-sm leading-relaxed">"{weekData.coachFeedback}"</p>
-                                    <div className="mt-3 text-xs text-gold-600 font-medium">
-                                        Reviewed by Coach Zack
+                                <div className="bg-surface-container rounded-xl p-6 border-l-4 border-primary relative overflow-hidden">
+                                    <div className="absolute top-0 right-0 p-3 opacity-5">
+                                        <Lightbulb size={48} />
+                                    </div>
+                                    <p className="text-on-surface/90 leading-relaxed font-body italic">"{weekData.coachFeedback}"</p>
+                                    <div className="mt-4 text-[10px] font-label uppercase tracking-widest text-primary font-bold">
+                                        {t('reviewedByCoachZack')}
                                     </div>
                                 </div>
                             ) : (
-                                <div className="text-center py-8 text-navy-400 text-sm">
-                                    No feedback yet for this week.
+                                <div className="text-center py-12 text-on-surface/30 font-body">
+                                    {t('noFeedbackYet')}
                                 </div>
                             )}
                         </div>
 
-                        {/* Assigned Workouts */}
-                        {assignedWorkouts.length > 0 && (
-                            <div className="clay-card p-6">
-                                <div className="flex items-center gap-2 mb-4">
-                                    <Dumbbell className="text-gold-400" size={20} />
-                                    <h3 className="font-bold text-white">This Week's Workouts</h3>
-                                </div>
-                                <div className="space-y-3">
-                                    {assignedWorkouts.map(w => w && (
-                                        <div key={w.id} className="clay-inset p-3 rounded-lg">
-                                            <h4 className="text-white font-medium text-sm">{w.name}</h4>
-                                            <p className="text-navy-400 text-xs mt-1">{w.exercises.length} exercises · {w.estimatedMinutes}min</p>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
                     </div>
 
-                    {/* RIGHT COLUMN - Client Input */}
+                    {/* ── RIGHT COLUMN — Client Input ── */}
                     <div className="lg:col-span-2 space-y-6">
                         {/* Daily Tracking */}
-                        <section className="clay-card p-6">
-                            <h3 className="text-lg font-bold text-white mb-4">{t('dailyEntries')}</h3>
+                        <section className="bg-surface-container-low rounded-2xl p-8 ghost-border">
+                            <h3 className="text-xl font-headline font-bold text-on-surface mb-6">{t('dailyEntries')}</h3>
                             <DailyTrackingTable
                                 entries={entries}
                                 readOnly={isReadOnly}
@@ -278,9 +357,9 @@ export const CheckIn = () => {
 
                         {/* Photos & Summary */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <section className="clay-card p-6">
-                                <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                                    <Camera size={20} /> {t('progressPhotos')}
+                            <section className="bg-surface-container-low rounded-2xl p-8 ghost-border">
+                                <h3 className="text-lg font-headline font-bold text-on-surface mb-6 flex items-center gap-3">
+                                    <Camera size={20} className="text-primary" /> {t('progressPhotos')}
                                 </h3>
                                 <div className="grid grid-cols-2 gap-3">
                                     {(['front', 'side', 'back', 'face'] as const).map((angle) => (
@@ -290,14 +369,14 @@ export const CheckIn = () => {
                                                     <img
                                                         src={photos[angle]}
                                                         alt={angle}
-                                                        className="aspect-[3/4] w-full rounded-lg object-cover cursor-pointer hover:opacity-80 transition-opacity"
+                                                        className="aspect-[3/4] w-full rounded-xl object-cover cursor-pointer hover:opacity-80 transition-opacity ghost-border"
                                                         onClick={() => setPhotoModal(photos[angle]!)}
                                                     />
-                                                    <div className="absolute top-1 left-1 px-2 py-0.5 rounded bg-black/60 text-xs text-white capitalize">{angle}</div>
+                                                    <div className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-surface/80 backdrop-blur-sm text-[10px] font-label uppercase tracking-widest text-on-surface/60 capitalize">{angle}</div>
                                                     {!isReadOnly && (
                                                         <button
                                                             onClick={() => removePhoto(angle)}
-                                                            className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-500/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                                                            className="absolute top-2 right-2 w-7 h-7 rounded-full bg-red-500/80 text-on-surface flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                                                         >
                                                             <X size={12} />
                                                         </button>
@@ -305,15 +384,15 @@ export const CheckIn = () => {
                                                 </div>
                                             ) : (
                                                 <label className={clsx(
-                                                    "aspect-[3/4] rounded-lg clay-inset border border-dashed border-navy-600 flex flex-col items-center justify-center gap-2 text-navy-400 transition-all",
-                                                    !isReadOnly && "cursor-pointer hover:border-gold-500/40 hover:text-gold-400"
+                                                    "aspect-[3/4] rounded-xl bg-surface-container-lowest border border-dashed border-outline-variant/30 flex flex-col items-center justify-center gap-2 text-on-surface/30 transition-all",
+                                                    !isReadOnly && "cursor-pointer hover:border-primary/40 hover:text-primary"
                                                 )}>
                                                     {uploadingAngle === angle ? (
-                                                        <Loader2 size={24} className="animate-spin text-gold-400" />
+                                                        <Loader2 size={24} className="animate-spin text-primary" />
                                                     ) : (
                                                         <Camera size={24} />
                                                     )}
-                                                    <span className="text-xs capitalize">{angle}</span>
+                                                    <span className="text-[10px] font-label uppercase tracking-widest capitalize">{angle}</span>
                                                     {!isReadOnly && (
                                                         <input
                                                             type="file"
@@ -333,37 +412,76 @@ export const CheckIn = () => {
                             </section>
 
                             <section className="space-y-6">
-                                {/* Hunger Scale */}
-                                <div className="clay-card p-6">
+                                {/* Strength Scale */}
+                                <div className="bg-surface-container-low rounded-2xl p-6 ghost-border">
                                     <div className="flex justify-between items-center mb-4">
-                                        <h3 className="font-bold text-white">{t('hungerScale')}</h3>
-                                        <span className="text-2xl font-bold text-gold-400">{hunger}<span className="text-sm text-navy-400">/10</span></span>
+                                        <h3 className="font-headline font-bold text-on-surface flex items-center gap-2 text-sm">
+                                            <Shield size={16} className="text-primary" />
+                                            {t('strengthScale')}
+                                        </h3>
+                                        <span className="text-2xl font-headline font-extrabold text-primary">{strength}<span className="text-xs text-on-surface/40 font-normal">/10</span></span>
                                     </div>
-                                    <input
-                                        type="range"
-                                        min="0"
-                                        max="10"
-                                        step="1"
-                                        disabled={isReadOnly}
-                                        value={hunger}
-                                        onChange={(e) => setHunger(parseInt(e.target.value))}
-                                        className="w-full h-2 rounded-lg appearance-none cursor-pointer"
-                                    />
-                                    <div className="flex justify-between text-xs text-navy-400 mt-2">
-                                        <span>No Hunger</span>
-                                        <span>Starving</span>
+                                    <input type="range" min="0" max="10" step="1" disabled={isReadOnly} value={strength} onChange={(e) => setStrength(parseInt(e.target.value))} className="w-full h-1.5 rounded-full appearance-none cursor-pointer bg-surface-container-highest accent-primary" />
+                                    <div className="flex justify-between text-[10px] font-label uppercase tracking-widest text-on-surface/40 mt-2">
+                                        <span>{t('weak')}</span>
+                                        <span>{t('strong')}</span>
+                                    </div>
+                                </div>
+
+                                {/* Hunger Scale */}
+                                <div className="bg-surface-container-low rounded-2xl p-6 ghost-border">
+                                    <div className="flex justify-between items-center mb-4">
+                                        <h3 className="font-headline font-bold text-on-surface text-sm">{t('hungerScale')}</h3>
+                                        <span className="text-2xl font-headline font-extrabold text-primary">{hunger}<span className="text-xs text-on-surface/40 font-normal">/10</span></span>
+                                    </div>
+                                    <input type="range" min="0" max="10" step="1" disabled={isReadOnly} value={hunger} onChange={(e) => setHunger(parseInt(e.target.value))} className="w-full h-1.5 rounded-full appearance-none cursor-pointer bg-surface-container-highest accent-primary" />
+                                    <div className="flex justify-between text-[10px] font-label uppercase tracking-widest text-on-surface/40 mt-2">
+                                        <span>{t('noHunger')}</span>
+                                        <span>{t('starving')}</span>
+                                    </div>
+                                </div>
+
+                                {/* Energy Scale */}
+                                <div className="bg-surface-container-low rounded-2xl p-6 ghost-border">
+                                    <div className="flex justify-between items-center mb-4">
+                                        <h3 className="font-headline font-bold text-on-surface flex items-center gap-2 text-sm">
+                                            <Zap size={16} className="text-primary" />
+                                            {t('energyScale')}
+                                        </h3>
+                                        <span className="text-2xl font-headline font-extrabold text-primary">{energy}<span className="text-xs text-on-surface/40 font-normal">/10</span></span>
+                                    </div>
+                                    <input type="range" min="0" max="10" step="1" disabled={isReadOnly} value={energy} onChange={(e) => setEnergy(parseInt(e.target.value))} className="w-full h-1.5 rounded-full appearance-none cursor-pointer bg-surface-container-highest accent-primary" />
+                                    <div className="flex justify-between text-[10px] font-label uppercase tracking-widest text-on-surface/40 mt-2">
+                                        <span>{t('noEnergy')}</span>
+                                        <span>{t('fullEnergy')}</span>
+                                    </div>
+                                </div>
+
+                                {/* Cardio Calories */}
+                                <div className="bg-surface-container-low rounded-2xl p-6 ghost-border">
+                                    <div className="flex justify-between items-center mb-4">
+                                        <h3 className="font-headline font-bold text-on-surface flex items-center gap-2 text-sm">
+                                            <Flame size={16} className="text-primary" />
+                                            {t('cardioCalories')}
+                                        </h3>
+                                        <span className="text-2xl font-headline font-extrabold text-primary">{cardioCalories}<span className="text-xs text-on-surface/40 font-normal"> kcal</span></span>
+                                    </div>
+                                    <input type="range" min="0" max="2000" step="50" disabled={isReadOnly} value={cardioCalories} onChange={(e) => setCardioCalories(parseInt(e.target.value))} className="w-full h-1.5 rounded-full appearance-none cursor-pointer bg-surface-container-highest accent-primary" />
+                                    <div className="flex justify-between text-[10px] font-label uppercase tracking-widest text-on-surface/40 mt-2">
+                                        <span>0</span>
+                                        <span>2000 kcal</span>
                                     </div>
                                 </div>
 
                                 {/* Weekly Summary */}
-                                <div className="clay-card p-6 flex-1">
-                                    <h3 className="font-bold text-white mb-4">{t('weeklySummary')}</h3>
+                                <div className="bg-surface-container-low rounded-2xl p-6 ghost-border flex-1">
+                                    <h3 className="font-headline font-bold text-on-surface mb-4 text-sm">{t('weeklySummary')}</h3>
                                     <textarea
                                         disabled={isReadOnly}
                                         value={summary}
                                         onChange={(e) => setSummary(e.target.value)}
                                         placeholder={t('weeklyReflectionPlaceholder')}
-                                        className="w-full h-32 clay-input p-4 placeholder-navy-500 resize-none"
+                                        className="w-full h-32 bg-surface-container-lowest rounded-xl p-4 text-on-surface placeholder-on-surface/30 resize-none border-none outline-none focus:ring-1 focus:ring-primary/30 font-body text-sm transition-all"
                                     />
                                 </div>
                             </section>
@@ -371,34 +489,34 @@ export const CheckIn = () => {
 
                         {/* Action Bar */}
                         {!isReadOnly && (
-                            <div className="flex items-center justify-end gap-4 pt-4 border-t border-white/[0.04]">
+                            <div className="flex items-center justify-end gap-4 pt-6">
                                 <button
                                     onClick={handleSave}
-                                    className="flex items-center gap-2 text-navy-300 hover:text-white px-6 py-3 rounded-xl font-medium transition-colors"
+                                    className="flex items-center gap-2 text-on-surface/50 hover:text-on-surface px-6 py-3 rounded-full font-label text-sm uppercase tracking-widest transition-colors"
                                 >
-                                    <Save size={20} /> {t('saveProgress')}
+                                    <Save size={18} /> {t('saveProgress')}
                                 </button>
                                 <button
                                     onClick={handleSubmit}
-                                    className="clay-button bg-gradient-to-r from-gold-400 to-gold-600 text-navy-950 px-8 py-3 flex items-center gap-2 gold-glow"
+                                    className="px-8 py-4 rounded-full font-label text-[12px] font-bold uppercase tracking-widest bg-gradient-to-r from-primary to-primary-container text-on-primary border border-primary/20 shadow-[0_5px_15px_rgba(230,195,100,0.3)] hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center gap-2"
                                 >
-                                    <Send size={20} /> {t('submitCheckIn')}
+                                    <Send size={18} /> {t('submitCheckIn')}
                                 </button>
                             </div>
                         )}
 
                         {isReadOnly && (
                             <div className={clsx(
-                                "rounded-xl p-4 flex items-center gap-3",
-                                weekData.status === 'locked' ? "bg-navy-400/5 border border-navy-400/15 text-navy-300" :
+                                "rounded-2xl p-6 flex items-center gap-4",
+                                weekData.status === 'locked' ? "bg-surface-container-low ghost-border text-on-surface/50" :
                                     weekData.status === 'reviewed' ? "bg-emerald-500/5 border border-emerald-500/15 text-emerald-400" :
-                                        "bg-gold-500/5 border border-gold-500/15 text-gold-400"
+                                        "bg-primary/5 border border-primary/15 text-primary"
                             )}>
                                 <AlertCircle size={20} />
-                                <p>
-                                    {weekData.status === 'locked' ? 'This week has been completed and locked.' :
-                                        weekData.status === 'reviewed' ? 'This week has been reviewed by your coach. Check the feedback panel.' :
-                                            'This week has been submitted and is awaiting coach review.'}
+                                <p className="font-body text-sm">
+                                    {weekData.status === 'locked' ? t('weekCompletedLocked') :
+                                        weekData.status === 'reviewed' ? t('weekReviewedByCoachMsg') :
+                                            t('weekSubmittedPending')}
                                 </p>
                             </div>
                         )}
@@ -411,19 +529,19 @@ export const CheckIn = () => {
             {
                 photoModal && (
                     <div
-                        className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4 animate-in fade-in duration-200"
+                        className="fixed inset-0 z-[100] bg-surface-container-lowest/95 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200"
                         onClick={() => setPhotoModal(null)}
                     >
                         <button
                             onClick={() => setPhotoModal(null)}
-                            className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20 transition-colors"
+                            className="absolute top-6 right-6 w-10 h-10 rounded-full bg-surface-container-highest/50 text-on-surface flex items-center justify-center hover:bg-surface-bright transition-colors"
                         >
-                            <X size={24} />
+                            <X size={20} />
                         </button>
                         <img
                             src={photoModal}
                             alt="Progress photo"
-                            className="max-w-full max-h-[90vh] rounded-xl object-contain"
+                            className="max-w-full max-h-[90vh] rounded-2xl object-contain ghost-border"
                         />
                     </div>
                 )}

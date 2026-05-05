@@ -295,6 +295,20 @@ export const translations = {
     checkInSubmittedLabel: { en: 'check-in submitted', ar: 'تم إرسال التسجيل' },
     createClient: { en: 'Create Client', ar: 'إنشاء عميل' },
     programType: { en: 'Program Type', ar: 'نوع البرنامج' },
+
+    // --- ToS modal ---
+    tosTitle: { en: 'Before you continue', ar: 'قبل المتابعة' },
+    tosBody: { en: 'By using BioZackTeam Academy, you agree NOT to share, redistribute, screen-record, or copy any video content, PDF, or coaching material. Your email is watermarked on all videos. Violations result in immediate account termination without refund.', ar: 'باستخدامك أكاديمية بيوزاك تيم، أنت توافق على عدم مشاركة أو إعادة توزيع أو تسجيل أو نسخ أي مقطع فيديو أو ملف PDF أو محتوى تدريبي. بريدك الإلكتروني يظهر كعلامة مائية على جميع الفيديوهات. أي مخالفة تؤدي إلى إغلاق الحساب فورًا دون استرداد.' },
+    tosAgreeCheckbox: { en: 'I have read and accept the terms.', ar: 'لقد قرأت ووافقت على الشروط.' },
+    tosAcceptCta: { en: 'Accept and continue', ar: 'قبول والمتابعة' },
+    sessionExpired: { en: 'Your session expired. Please sign in again.', ar: 'انتهت جلستك. الرجاء تسجيل الدخول مرة أخرى.' },
+    // --- Coach cockpit + nav cleanup ---
+    attentionQueue: { en: 'Attention queue', ar: 'قائمة الانتباه' },
+    needsReviewSegment: { en: 'Needs Review', ar: 'بانتظار المراجعة' },
+    missedThisWeek: { en: 'Missed', ar: 'تخلّف' },
+    stale: { en: 'Stale', ar: 'غير نشط' },
+    joinDiscord: { en: 'Join our Discord', ar: 'انضم إلى ديسكورد' },
+    discordDesc: { en: 'Live chat with the team and other members.', ar: 'دردشة مباشرة مع الفريق والأعضاء.' },
 } as const;
 
 export type TranslationKey = keyof typeof translations;

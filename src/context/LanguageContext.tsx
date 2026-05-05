@@ -1,10 +1,24 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { translations, Language, TranslationKey } from '../i18n/translations';
 
+/**
+ * Translation lookup. Overloads:
+ *   - Known key (TranslationKey union)  → returns the translated string.
+ *   - Arbitrary string (e.g. dynamic role name, category) → returns the
+ *     translated string, OR the key itself as a graceful fallback when the
+ *     key isn't in the dictionary. This keeps TS happy for runtime-computed
+ *     keys without forcing `as any` everywhere, and prevents the UI from
+ *     ever rendering a literal `undefined`.
+ */
+export interface TranslateFn {
+    (key: TranslationKey): string;
+    (key: string): string;
+}
+
 interface LanguageContextType {
     lang: Language;
     setLang: (lang: Language) => void;
-    t: (key: TranslationKey) => string;
+    t: TranslateFn;
     dir: 'ltr' | 'rtl';
     isRTL: boolean;
 }
@@ -22,9 +36,11 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
         localStorage.setItem('biozack-lang', newLang);
     };
 
-    const t = (key: TranslationKey): string => {
-        return translations[key]?.[lang] || translations[key]?.['en'] || key;
-    };
+    const t = ((key: string): string => {
+        const entry = (translations as Record<string, { en: string; ar: string }>)[key];
+        if (!entry) return key;
+        return entry[lang] || entry.en;
+    }) as TranslateFn;
 
     const dir = lang === 'ar' ? 'rtl' : 'ltr';
     const isRTL = lang === 'ar';

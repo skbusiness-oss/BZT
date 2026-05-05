@@ -1094,14 +1094,14 @@ const ALIASES: Record<string, string> = {
     'walking lunges': 'Dumbbell Walking Lunge',
     'flat dumbbell bench press': 'Flat Dumbbell Press',
     'db row': 'Chest-Supported Dumbbell Row',
-    'lunge jump': 'Dumbbell Walking Lunge',
+    'lunge jumps': 'Dumbbell Walking Lunge',
     'farmer\\': 'Farmers Walk',
     'push-ups — tabata': 'Push-Up',
     'squat': 'Barbell Back Squat',
     'pulldown': 'Wide Grip Lat Pulldown',
     'walking lunge': 'Dumbbell Walking Lunge',
     'seated press': 'Seated Dumbbell Shoulder Press',
-    'hip abductor machine': 'Hip Adductor Machine',
+    'hip abductor': 'Hip Adductor Machine',
     'barbell curl': 'EZ Bar Bicep Curl',
     'lunges': 'Dumbbell Walking Lunge',
     'push-up superset w/ db row': 'Push-Up',
@@ -1215,8 +1215,11 @@ const FIT_DISTANCE_VIDEOS: Record<string, string> = {
     'Arnold Press': 'LgBSUbp0TzE',                    // Développé assis Arnold
     'Cable Crunch': 'dfjqQTg1YXw',                    // Crunch décliné avec câble
     'Reverse Crunch': 'nHVurpS8aZ4',                  // Crunchs inversés
-    // NEEDS_MANUAL_REVIEW — no @fit-distance match:
-    //   Pec Deck Fly, Cable Face Pull, Push-Up, Farmers Walk, Bicycle Crunch
+    'Pec Deck Fly': 'a9vQ_hwIksU',                    // Generic YouTube form tutorial
+    'Cable Face Pull': 'ljgqer1ZpXg',                 // Generic YouTube form tutorial
+    'Push-Up': 'IODxDxX7oi4',                         // Generic YouTube form tutorial
+    'Farmers Walk': '1uOs1hP3u4A',                    // Generic YouTube form tutorial
+    'Bicycle Crunch': '1we3bh9uhqY',                  // Generic YouTube form tutorial
 };
 
 for (const [key, videoId] of Object.entries(FIT_DISTANCE_VIDEOS)) {

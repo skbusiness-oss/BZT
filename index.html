@@ -17,18 +17,53 @@
     <link rel="apple-touch-icon" href="/icon-192.png" />
     
     <title>BioZackTeam Fitness</title>
+
+    <!-- Set data-theme before React mounts to avoid a flash of the wrong theme. -->
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem('bzt-theme');
+          var theme = (stored === 'light' || stored === 'dark') ? stored : 'dark';
+          document.documentElement.setAttribute('data-theme', theme);
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
     
-    <!-- Register Service Worker -->
+    <!-- Register Service Worker.
+         When the SW updates (e.g. after a new deploy), `controllerchange` fires
+         once the new worker takes control. We reload so the page picks up the
+         new bundle instead of staying on the old cached one. -->
     <script>
       if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
+        var reloading = false;
+        navigator.serviceWorker.addEventListener('controllerchange', function () {
+          if (reloading) return;
+          reloading = true;
+          window.location.reload();
+        });
+        window.addEventListener('load', function () {
           navigator.serviceWorker.register('/service-worker.js')
-            .then(reg => console.log('SW registered'))
-            .catch(err => console.log('SW registration failed:', err));
+            .then(function (reg) {
+              // If a new SW becomes "waiting", tell it to skip waiting so it
+              // activates immediately and triggers controllerchange.
+              if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+              reg.addEventListener('updatefound', function () {
+                var nw = reg.installing;
+                if (!nw) return;
+                nw.addEventListener('statechange', function () {
+                  if (nw.state === 'installed' && navigator.serviceWorker.controller) {
+                    nw.postMessage({ type: 'SKIP_WAITING' });
+                  }
+                });
+              });
+            })
+            .catch(function () { /* no-op */ });
         });
       }
     </script>

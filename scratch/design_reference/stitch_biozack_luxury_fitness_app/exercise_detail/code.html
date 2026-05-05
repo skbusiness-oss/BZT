@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;700;800&amp;family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "on-secondary-fixed-variant": "#524523",
+                      "secondary": "#d8c598",
+                      "outline-variant": "#4d4637",
+                      "error-container": "#93000a",
+                      "primary": "#e6c364",
+                      "on-secondary": "#3b2f0e",
+                      "tertiary": "#b9c4ff",
+                      "inverse-surface": "#dee1f7",
+                      "primary-fixed-dim": "#e6c364",
+                      "on-tertiary-fixed-variant": "#35437e",
+                      "on-primary-fixed-variant": "#584400",
+                      "surface-container-high": "#25293a",
+                      "surface-bright": "#343949",
+                      "secondary-fixed": "#f5e1b2",
+                      "on-primary-fixed": "#241a00",
+                      "surface-dim": "#0e1322",
+                      "surface": "#0e1322",
+                      "on-primary": "#3d2e00",
+                      "tertiary-container": "#9ba8eb",
+                      "on-background": "#dee1f7",
+                      "on-surface-variant": "#d0c5b2",
+                      "secondary-container": "#554825",
+                      "tertiary-fixed-dim": "#b9c3ff",
+                      "inverse-primary": "#755b00",
+                      "on-primary-container": "#503d00",
+                      "surface-container-lowest": "#090e1c",
+                      "inverse-on-surface": "#2b3040",
+                      "error": "#ffb4ab",
+                      "surface-tint": "#e6c364",
+                      "background": "#0e1322",
+                      "on-surface": "#dee1f7",
+                      "surface-variant": "#2f3445",
+                      "on-tertiary": "#1e2b66",
+                      "primary-container": "#c9a84c",
+                      "primary-fixed": "#ffe08f",
+                      "on-error": "#690005",
+                      "on-tertiary-fixed": "#041451",
+                      "on-secondary-fixed": "#241a00",
+                      "on-tertiary-container": "#2e3b77",
+                      "on-secondary-container": "#c9b78b",
+                      "outline": "#99907e",
+                      "surface-container-low": "#161b2b",
+                      "surface-container-highest": "#2f3445",
+                      "surface-container": "#1a1f2f",
+                      "tertiary-fixed": "#dde1ff",
+                      "on-error-container": "#ffdad6",
+                      "secondary-fixed-dim": "#d8c598"
+              },
+              "borderRadius": {
+                      "DEFAULT": "1rem",
+                      "lg": "2rem",
+                      "xl": "3rem",
+                      "full": "9999px"
+              },
+              "fontFamily": {
+                      "headline": ["Manrope"],
+                      "body": ["Inter"],
+                      "label": ["Inter"]
+              }
+            },
+          },
+        }
+      </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-sheet {
+            background: rgba(14, 19, 34, 0.95);
+            backdrop-filter: blur(40px);
+        }
+        .gold-gradient {
+            background: linear-gradient(135deg, #e6c364 0%, #c9a84c 100%);
+        }
+        .ghost-border {
+            border: 1px solid rgba(230, 195, 100, 0.15);
+        }
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface font-body text-on-surface min-h-screen overflow-hidden">
+<!-- Background Content (Simulated Dashboard) -->
+<main class="p-6 opacity-40 select-none">
+<header class="flex justify-between items-center mb-8">
+<div>
+<p class="text-secondary font-label uppercase tracking-widest text-[10px] mb-1">Morning Session</p>
+<h1 class="text-3xl font-headline font-extrabold tracking-tight">Daily Routine</h1>
+</div>
+<div class="w-12 h-12 rounded-full bg-surface-container border border-primary/20"></div>
+</header>
+<div class="space-y-6">
+<div class="h-48 w-full bg-surface-container rounded-lg"></div>
+<div class="h-32 w-full bg-surface-container-low rounded-lg"></div>
+<div class="h-32 w-full bg-surface-container-low rounded-lg"></div>
+</div>
+</main>
+<!-- Modal Backdrop -->
+<div class="fixed inset-0 bg-surface-container-lowest/80 backdrop-blur-sm z-40"></div>
+<!-- Bottom Sheet Modal -->
+<div class="fixed inset-x-0 bottom-0 z-50 flex flex-col max-h-[813px] glass-sheet rounded-t-xl shadow-2xl transition-transform duration-500 ease-out">
+<!-- Grab Handle -->
+<div class="w-full flex justify-center py-4">
+<div class="w-12 h-1.5 bg-on-surface/20 rounded-full"></div>
+</div>
+<!-- Scrollable Content -->
+<div class="flex-1 overflow-y-auto no-scrollbar pb-12 px-6">
+<!-- Close Button -->
+<button class="absolute top-4 right-6 w-10 h-10 flex items-center justify-center rounded-full bg-surface-container-highest/50 text-on-surface hover:bg-surface-bright transition-colors">
+<span class="material-symbols-outlined">close</span>
+</button>
+<!-- Full-width Player Section -->
+<div class="relative group mt-2 mb-8">
+<div class="aspect-video w-full overflow-hidden rounded-lg ghost-border bg-surface-container-lowest relative">
+<img alt="professional male athlete performing a heavy barbell back squat in a moody luxury gym with cinematic gold lighting" class="w-full h-full object-cover opacity-80" data-alt="professional male athlete performing a heavy barbell back squat in a moody luxury gym with cinematic gold lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCBuTMprWZz76xGwBjYtUvzVT598ff63mZ89eXwe1JcOl2y2j0fv5xZjbgrdq44btcG2QbESXb705jd6nMuFOEZswsfhwvxyTqeQEQUujjvDuffPBMMyZM1TLXemr70IgCxlFXOPZrauy_CUvyFhRuq3PeaAhERI53RPKV35JCrxEqgLO3GNZV_mgRCMvJdbpMNgKWDhDlhVZqpPkShxsU0lQ3q4_J4RAArJ9G9s2MMgXiglb8Uz4fVjHY5HBF5vv4ZASaR3_IN8jg"/>
+<!-- Gold Frame Overlay -->
+<div class="absolute inset-0 border-2 border-primary/30 rounded-lg pointer-events-none"></div>
+<!-- Play Indicator -->
+<div class="absolute inset-0 flex items-center justify-center">
+<div class="w-16 h-16 rounded-full gold-gradient flex items-center justify-center shadow-lg transform active:scale-90 transition-transform">
+<span class="material-symbols-outlined text-on-primary-fixed text-4xl" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Title & Metadata -->
+<div class="mb-8">
+<div class="flex flex-wrap gap-2 mb-3">
+<span class="px-4 py-1.5 rounded-full bg-surface-container-highest text-primary font-label text-[11px] font-bold uppercase tracking-widest border border-primary/10">Quads</span>
+<span class="px-4 py-1.5 rounded-full bg-surface-container-highest text-primary font-label text-[11px] font-bold uppercase tracking-widest border border-primary/10">Glutes</span>
+<span class="px-4 py-1.5 rounded-full bg-surface-container-highest text-on-surface/60 font-label text-[11px] font-bold uppercase tracking-widest border border-outline-variant/30">Compound</span>
+</div>
+<h2 class="text-4xl font-headline font-extrabold text-on-surface tracking-tight leading-tight">Barbell Back Squat</h2>
+</div>
+<!-- Key Metrics Grid -->
+<div class="grid grid-cols-3 gap-4 mb-10">
+<div class="bg-surface-container-low p-4 rounded-lg ghost-border text-center">
+<p class="text-[10px] text-on-surface/50 font-label uppercase tracking-tighter mb-1">Sets</p>
+<p class="text-2xl font-headline font-bold text-primary">4</p>
+</div>
+<div class="bg-surface-container-low p-4 rounded-lg ghost-border text-center">
+<p class="text-[10px] text-on-surface/50 font-label uppercase tracking-tighter mb-1">Reps</p>
+<p class="text-2xl font-headline font-bold text-primary">8-10</p>
+</div>
+<div class="bg-surface-container-low p-4 rounded-lg ghost-border text-center">
+<p class="text-[10px] text-on-surface/50 font-label uppercase tracking-tighter mb-1">Tempo</p>
+<p class="text-2xl font-headline font-bold text-primary">3-1-1</p>
+</div>
+</div>
+<!-- Instructions Section -->
+<div class="mb-10">
+<h3 class="text-xl font-headline font-bold mb-6 flex items-center gap-3">
+<span class="material-symbols-outlined text-primary">list_alt</span>
+                    Execution Steps
+                </h3>
+<div class="space-y-6">
+<div class="flex gap-6 items-start group">
+<div class="flex-none w-8 h-8 rounded-full bg-surface-container-highest border border-primary/40 flex items-center justify-center text-primary font-headline font-bold text-sm">1</div>
+<p class="text-on-surface/80 leading-relaxed font-body pt-1">Position the barbell across your upper traps, not your neck. Grip the bar firmly with elbows tucked back.</p>
+</div>
+<div class="flex gap-6 items-start group">
+<div class="flex-none w-8 h-8 rounded-full bg-surface-container-highest border border-primary/40 flex items-center justify-center text-primary font-headline font-bold text-sm">2</div>
+<p class="text-on-surface/80 leading-relaxed font-body pt-1">Stand with feet shoulder-width apart, toes slightly pointed outward. Inhale deeply and brace your core.</p>
+</div>
+<div class="flex gap-6 items-start group">
+<div class="flex-none w-8 h-8 rounded-full bg-surface-container-highest border border-primary/40 flex items-center justify-center text-primary font-headline font-bold text-sm">3</div>
+<p class="text-on-surface/80 leading-relaxed font-body pt-1">Lower your hips back and down until your thighs are parallel to the floor, keeping your chest proud.</p>
+</div>
+<div class="flex gap-6 items-start group">
+<div class="flex-none w-8 h-8 rounded-full bg-surface-container-highest border border-primary/40 flex items-center justify-center text-primary font-headline font-bold text-sm">4</div>
+<p class="text-on-surface/80 leading-relaxed font-body pt-1">Drive through your mid-foot to return to the starting position, exhaling at the top of the movement.</p>
+</div>
+</div>
+</div>
+<!-- Coach Tips Section -->
+<div class="p-6 bg-surface-container rounded-lg border-l-4 border-primary relative overflow-hidden mb-12">
+<div class="absolute top-0 right-0 p-4 opacity-10">
+<span class="material-symbols-outlined text-6xl">lightbulb</span>
+</div>
+<h4 class="text-primary font-headline font-bold text-lg mb-2 uppercase tracking-wide">Coach Zack's Insights</h4>
+<p class="text-on-surface/90 leading-relaxed font-body italic">
+                    "Focus on vertical bar path. If you feel your heels lifting, your weight is too far forward. Think about 'screwing' your feet into the floor to activate your glutes more effectively."
+                </p>
+</div>
+<!-- CTA Action -->
+<div class="sticky bottom-0 left-0 w-full pt-4 bg-transparent">
+<button class="w-full gold-gradient text-on-primary-fixed font-headline font-extrabold py-5 rounded-full text-lg shadow-[0_10px_30px_rgba(230,195,100,0.3)] active:scale-95 transition-all uppercase tracking-widest">
+                    Log Set 1
+                </button>
+</div>
+</div>
+</div>
+<!-- Bottom Nav Bar (Shared Component) -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 pt-3 pb-8 bg-[#1a1f2f]/60 backdrop-blur-2xl rounded-t-[2rem] border-t border-[#e6c364]/15 shadow-[0_-4px_20px_rgba(0,0,0,0.4)] md:hidden">
+<a class="flex flex-col items-center justify-center text-[#e6c364] drop-shadow-[0_0_8px_rgba(230,195,100,0.4)]" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">home</span>
+<span class="font-['Inter'] text-[10px] font-semibold uppercase tracking-widest mt-1">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#dee1f7]/50 hover:text-[#e6c364]/80 transition-all" href="#">
+<span class="material-symbols-outlined">fitness_center</span>
+<span class="font-['Inter'] text-[10px] font-semibold uppercase tracking-widest mt-1">Workouts</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#dee1f7]/50 hover:text-[#e6c364]/80 transition-all" href="#">
+<span class="material-symbols-outlined">monitoring</span>
+<span class="font-['Inter'] text-[10px] font-semibold uppercase tracking-widest mt-1">Progress</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#dee1f7]/50 hover:text-[#e6c364]/80 transition-all" href="#">
+<span class="material-symbols-outlined">sports_kabaddi</span>
+<span class="font-['Inter'] text-[10px] font-semibold uppercase tracking-widest mt-1">Coaching</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#dee1f7]/50 hover:text-[#e6c364]/80 transition-all" href="#">
+<span class="material-symbols-outlined">person</span>
+<span class="font-['Inter'] text-[10px] font-semibold uppercase tracking-widest mt-1">Profile</span>
+</a>
+</nav>
+</body></html>
