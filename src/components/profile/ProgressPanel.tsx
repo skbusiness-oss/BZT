@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import {
     LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
@@ -7,6 +8,7 @@ import { useData } from '../../context/DataContext';
 import { useSelfLogs, BodyMeasurements as Meas } from '../../hooks/useSelfLogs';
 import { levelFromScore, levelProgress } from '../../lib/activityScore';
 import { CheckInCompare } from '../checkin/CheckInCompare';
+import { db } from '../../lib/firebase';
 
 const t = {
     surface: 'rgb(var(--surface))',
@@ -31,6 +33,12 @@ const t = {
 };
 const goldGradient = `linear-gradient(135deg, ${t.primary} 0%, ${t.primaryContainer} 100%)`;
 const todayISO = () => new Date().toISOString().slice(0, 10);
+const weekStartISO = () => {
+    const d = new Date();
+    const day = (d.getDay() + 6) % 7; // Monday = 0
+    d.setDate(d.getDate() - day);
+    return d.toISOString().slice(0, 10);
+};
 
 function Card({ children, variant = 'default', style = {} }: {
     children: React.ReactNode; variant?: 'default' | 'glass' | 'bright'; style?: React.CSSProperties;

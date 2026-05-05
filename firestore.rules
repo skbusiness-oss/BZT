@@ -131,10 +131,18 @@ service cloud.firestore {
       // Owner: full read/write. Coach/admin: read-only (view-as).
       match /selfLogs/{logId} {
         allow read: if isSignedIn() && (isOwner(uid) || isCoach());
-        allow create, update: if isSignedIn() && isOwner(uid)
+        allow create: if isSignedIn() && isOwner(uid)
                               && request.resource.data.keys().hasOnly(
-                                   ['date', 'weight', 'measurements', 'metrics', 'notes', 'createdAt', 'updatedAt']);
-        allow delete: if isSignedIn() && isOwner(uid);
+                                   ['date', 'weight', 'measurements', 'metrics', 'notes',
+                                    'period', 'weekStart', 'weekIndex', 'locked',
+                                    'createdAt', 'updatedAt']);
+        allow update: if isSignedIn() && isOwner(uid)
+                              && resource.data.locked != true
+                              && request.resource.data.keys().hasOnly(
+                                   ['date', 'weight', 'measurements', 'metrics', 'notes',
+                                    'period', 'weekStart', 'weekIndex', 'locked',
+                                    'createdAt', 'updatedAt']);
+        allow delete: if isSignedIn() && isOwner(uid) && resource.data.locked != true;
       }
     }
 

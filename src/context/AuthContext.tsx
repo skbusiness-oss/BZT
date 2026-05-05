@@ -219,6 +219,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             streak: data.streak,
             tosAcceptedAt: tsToIso(data.tosAcceptedAt),
             tosVersion: typeof data.tosVersion === 'string' ? data.tosVersion : undefined,
+            age: typeof data.age === 'number' ? data.age : undefined,
+            heightCm: typeof data.heightCm === 'number' ? data.heightCm : undefined,
+            goal: typeof data.goal === 'string' ? data.goal : undefined,
+            currentWeightKg: typeof data.currentWeightKg === 'number' ? data.currentWeightKg : undefined,
+            targetWeightKg: typeof data.targetWeightKg === 'number' ? data.targetWeightKg : undefined,
+            communityProfileStartedAt: tsToIso(data.communityProfileStartedAt) ?? (typeof data.communityProfileStartedAt === 'string' ? data.communityProfileStartedAt : undefined),
           };
 
           setUser(nextUser);

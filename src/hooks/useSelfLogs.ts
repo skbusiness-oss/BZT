@@ -30,12 +30,16 @@ export interface DailyMetrics {
 }
 
 export interface SelfLog {
-    id: string;          // = date (YYYY-MM-DD) for one-log-per-day semantics
+    id: string;          // normally date/weekStart (YYYY-MM-DD)
     date: string;        // YYYY-MM-DD
     weight?: number;     // kg
     measurements?: BodyMeasurements;
     metrics?: DailyMetrics;
     notes?: string;
+    period?: 'daily' | 'weekly';
+    weekStart?: string;
+    weekIndex?: number;
+    locked?: boolean;
     createdAt?: unknown;
     updatedAt?: unknown;
 }
@@ -86,6 +90,10 @@ export function useSelfLogs(targetUserId?: string) {
         if (input.measurements) payload.measurements = input.measurements;
         if (input.metrics) payload.metrics = input.metrics;
         if (input.notes) payload.notes = input.notes;
+        if (input.period) payload.period = input.period;
+        if (input.weekStart) payload.weekStart = input.weekStart;
+        if (input.weekIndex !== undefined) payload.weekIndex = input.weekIndex;
+        if (input.locked !== undefined) payload.locked = input.locked;
         await setDoc(ref, payload, { merge: true });
         // Idempotent — one SELF_LOG award per (uid, date).
         await awardXp(uid, XP_SOURCE.SELF_LOG, input.date);

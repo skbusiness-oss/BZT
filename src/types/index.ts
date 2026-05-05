@@ -24,6 +24,13 @@ export interface User {
     tosAcceptedAt?: string;
     /** ToS version they accepted (e.g. 'v1'). */
     tosVersion?: string;
+    /** Community/client self-profile fields. */
+    age?: number;
+    heightCm?: number;
+    goal?: string;
+    currentWeightKg?: number;
+    targetWeightKg?: number;
+    communityProfileStartedAt?: string;
 }
 
 export type Category = 'cutting' | 'bulking' | 'pro' | 'health';
