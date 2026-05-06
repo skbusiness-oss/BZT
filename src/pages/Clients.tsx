@@ -51,6 +51,7 @@ export const Clients = () => {
     const [confirmDelete, setConfirmDelete] = useState<Client | null>(null);
     const [confirmDeleteMember, setConfirmDeleteMember] = useState<CommunityMember | null>(null);
     const [deleting, setDeleting] = useState(false);
+    const [deleteError, setDeleteError] = useState<string | null>(null);
 
     // Coaching tab: only show clients whose accessLevel is 'client' (or unset)
     const coachingClients = useMemo(
@@ -88,6 +89,7 @@ export const Clients = () => {
     const handleDeleteConfirm = async () => {
         if (!confirmDelete) return;
         setDeleting(true);
+        setDeleteError(null);
         try {
             // Full revocation: Auth + Firestore + audit log via Cloud Function.
             // Falls back to Firestore-only cascade for legacy clients without a userId.
@@ -99,12 +101,12 @@ export const Clients = () => {
             } else {
                 await removeClient(confirmDelete.id);
             }
-        } catch (e) {
-            // eslint-disable-next-line no-console
+            setConfirmDelete(null);
+        } catch (e: any) {
             console.error('Failed to delete coaching client:', e);
+            setDeleteError(e?.message ?? 'Delete failed. Check the browser console.');
         } finally {
             setDeleting(false);
-            setConfirmDelete(null);
         }
     };
 
@@ -128,17 +130,19 @@ export const Clients = () => {
     const handleDeleteMember = async () => {
         if (!confirmDeleteMember) return;
         setDeleting(true);
+        setDeleteError(null);
         try {
             const uid = confirmDeleteMember.id;
             await callDeleteUser({
                 targetUid: uid,
                 reason: 'coach_removed_community',
             });
-        } catch (e) {
+            setConfirmDeleteMember(null);
+        } catch (e: any) {
             console.error('Failed to delete community member:', e);
+            setDeleteError(e?.message ?? 'Delete failed. Check the browser console.');
         } finally {
             setDeleting(false);
-            setConfirmDeleteMember(null);
         }
     };
 
@@ -493,15 +497,22 @@ export const Clients = () => {
                             <div className="text-sm font-body text-on-surface/60">{confirmDelete.email}</div>
                         </div>
 
-                        <ul className="text-sm font-body text-on-surface/70 space-y-3 mb-8 ps-1">
+                        <ul className="text-sm font-body text-on-surface/70 space-y-3 mb-6 ps-1">
                             <li className="flex gap-3"><span className="text-red-400 font-bold">•</span> {t('deleteRevokesAccess') ?? 'Revokes web app access immediately.'}</li>
                             <li className="flex gap-3"><span className="text-red-400 font-bold">•</span> {t('deleteRemovesData') ?? 'Removes their client record and all weekly check-ins.'}</li>
                             <li className="flex gap-3"><span className="text-red-400 font-bold">•</span> {t('deleteAuditNote') ?? 'Logged in the coach audit trail.'}</li>
                         </ul>
 
+                        {deleteError && (
+                            <div className="mb-6 px-4 py-3 rounded-xl bg-red-500/15 border border-red-500/40 text-red-300 text-sm font-body flex items-start gap-2">
+                                <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+                                <span className="break-words">{deleteError}</span>
+                            </div>
+                        )}
+
                         <div className="flex gap-3">
                             <button
-                                onClick={() => setConfirmDelete(null)}
+                                onClick={() => { setConfirmDelete(null); setDeleteError(null); }}
                                 disabled={deleting}
                                 className="flex-1 px-6 py-3.5 rounded-xl font-label text-[10px] font-bold uppercase tracking-widest text-on-surface bg-surface-container hover:bg-surface-container-high border border-outline-variant/30 transition-all"
                             >
@@ -543,15 +554,22 @@ export const Clients = () => {
                             <div className="text-sm font-body text-on-surface/60">{confirmDeleteMember.email}</div>
                         </div>
 
-                        <ul className="text-sm font-body text-on-surface/70 space-y-3 mb-8 ps-1">
+                        <ul className="text-sm font-body text-on-surface/70 space-y-3 mb-6 ps-1">
                             <li className="flex gap-3"><span className="text-red-400 font-bold">•</span> {t('deleteRevokesAccess') ?? 'Revokes web app access immediately.'}</li>
                             <li className="flex gap-3"><span className="text-red-400 font-bold">•</span> {t('deleteBansFromPlatform') ?? 'Blocks them from signing in again.'}</li>
                             <li className="flex gap-3"><span className="text-red-400 font-bold">•</span> {t('deleteAuditNote') ?? 'Logged in the coach audit trail.'}</li>
                         </ul>
 
+                        {deleteError && (
+                            <div className="mb-6 px-4 py-3 rounded-xl bg-red-500/15 border border-red-500/40 text-red-300 text-sm font-body flex items-start gap-2">
+                                <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+                                <span className="break-words">{deleteError}</span>
+                            </div>
+                        )}
+
                         <div className="flex gap-3">
                             <button
-                                onClick={() => setConfirmDeleteMember(null)}
+                                onClick={() => { setConfirmDeleteMember(null); setDeleteError(null); }}
                                 disabled={deleting}
                                 className="flex-1 px-6 py-3.5 rounded-xl font-label text-[10px] font-bold uppercase tracking-widest text-on-surface bg-surface-container hover:bg-surface-container-high border border-outline-variant/30 transition-all"
                             >

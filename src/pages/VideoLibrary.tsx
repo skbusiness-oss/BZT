@@ -1,456 +1,830 @@
-import { useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
+import {
+    Lock, Search, Plus, X,
+    Link2, CheckCircle2, AlertCircle, Edit2, Trash2, FileText,
+    Download, Loader2, ArrowRight,
+    Tv2, Tag, Settings2, GraduationCap,
+} from 'lucide-react';
+import clsx from 'clsx';
+import VideoPlayer from '../components/VideoPlayer';
+import { CourseCard } from '../components/academy/CourseCard';
+import { CourseDetail } from '../components/academy/CourseDetail';
+import { ManageCourseModal } from '../components/academy/ManageCourseModal';
+import { ManageLessonModal } from '../components/academy/ManageLessonModal';
+import { useAcademy } from '../context/AcademyContext';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
-import { useLanguage } from '../context/LanguageContext';
-import { Play, Lock, Search, Plus, X, Youtube, Video as VideoIcon, Link2, Image } from 'lucide-react';
-import clsx from 'clsx';
-import { VideoWatermark } from '../components/shared/VideoWatermark';
+import { buildEmbedUrl } from '../lib/videoUtils';
+import type { Course, Lesson, LessonResource, LibraryCategory } from '../types';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+type MainTab = 'academy' | 'lives' | 'topics' | 'manage';
+type LessonFormData = Omit<Lesson, 'id' | 'createdAt' | 'updatedAt' | 'createdBy'> & {
+    resources?: LessonResource[];
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 export const VideoLibrary = () => {
-    const { videos, categories, addVideo, addCategory } = useData();
     const { user } = useAuth();
-    const { t } = useLanguage();
-    const [filter, setFilter] = useState('All');
-    const [search, setSearch] = useState('');
-    const [showAddModal, setShowAddModal] = useState(false);
-    const [showCategoryModal, setShowCategoryModal] = useState(false);
-    const [newCategory, setNewCategory] = useState('');
-    const [activeVideo, setActiveVideo] = useState<typeof videos[number] | null>(null);
-
-    const [newVideo, setNewVideo] = useState({
-        title: '',
-        category: '',
-        videoUrl: '',
-        platform: 'youtube' as 'youtube' | 'vimeo',
-        thumbnailUrl: '',
-        description: '',
-        isLocked: false
-    });
+    const {
+        videos, categories, addVideo, updateVideo, removeVideo,
+        addCategory, uploadVideoPdf,
+    } = useData();
+    const {
+        courses, libraryCategories, lessons, lessonContent, lessonProgress, userProgress, loading: academyLoading,
+        loadLessons, loadLessonContent, createCourse, updateCourse, archiveCourse, moveCourse,
+        createLesson, updateLesson, archiveLesson, moveLesson,
+        createCategory, updateCategory, archiveCategory,
+        getLessonResourceUrl, markLessonStarted, markLessonComplete,
+    } = useAcademy();
 
     const isCoach = user?.role === 'coach' || user?.role === 'admin';
 
-    const allCategories = ['All', ...categories];
+    // ── Navigation state ──────────────────────────────────────────────────────
+    const [activeTab, setActiveTab] = useState<MainTab>('academy');
+    const [activeCourseId, setActiveCourseId] = useState<string | null>(null);
+    const [topicFilter, setTopicFilter] = useState<string | null>(null);
+    const [search, setSearch] = useState('');
 
-    const filteredVideos = videos.filter(video => {
-        const matchesCategory = filter === 'All' || video.category === filter;
-        const matchesSearch = video.title.toLowerCase().includes(search.toLowerCase());
-        return matchesCategory && matchesSearch;
+    // ── Modal state ───────────────────────────────────────────────────────────
+    const [courseModal, setCourseModal] = useState<{ open: boolean; course: Course | null }>({ open: false, course: null });
+    const [lessonModal, setLessonModal] = useState<{ open: boolean; lesson: Lesson | null; courseId: string }>({ open: false, lesson: null, courseId: '' });
+    const [newCatName, setNewCatName] = useState('');
+    const [editingCat, setEditingCat] = useState<LibraryCategory | null>(null);
+    const [editingCatName, setEditingCatName] = useState('');
+
+    // ── Legacy video modal state ──────────────────────────────────────────────
+    const [showAddModal, setShowAddModal] = useState(false);
+    const [showCategoryModal, setShowCategoryModal] = useState(false);
+    const [newLegacyCategory, setNewLegacyCategory] = useState('');
+    const [editingVideoId, setEditingVideoId] = useState<string | null>(null);
+    const [rawInput, setRawInput] = useState('');
+    const [saveError, setSaveError] = useState<string | null>(null);
+    const [pdfFiles, setPdfFiles] = useState<{ name: string; url: string }[]>([]);
+    const [uploadingPdf, setUploadingPdf] = useState(false);
+    const [activeVideo, setActiveVideo] = useState<typeof videos[number] | null>(null);
+
+    const [newVideo, setNewVideo] = useState({
+        title: '', category: '', videoUrl: '', platform: 'youtube' as 'youtube' | 'vimeo',
+        thumbnailUrl: '', description: '', isLocked: false, level: '' as '' | 'beginner' | 'intermediate' | 'advanced',
     });
 
-    const canAccess = (video: typeof videos[number]) => {
-        if (!video.isLocked) return true;
-        if (user?.role === 'community') return false;
+    // ── Derived data ──────────────────────────────────────────────────────────
+    const academyCourses = useMemo(() =>
+        courses.filter(c => c.courseType === 'academy').sort((a, b) => a.order - b.order),
+        [courses]);
+
+    const liveCourses = useMemo(() =>
+        courses.filter(c => c.courseType === 'recorded_live').sort((a, b) => a.order - b.order),
+        [courses]);
+
+    const allCourses = useMemo(() =>
+        courses.filter(c => c.courseType !== 'recorded_live').sort((a, b) => a.order - b.order),
+        [courses]);
+
+    const topicCourses = useMemo(() => {
+        let list = courses;
+        if (topicFilter) list = list.filter(c => c.categoryIds.includes(topicFilter));
+        if (search) list = list.filter(c => c.title.toLowerCase().includes(search.toLowerCase()));
+        return list.sort((a, b) => a.order - b.order);
+    }, [courses, topicFilter, search]);
+
+    const activeCourse = activeCourseId ? courses.find(c => c.id === activeCourseId) ?? null : null;
+    const activeLessons = activeCourseId ? (lessons[activeCourseId] ?? []) : [];
+    const activeProgress = activeCourseId ? userProgress[activeCourseId] : undefined;
+    const lessonsLoading = activeCourseId ? !lessons[activeCourseId] : false;
+
+    // Continue Learning: first required academy course with incomplete lessons
+    const continueLearning = useMemo(() => {
+        for (const course of academyCourses.filter(c => c.isRequired && c.isPublished)) {
+            const progress = userProgress[course.id];
+            const completedIds = new Set(progress?.completedLessonIds ?? []);
+            const cl = lessons[course.id] ?? [];
+            const required = cl.filter(l => l.isRequired && !l.archived);
+            const hasIncomplete = required.some(l => !completedIds.has(l.id)) || cl.length === 0;
+            if (hasIncomplete) {
+                const nextLesson = required.find(l => !completedIds.has(l.id)) ?? null;
+                return { course, nextLesson };
+            }
+        }
+        return null;
+    }, [academyCourses, userProgress, lessons]);
+
+    // Load lessons when a course is opened
+    useEffect(() => {
+        if (activeCourseId) loadLessons(activeCourseId);
+    }, [activeCourseId, loadLessons, user?.role]);
+
+    // Pre-load first required academy course for Continue Learning banner
+    useEffect(() => {
+        const first = academyCourses.find(c => c.isRequired && c.isPublished);
+        if (first) loadLessons(first.id);
+    }, [academyCourses, loadLessons]);
+
+    // ── Access control ────────────────────────────────────────────────────────
+    const canAccessCourse = (course: Course) => {
+        if (isCoach) return true;
+        if (!course.isPublished) return false;
+        if (course.accessTier === 'community') return true;
+        if (course.accessTier === 'client') return user?.role === 'client';
+        return false;
+    };
+
+    const canAccessLesson = (lesson: Lesson, course: Course) => {
+        if (isCoach) return true;
+        if (lesson.isPreview && course.isPublished) return true;
+        if (!canAccessCourse(course)) return false;
+        if (!lesson.isRequired) return true;
+        if ((lesson.order ?? 1) <= 1) return true;
+        if (!lesson.prerequisiteLessonId) return false;
+        return lessonProgress[`${user?.id}_${course.id}_${lesson.prerequisiteLessonId}`]?.status === 'completed';
+    };
+
+    // ── Course CRUD handlers ──────────────────────────────────────────────────
+    const openCreateCourse = () => setCourseModal({ open: true, course: null });
+    const openEditCourse = (course: Course) => setCourseModal({ open: true, course });
+    const closeCourseModal = () => setCourseModal({ open: false, course: null });
+
+    const handleSaveCourse = async (data: Omit<Course, 'id' | 'createdAt' | 'updatedAt' | 'createdBy'>) => {
+        if (courseModal.course) {
+            await updateCourse(courseModal.course.id, data);
+        } else {
+            await createCourse(data);
+        }
+        closeCourseModal();
+    };
+
+    const handleArchiveCourse = async (courseId: string) => {
+        if (window.confirm('Archive this course? It will be hidden from all students.')) {
+            await archiveCourse(courseId);
+            if (activeCourseId === courseId) setActiveCourseId(null);
+        }
+    };
+
+    const handleTogglePublish = async (course: Course) => {
+        await updateCourse(course.id, { isPublished: !course.isPublished });
+    };
+
+    // ── Lesson CRUD handlers ──────────────────────────────────────────────────
+    const openAddLesson = (courseId: string) => setLessonModal({ open: true, lesson: null, courseId });
+    const openEditLesson = (lesson: Lesson, courseId: string) => {
+        void loadLessonContent(courseId, lesson.id);
+        setLessonModal({ open: true, lesson, courseId });
+    };
+    const closeLessonModal = () => setLessonModal({ open: false, lesson: null, courseId: '' });
+
+    const handleSaveLesson = async (data: LessonFormData) => {
+        if (lessonModal.lesson) {
+            await updateLesson(lessonModal.courseId, lessonModal.lesson.id, data);
+        } else {
+            await createLesson(lessonModal.courseId, data);
+        }
+        closeLessonModal();
+    };
+
+    const handleOpenLesson = async (course: Course, lessonId: string) => {
+        const lesson = (lessons[course.id] ?? []).find(l => l.id === lessonId);
+        if (!lesson || !canAccessLesson(lesson, course)) return false;
+        await loadLessonContent(course.id, lessonId);
+        await markLessonStarted(course.id, lessonId);
         return true;
     };
 
-    const handleAddVideo = () => {
-        if (newVideo.title && newVideo.category && newVideo.videoUrl) {
-            addVideo(newVideo);
-            setNewVideo({ title: '', category: '', videoUrl: '', platform: 'youtube', thumbnailUrl: '', description: '', isLocked: false });
-            setShowAddModal(false);
+    const handleArchiveLesson = async (courseId: string, lessonId: string) => {
+        if (window.confirm('Archive this lesson? Students will no longer see it.')) {
+            await archiveLesson(courseId, lessonId);
         }
     };
 
-    const handleAddCategory = () => {
-        if (newCategory.trim()) {
-            addCategory(newCategory.trim());
-            setNewCategory('');
-            setShowCategoryModal(false);
+    // ── Category CRUD handlers ────────────────────────────────────────────────
+    const handleSaveCategory = async () => {
+        if (!newCatName.trim()) return;
+        await createCategory(newCatName.trim());
+        setNewCatName('');
+    };
+
+    const handleRenameCategory = async (cat: LibraryCategory) => {
+        if (editingCatName.trim() && editingCatName.trim() !== cat.name) {
+            await updateCategory(cat.id, { name: editingCatName.trim() });
+        }
+        setEditingCat(null);
+    };
+
+    const handleArchiveCategory = async (cat: LibraryCategory) => {
+        if (window.confirm(`Archive category "${cat.name}"?`)) {
+            await archiveCategory(cat.id);
         }
     };
 
-    /**
-     * If the user pasted a full <iframe> embed snippet, pull out just the src URL.
-     * Works for both YouTube and Vimeo embed codes.
-     */
-    const extractUrlFromEmbed = (raw: string): string => {
-        const srcMatch = raw.match(/src=["']([^"']+)["']/i);
-        return srcMatch ? srcMatch[1] : raw;
+    // ── Legacy video handlers (unchanged) ─────────────────────────────────────
+    const parsedLegacy = buildEmbedUrl(rawInput);
+
+    const handleUrlInput = (value: string) => {
+        setRawInput(value);
+        const result = buildEmbedUrl(value);
+        setNewVideo(v => result
+            ? { ...v, videoUrl: result.embedUrl, platform: result.platform }
+            : { ...v, videoUrl: '', platform: 'youtube' });
     };
 
-    const detectPlatform = (raw: string): 'youtube' | 'vimeo' => {
-        if (raw.includes('vimeo')) return 'vimeo';
-        return 'youtube';
-    };
-
-    const getEmbedUrl = (video: typeof videos[number]): string => {
+    const handleAddVideo = async () => {
+        if (!newVideo.title || !newVideo.category || !newVideo.videoUrl) return;
+        setSaveError(null);
         try {
-            if (!video.videoUrl) {
-                return video.platform === 'vimeo'
-                    ? 'https://player.vimeo.com/video/76979871'
-                    : 'https://www.youtube.com/embed/dQw4w9WgXcQ';
-            }
-
-            // Strip out iframe embed code → bare URL
-            const url = extractUrlFromEmbed(video.videoUrl.trim());
-
-            if (video.platform === 'vimeo' || url.includes('vimeo')) {
-                // Already a player URL  e.g. https://player.vimeo.com/video/123456
-                if (url.includes('player.vimeo.com')) return url;
-                // Standard  https://vimeo.com/123456  or  https://vimeo.com/channels/.../123456
-                const match = url.match(/vimeo\.com\/(?:.*\/)?(\d+)/);
-                if (match) return `https://player.vimeo.com/video/${match[1]}`;
-                return url;
-            } else {
-                // Handles every YouTube surface:
-                //  • youtube.com/watch?v=ID
-                //  • youtube.com/watch?list=X&v=ID
-                //  • youtu.be/ID
-                //  • youtube.com/embed/ID   (already an embed URL — re-use as-is)
-                //  • youtube.com/shorts/ID
-                //  • youtube.com/live/ID
-                //  • youtube.com/v/ID
-                // Strip ?si= tracking token that YouTube injects into embed codes
-                const clean = url.replace(/[?&]si=[\w-]+/, '');
-                const match = clean.match(
-                    /(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/|live\/))([\w-]{11})/
-                );
-                if (match) {
-                    return `https://www.youtube.com/embed/${match[1]}?autoplay=1&rel=0`;
-                }
-                // Already a bare embed URL with no recognisable pattern — use it directly
-                return url;
-            }
-        } catch {
-            return video.videoUrl ?? '';
+            const { level, ...rest } = newVideo;
+            const videoData = { ...rest, pdfFiles, ...(level ? { level } : {}) };
+            if (editingVideoId) await updateVideo(editingVideoId, videoData);
+            else await addVideo(videoData);
+            setNewVideo({ title: '', category: '', videoUrl: '', platform: 'youtube', thumbnailUrl: '', description: '', isLocked: false, level: '' });
+            setRawInput(''); setPdfFiles([]); setEditingVideoId(null); setSaveError(null); setShowAddModal(false);
+        } catch (err: any) {
+            const code = err?.code ?? '';
+            setSaveError(code === 'permission-denied' || code === 'PERMISSION_DENIED'
+                ? 'Permission denied — check your Firestore rules.'
+                : err?.message ?? 'Failed to save.');
         }
     };
 
+    const handlePdfUpload = async (file: File) => {
+        setSaveError(null);
+        if (!file.name.toLowerCase().endsWith('.pdf')) { setSaveError('Please select a PDF.'); return; }
+        if (file.size > 50 * 1024 * 1024) { setSaveError(`File is ${(file.size / 1024 / 1024).toFixed(1)} MB. Max is 50 MB.`); return; }
+        if (!editingVideoId) {
+            setSaveError('Save the video first, then edit it to attach PDFs.');
+            return;
+        }
+        setUploadingPdf(true);
+        try {
+            const result = await uploadVideoPdf(file, editingVideoId);
+            setPdfFiles(prev => [...prev, result]);
+        } catch (e: unknown) {
+            const err = e as { code?: string; message?: string };
+            // eslint-disable-next-line no-console
+            console.error('PDF upload failed:', err);
+            const msg = err?.code === 'storage/unauthorized'
+                ? 'Permission denied. Only coaches can upload PDFs.'
+                : err?.code === 'storage/canceled'
+                    ? 'Upload was canceled.'
+                    : err?.code === 'storage/retry-limit-exceeded'
+                        ? 'Network too slow — retry on a stronger connection.'
+                        : err?.message ?? 'PDF upload failed.';
+            setSaveError(msg);
+        }
+        finally { setUploadingPdf(false); }
+    };
+
+    const handleEditClick = (video: typeof videos[number], e: React.MouseEvent) => {
+        e.stopPropagation();
+        setEditingVideoId(video.id);
+        setNewVideo({ title: video.title, category: video.category, videoUrl: video.videoUrl || '', platform: video.platform || 'youtube', thumbnailUrl: video.thumbnailUrl || '', description: video.description || '', isLocked: video.isLocked || false, level: (video.level || '') as '' | 'beginner' | 'intermediate' | 'advanced' });
+        setPdfFiles(video.pdfFiles || []);
+        setRawInput(video.videoUrl || '');
+        setShowAddModal(true);
+    };
+
+    const handleDeleteClick = async (video: typeof videos[number], e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (window.confirm(`Delete "${video.title}"?`)) await removeVideo(video.id);
+    };
+
+    const getPlayUrl = (video: typeof videos[number]) => {
+        if (!video.videoUrl) return '';
+        const result = buildEmbedUrl(video.videoUrl);
+        return result ? result.embedUrl : video.videoUrl;
+    };
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+    const maxCourseOrder = courses.length > 0 ? Math.max(...courses.map(c => c.order)) : 0;
+    const nextLessonOrder = activeCourseId
+        ? (lessons[activeCourseId]?.length ? Math.max(...lessons[activeCourseId].map(l => l.order)) + 1 : 1)
+        : 1;
+
+    const TABS: { id: MainTab; label: string; icon: React.ReactNode }[] = [
+        { id: 'academy', label: 'Academy Path', icon: <GraduationCap size={15} /> },
+        { id: 'lives', label: 'Live Sessions', icon: <Tv2 size={15} /> },
+        { id: 'topics', label: 'Topics', icon: <Tag size={15} /> },
+        ...(isCoach ? [{ id: 'manage' as MainTab, label: 'Manage', icon: <Settings2 size={15} /> }] : []),
+    ];
+
+    // ── Render ────────────────────────────────────────────────────────────────
     return (
-        <div className="space-y-8 animate-in fade-in duration-500 pb-20">
-            <div className="flex flex-col md:flex-row justify-between gap-4">
-                <div>
-                    <h1 className="text-3xl font-bold text-white">{t('videoLibraryTitle')}</h1>
-                    <p className="text-navy-200">{t('videoLibrarySubtitle')}</p>
+        <div className="animate-in fade-in duration-500 pb-32">
+
+            {/* ── Editorial Header ─────────────────────────────────────────── */}
+            <section className="mb-10">
+                <span className="text-primary font-headline font-bold text-sm tracking-[0.3em] uppercase mb-3 block">
+                    Zero to Hero
+                </span>
+                <h1 className="font-display font-extrabold text-5xl md:text-7xl tracking-tighter leading-none text-on-surface mb-5">
+                    Academy<span className="text-primary-container">.</span>
+                </h1>
+                <p className="text-on-surface-variant font-body leading-relaxed max-w-xl mb-8">
+                    A structured path from fundamentals to elite mastery. Required courses build the foundation your coaching calls are built on.
+                </p>
+
+                {/* Tab bar */}
+                <div className="flex items-center gap-1 bg-surface-container-low rounded-full p-1.5 w-fit mb-8 overflow-x-auto no-scrollbar">
+                    {TABS.map(tab => (
+                        <button
+                            key={tab.id}
+                            onClick={() => { setActiveTab(tab.id); setActiveCourseId(null); }}
+                            className={clsx(
+                                'flex items-center gap-2 px-5 py-2.5 rounded-full text-xs font-bold uppercase tracking-widest font-headline transition-all duration-300 whitespace-nowrap',
+                                activeTab === tab.id
+                                    ? 'gold-gradient text-on-primary-fixed shadow-lg shadow-primary/20'
+                                    : 'text-on-surface-variant hover:text-primary',
+                            )}
+                        >
+                            {tab.icon}{tab.label}
+                        </button>
+                    ))}
                 </div>
 
-                <div className="flex flex-col sm:flex-row gap-3">
-                    <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-navy-400" size={18} />
-                        <input
-                            type="text"
-                            placeholder={t('searchVideos')}
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            className="clay-input py-2 pl-10 pr-4 w-full sm:w-64"
-                        />
+                {/* Search — Topics tab only */}
+                {activeTab === 'topics' && (
+                    <div className="flex items-center gap-4 mb-4">
+                        <div className="relative group bg-surface-container rounded-full pl-9 pr-1 py-1">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant/60 pointer-events-none" size={14} />
+                            <input
+                                type="text"
+                                placeholder="Search courses…"
+                                value={search}
+                                onChange={e => setSearch(e.target.value)}
+                                className="bg-transparent border-0 outline-none focus:ring-0 py-1.5 pr-3 text-xs font-body text-on-surface placeholder:text-on-surface-variant/50 w-48"
+                            />
+                            <div className="absolute bottom-0 left-6 right-6 h-px bg-primary scale-x-0 group-focus-within:scale-x-100 transition-transform duration-500 origin-left shadow-[0_0_8px_rgba(230,195,100,0.5)]" />
+                        </div>
                     </div>
+                )}
+            </section>
 
-                    {isCoach && (
-                        <div className="flex gap-2">
+            {/* ── Course Detail View ───────────────────────────────────────── */}
+            {activeCourse && (
+                <CourseDetail
+                    course={activeCourse}
+                    categories={libraryCategories}
+                    lessons={activeLessons}
+                    lessonContent={lessonContent}
+                    lessonProgress={lessonProgress}
+                    progress={activeProgress}
+                    loading={lessonsLoading}
+                    isManaging={activeTab === 'manage'}
+                    canAccessLesson={(l) => canAccessLesson(l, activeCourse)}
+                    onBack={() => setActiveCourseId(null)}
+                    onOpenLesson={(lessonId) => handleOpenLesson(activeCourse, lessonId)}
+                    onMarkComplete={(lessonId) => markLessonComplete(activeCourse.id, lessonId)}
+                    onGetResourceUrl={getLessonResourceUrl}
+                    onAddLesson={() => openAddLesson(activeCourse.id)}
+                    onEditLesson={(l) => openEditLesson(l, activeCourse.id)}
+                    onArchiveLesson={(id) => handleArchiveLesson(activeCourse.id, id)}
+                    onMoveLessonUp={(id) => moveLesson(activeCourse.id, id, 'up')}
+                    onMoveLessonDown={(id) => moveLesson(activeCourse.id, id, 'down')}
+                />
+            )}
+
+            {/* ── Academy Path Tab ─────────────────────────────────────────── */}
+            {!activeCourse && activeTab === 'academy' && (
+                <div className="space-y-12">
+                    {/* Continue Learning banner */}
+                    {continueLearning && (
+                        <div className="glass-card rounded-2xl p-8 flex flex-col md:flex-row gap-6 items-start md:items-center">
+                            <div className="flex-1">
+                                <span className="text-[10px] font-headline font-bold uppercase tracking-[0.3em] text-primary block mb-2">Continue Learning</span>
+                                <h2 className="text-2xl font-headline font-extrabold text-on-surface mb-2">{continueLearning.course.title}</h2>
+                                {continueLearning.nextLesson && (
+                                    <p className="text-sm text-on-surface-variant">
+                                        Next: <span className="text-on-surface font-medium">{continueLearning.nextLesson.title}</span>
+                                    </p>
+                                )}
+                            </div>
                             <button
-                                onClick={() => setShowAddModal(true)}
-                                className="clay-button bg-gradient-to-r from-gold-400 to-gold-600 text-navy-950 px-4 py-2 flex items-center gap-2"
+                                onClick={() => setActiveCourseId(continueLearning.course.id)}
+                                className="gold-gradient text-on-primary-fixed px-8 py-3.5 rounded-full font-label text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 shrink-0 shadow-lg shadow-primary/20 active:scale-95 transition-all"
                             >
-                                <Plus size={18} /> {t('addVideo')}
-                            </button>
-                            <button
-                                onClick={() => setShowCategoryModal(true)}
-                                className="clay-button bg-navy-800 hover:bg-navy-700 text-white px-4 py-2 flex items-center gap-2"
-                            >
-                                <Plus size={16} /> {t('addCategory')}
+                                Continue <ArrowRight size={14} />
                             </button>
                         </div>
                     )}
-                </div>
-            </div>
 
-            {/* Category Tabs */}
-            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-                {allCategories.map(cat => (
-                    <button
-                        key={cat}
-                        onClick={() => setFilter(cat)}
-                        className={clsx(
-                            "px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors",
-                            filter === cat
-                                ? "bg-gradient-to-r from-gold-400 to-gold-600 text-navy-950 shadow-clay-sm"
-                                : "clay-card-sm text-navy-200 hover:text-white"
-                        )}
-                    >
-                        {cat}
-                    </button>
-                ))}
-            </div>
-
-            {/* Video Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredVideos.map(video => {
-                    const unlocked = canAccess(video);
-
-                    return (
-                        <div key={video.id} className="group clay-card overflow-hidden hover:border-gold-500/20 transition-all">
-                            {/* Thumbnail */}
-                            <div 
-                                className={clsx("aspect-video relative overflow-hidden", unlocked ? "cursor-pointer" : "cursor-not-allowed")}
-                                onClick={() => unlocked && setActiveVideo(video)}
-                            >
-                                <img
-                                    src={video.thumbnailUrl || `https://placehold.co/600x400/1a237e/7986cb?text=${video.title}`}
-                                    alt={video.title}
-                                    className={clsx("w-full h-full object-cover transition-transform duration-500 group-hover:scale-105", !unlocked && "grayscale")}
-                                />
-                                <div className="absolute inset-0 bg-navy-950/20 group-hover:bg-navy-950/0 transition-colors" />
-
-                                {/* Platform Badge */}
-                                {video.platform && (
-                                    <div className="absolute top-3 right-3">
-                                        <span className={clsx(
-                                            "px-2 py-1 rounded text-xs font-bold flex items-center gap-1",
-                                            video.platform === 'youtube' ? "bg-red-600 text-white" : "bg-blue-500 text-white"
-                                        )}>
-                                            {video.platform === 'youtube' ? <Youtube size={12} /> : <VideoIcon size={12} />}
-                                            {video.platform.charAt(0).toUpperCase() + video.platform.slice(1)}
-                                        </span>
-                                    </div>
-                                )}
-
-                                {/* Overlay Icon */}
-                                <div className="absolute inset-0 flex items-center justify-center">
-                                    {unlocked ? (
-                                        <div className="w-12 h-12 rounded-full flex items-center justify-center translate-y-4 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300 text-navy-950"
-                                            style={{ background: 'linear-gradient(135deg, #ffd740, #d4a017)', boxShadow: '0 4px 20px rgba(212,160,23,0.3)' }}>
-                                            <Play size={20} fill="currentColor" />
-                                        </div>
-                                    ) : (
-                                        <div className="w-12 h-12 rounded-full bg-navy-900/90 text-navy-300 flex items-center justify-center shadow-lg backdrop-blur-sm border border-navy-700">
-                                            <Lock size={20} />
-                                        </div>
-                                    )}
+                    {/* Required path */}
+                    {['beginner', 'intermediate', 'advanced'].map(lvl => {
+                        const group = academyCourses.filter(c => c.level === lvl && c.isRequired);
+                        if (group.length === 0) return null;
+                        return (
+                            <div key={lvl}>
+                                <div className="flex items-baseline gap-3 mb-6">
+                                    <h2 className="text-xl font-headline font-extrabold capitalize text-on-surface">{lvl}</h2>
+                                    <span className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">{group.length} courses</span>
                                 </div>
-
-                                {/* Category Badge */}
-                                <div className="absolute top-3 left-3">
-                                    <span className="px-2 py-1 rounded bg-navy-950/60 backdrop-blur-md text-xs font-medium text-white border border-white/10">
-                                        {video.category}
-                                    </span>
-                                </div>
-                            </div>
-
-                            {/* Content */}
-                            <div className="p-5">
-                                <h3 className={clsx("font-bold text-lg mb-1 group-hover:text-gold-400 transition-colors", !unlocked ? "text-navy-400" : "text-white")}>
-                                    {video.title}
-                                </h3>
-                                <p className="text-sm text-navy-300 mb-4 line-clamp-2">
-                                    {video.description || `Master the fundamentals of ${video.category.toLowerCase()} with this comprehensive guide.`}
-                                </p>
-
-                                <div className="flex items-center justify-between">
-                                    {unlocked ? (
-                                        <button 
-                                            onClick={() => setActiveVideo(video)}
-                                            className="text-sm font-bold text-gold-400 hover:text-gold-300 flex items-center gap-1"
-                                        >
-                                            Watch Now <Play size={12} />
-                                        </button>
-                                    ) : (
-                                        <button className="text-xs font-bold text-navy-300 clay-card-sm px-3 py-1.5 flex items-center gap-2 cursor-not-allowed">
-                                            <Lock size={12} /> Upgrade to Unlock
-                                        </button>
-                                    )}
-                                    <span className="text-xs text-navy-500">12:34</span>
-                                </div>
-                            </div>
-                        </div>
-                    );
-                })}
-            </div>
-
-            {/* Add Video Modal */}
-            {showAddModal && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-200">
-                    <div className="clay-card p-6 max-w-lg w-full mx-4 animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
-                        <div className="flex items-center justify-between mb-6">
-                            <h2 className="text-xl font-bold text-white">Add New Video</h2>
-                            <button onClick={() => setShowAddModal(false)} className="text-navy-300 hover:text-white">
-                                <X size={20} />
-                            </button>
-                        </div>
-
-                        <div className="space-y-4">
-                            <div>
-                                <label className="block text-sm text-navy-200 mb-1">Video Title *</label>
-                                <input
-                                    type="text"
-                                    value={newVideo.title}
-                                    onChange={e => setNewVideo({ ...newVideo, title: e.target.value })}
-                                    placeholder="e.g. Mastering the Deadlift"
-                                    className="w-full clay-input p-3"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm text-navy-200 mb-1">Category *</label>
-                                <select
-                                    value={newVideo.category}
-                                    onChange={e => setNewVideo({ ...newVideo, category: e.target.value })}
-                                    className="w-full clay-input p-3"
-                                >
-                                    <option value="">Select a category</option>
-                                    {categories.map(cat => (
-                                        <option key={cat} value={cat}>{cat}</option>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    {group.map(course => (
+                                        <CourseCard
+                                            key={course.id}
+                                            course={course}
+                                            categories={libraryCategories}
+                                            progress={userProgress[course.id]}
+                                            lessonCount={course.lessonCount ?? lessons[course.id]?.length ?? 0}
+                                            canAccess={canAccessCourse(course)}
+                                            onSelect={() => setActiveCourseId(course.id)}
+                                        />
                                     ))}
-                                </select>
+                                </div>
                             </div>
+                        );
+                    })}
 
-                            <div>
-                                <label className="block text-sm text-navy-200 mb-1 flex items-center gap-2">
-                                    <Link2 size={14} /> Video URL (YouTube or Vimeo) *
-                                </label>
-                                <textarea
-                                    value={newVideo.videoUrl}
-                                    onChange={e => setNewVideo({
-                                        ...newVideo,
-                                        videoUrl: e.target.value,
-                                        platform: detectPlatform(e.target.value)
-                                    })}
-                                    placeholder="Paste a YouTube/Vimeo URL  — or paste the full <iframe> embed code directly"
-                                    rows={3}
-                                    className="w-full clay-input p-3 resize-none text-sm"
+                    {/* Optional bonus content in academy */}
+                    {(() => {
+                        const bonus = allCourses.filter(c => !c.isRequired);
+                        if (bonus.length === 0) return null;
+                        return (
+                            <details>
+                                <summary className="cursor-pointer list-none text-[10px] font-label font-bold uppercase tracking-widest text-on-surface-variant hover:text-primary transition-colors mb-6">
+                                    Bonus Content ({bonus.length})
+                                </summary>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
+                                    {bonus.map(course => (
+                                        <CourseCard
+                                            key={course.id}
+                                            course={course}
+                                            categories={libraryCategories}
+                                            progress={userProgress[course.id]}
+                                            lessonCount={course.lessonCount ?? lessons[course.id]?.length ?? 0}
+                                            canAccess={canAccessCourse(course)}
+                                            onSelect={() => setActiveCourseId(course.id)}
+                                        />
+                                    ))}
+                                </div>
+                            </details>
+                        );
+                    })()}
+
+                    {academyCourses.length === 0 && !academyLoading && (
+                        <div className="glass-card rounded-2xl p-16 text-center text-on-surface/40">
+                            <GraduationCap size={48} className="mx-auto mb-4 opacity-20" />
+                            <p className="text-sm font-body">
+                                No academy courses yet.{isCoach && ' Switch to the Manage tab to create the first one.'}
+                            </p>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* ── Live Sessions Tab ────────────────────────────────────────── */}
+            {!activeCourse && activeTab === 'lives' && (
+                <div>
+                    <div className="flex items-center justify-between mb-8">
+                        <p className="text-on-surface-variant text-sm">Recorded live sessions — browse and watch at your own pace.</p>
+                        {isCoach && (
+                            <button
+                                onClick={openCreateCourse}
+                                className="gold-gradient w-10 h-10 rounded-full flex items-center justify-center shrink-0 shadow-lg shadow-primary/20 active:scale-90 transition-all"
+                                title="Add live session"
+                            ><Plus size={18} className="text-on-primary-fixed" /></button>
+                        )}
+                    </div>
+                    {liveCourses.length > 0 ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {liveCourses.map(course => (
+                                <CourseCard
+                                    key={course.id}
+                                    course={course}
+                                    categories={libraryCategories}
+                                    progress={userProgress[course.id]}
+                                    lessonCount={course.lessonCount ?? lessons[course.id]?.length ?? 0}
+                                    canAccess={canAccessCourse(course)}
+                                    onSelect={() => setActiveCourseId(course.id)}
                                 />
-                                {newVideo.videoUrl && (
-                                    <div className="mt-2 flex items-center gap-2 text-xs text-navy-400">
-                                        Detected platform:
-                                        <span className={clsx(
-                                            "px-2 py-0.5 rounded font-bold",
-                                            newVideo.platform === 'youtube' ? "bg-red-600/20 text-red-400" : "bg-blue-500/20 text-blue-400"
-                                        )}>
-                                            {newVideo.platform}
-                                        </span>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="glass-card rounded-2xl p-16 text-center text-on-surface/40">
+                            <Tv2 size={48} className="mx-auto mb-4 opacity-20" />
+                            <p className="text-sm font-body">No recorded sessions yet.</p>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* ── Topics Tab ──────────────────────────────────────────────── */}
+            {!activeCourse && activeTab === 'topics' && (
+                <div>
+                    {/* Category chip row */}
+                    <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-3 mb-8">
+                        <button
+                            onClick={() => setTopicFilter(null)}
+                            className={clsx(
+                                'px-5 py-2 rounded-full text-xs font-bold uppercase tracking-widest whitespace-nowrap transition-all duration-300',
+                                !topicFilter ? 'gold-gradient text-on-primary-fixed shadow-md' : 'bg-surface-container-highest text-on-surface-variant hover:text-primary',
+                            )}
+                        >All</button>
+                        {libraryCategories.map(cat => (
+                            <button
+                                key={cat.id}
+                                onClick={() => setTopicFilter(topicFilter === cat.id ? null : cat.id)}
+                                className={clsx(
+                                    'px-5 py-2 rounded-full text-xs font-bold uppercase tracking-widest whitespace-nowrap transition-all duration-300',
+                                    topicFilter === cat.id ? 'gold-gradient text-on-primary-fixed shadow-md' : 'bg-surface-container-highest text-on-surface-variant hover:text-primary',
+                                )}
+                            >
+                                {cat.icon && <span className="mr-1">{cat.icon}</span>}{cat.name}
+                            </button>
+                        ))}
+                    </div>
+
+                    {topicCourses.length > 0 ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {topicCourses.map(course => (
+                                <CourseCard
+                                    key={course.id}
+                                    course={course}
+                                    categories={libraryCategories}
+                                    progress={userProgress[course.id]}
+                                    lessonCount={course.lessonCount ?? lessons[course.id]?.length ?? 0}
+                                    canAccess={canAccessCourse(course)}
+                                    onSelect={() => setActiveCourseId(course.id)}
+                                />
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="glass-card rounded-2xl p-16 text-center text-on-surface/40">
+                            <Tag size={48} className="mx-auto mb-4 opacity-20" />
+                            <p className="text-sm font-body">{search ? `No courses match "${search}"` : 'No courses in this topic.'}</p>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* ── Manage Tab (coach only) ──────────────────────────────────── */}
+            {!activeCourse && activeTab === 'manage' && isCoach && (
+                <div className="space-y-10">
+                    {/* Create course button */}
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <h2 className="text-xl font-headline font-extrabold text-on-surface">Course Management</h2>
+                            <p className="text-xs text-on-surface-variant mt-1">Use ↑↓ arrows to reorder. Unpublished courses are only visible to coaches.</p>
+                        </div>
+                        <button
+                            onClick={openCreateCourse}
+                            className="gold-gradient text-on-primary-fixed px-6 py-3 rounded-full font-label text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 shadow-lg shadow-primary/20 active:scale-95 transition-all"
+                        ><Plus size={16} /> New Course</button>
+                    </div>
+
+                    {/* Course list */}
+                    {courses.length > 0 ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {courses.map((course, idx) => (
+                                <CourseCard
+                                    key={course.id}
+                                    course={course}
+                                    categories={libraryCategories}
+                                    progress={userProgress[course.id]}
+                                    lessonCount={course.lessonCount ?? lessons[course.id]?.length}
+                                    isManaging
+                                    isFirst={idx === 0}
+                                    isLast={idx === courses.length - 1}
+                                    canAccess
+                                    onSelect={() => setActiveCourseId(course.id)}
+                                    onMoveUp={() => moveCourse(course.id, 'up')}
+                                    onMoveDown={() => moveCourse(course.id, 'down')}
+                                    onEdit={() => openEditCourse(course)}
+                                    onArchive={() => handleArchiveCourse(course.id)}
+                                    onTogglePublish={() => handleTogglePublish(course)}
+                                />
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="glass-card rounded-2xl p-12 text-center text-on-surface/40">
+                            <GraduationCap size={40} className="mx-auto mb-3 opacity-20" />
+                            <p className="text-sm font-body">No courses yet. Click "New Course" to create the first one.</p>
+                        </div>
+                    )}
+
+                    {/* Category management */}
+                    <div className="glass-card rounded-2xl p-8">
+                        <div className="flex items-center justify-between mb-6">
+                            <div>
+                                <h2 className="text-lg font-headline font-extrabold text-on-surface">Topics / Categories</h2>
+                                <p className="text-xs text-on-surface-variant mt-1">Used to tag courses and power the Topics browse view.</p>
+                            </div>
+                        </div>
+
+                        <div className="space-y-2 mb-6">
+                            {libraryCategories.map(cat => (
+                                <div key={cat.id} className="flex items-center gap-3 p-3 rounded-xl bg-surface-container-lowest border border-outline-variant/30">
+                                    {editingCat?.id === cat.id ? (
+                                        <>
+                                            <input
+                                                value={editingCatName}
+                                                onChange={e => setEditingCatName(e.target.value)}
+                                                onKeyDown={e => { if (e.key === 'Enter') handleRenameCategory(cat); if (e.key === 'Escape') setEditingCat(null); }}
+                                                className="flex-1 bg-transparent border-b border-primary/50 outline-none text-sm font-body text-on-surface py-0.5"
+                                                autoFocus
+                                            />
+                                            <button onClick={() => handleRenameCategory(cat)} className="text-primary text-[10px] font-bold uppercase tracking-widest">Save</button>
+                                            <button onClick={() => setEditingCat(null)} className="text-on-surface/40 hover:text-on-surface transition-colors"><X size={14} /></button>
+                                        </>
+                                    ) : (
+                                        <>
+                                            {cat.icon && <span className="text-base">{cat.icon}</span>}
+                                            <span className="flex-1 text-sm font-body text-on-surface">{cat.name}</span>
+                                            <button onClick={() => { setEditingCat(cat); setEditingCatName(cat.name); }} className="p-1.5 rounded-lg text-on-surface-variant hover:text-primary transition-colors"><Edit2 size={13} /></button>
+                                            <button onClick={() => handleArchiveCategory(cat)} className="p-1.5 rounded-lg text-on-surface-variant hover:text-red-400 transition-colors"><Trash2 size={13} /></button>
+                                        </>
+                                    )}
+                                </div>
+                            ))}
+                            {libraryCategories.length === 0 && (
+                                <p className="text-xs text-on-surface/30 font-body py-4 text-center">No categories yet.</p>
+                            )}
+                        </div>
+
+                        <div className="flex gap-3 border-t border-outline-variant/20 pt-5">
+                            <input
+                                value={newCatName}
+                                onChange={e => setNewCatName(e.target.value)}
+                                onKeyDown={e => { if (e.key === 'Enter') handleSaveCategory(); }}
+                                placeholder="e.g. Nutrition, Hormones, Recovery…"
+                                className="flex-1 bg-surface-container-lowest border border-outline-variant/30 focus:border-primary/50 outline-none rounded-xl px-4 py-3 text-sm font-body text-on-surface transition-colors"
+                            />
+                            <button
+                                onClick={handleSaveCategory}
+                                disabled={!newCatName.trim()}
+                                className="gold-gradient w-11 h-11 rounded-full flex items-center justify-center shrink-0 shadow-lg shadow-primary/20 disabled:opacity-40 disabled:pointer-events-none active:scale-90 transition-all"
+                            ><Plus size={18} className="text-on-primary-fixed" /></button>
+                        </div>
+                    </div>
+
+                    {/* Legacy video archive management */}
+                    <details className="group">
+                        <summary className="cursor-pointer list-none text-[10px] font-label font-bold uppercase tracking-widest text-on-surface-variant hover:text-primary transition-colors">
+                            Legacy Video Archive (CRUD)
+                        </summary>
+                        <div className="mt-6 flex items-center gap-3">
+                            <button
+                                onClick={() => { setNewVideo({ title: '', category: '', videoUrl: '', platform: 'youtube', thumbnailUrl: '', description: '', isLocked: false, level: '' }); setRawInput(''); setEditingVideoId(null); setSaveError(null); setShowAddModal(true); }}
+                                className="gold-gradient w-10 h-10 rounded-full flex items-center justify-center shrink-0 active:scale-90 transition-all shadow-lg shadow-primary/20"
+                            ><Plus size={18} className="text-on-primary-fixed" /></button>
+                            {categories.map(cat => (
+                                <span key={cat} className="px-3 py-1.5 rounded-full bg-surface-container text-xs text-on-surface-variant border border-outline-variant/30">{cat}</span>
+                            ))}
+                            <button onClick={() => setShowCategoryModal(true)} className="text-xs text-on-surface-variant hover:text-primary transition-colors underline underline-offset-2">+ Tag</button>
+                        </div>
+                        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                            {videos.map(video => (
+                                <div key={video.id} className="glass-card rounded-xl p-4 flex items-center gap-3">
+                                    <img src={video.thumbnailUrl || `https://placehold.co/80x45/1a1f2f/e6c364?text=VID`} alt={video.title} className="w-20 h-11 rounded-lg object-cover shrink-0" />
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-body font-medium text-on-surface truncate">{video.title}</p>
+                                        <p className="text-[10px] text-on-surface-variant">{video.category}</p>
+                                    </div>
+                                    <div className="flex gap-1 shrink-0">
+                                        <button onClick={e => handleEditClick(video, e)} className="p-1.5 rounded-lg text-on-surface-variant hover:text-primary transition-colors"><Edit2 size={13} /></button>
+                                        <button onClick={e => handleDeleteClick(video, e)} className="p-1.5 rounded-lg text-on-surface-variant hover:text-red-400 transition-colors"><Trash2 size={13} /></button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </details>
+                </div>
+            )}
+
+            {/* ── Academy CRUD Modals ───────────────────────────────────────── */}
+            {courseModal.open && (
+                <ManageCourseModal
+                    course={courseModal.course}
+                    categories={libraryCategories}
+                    maxOrder={maxCourseOrder}
+                    onSave={handleSaveCourse}
+                    onClose={closeCourseModal}
+                />
+            )}
+
+            {lessonModal.open && (
+                <ManageLessonModal
+                    lesson={lessonModal.lesson}
+                    courseId={lessonModal.courseId}
+                    nextOrder={nextLessonOrder}
+                    onSave={handleSaveLesson}
+                    onClose={closeLessonModal}
+                />
+            )}
+
+            {/* ── Legacy Add Video Modal ────────────────────────────────────── */}
+            {showAddModal && (
+                <div className="fixed inset-0 bg-surface/90 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-200 p-4">
+                    <div className="bg-surface-container-low p-8 rounded-2xl max-w-2xl w-full mx-4 animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto ghost-border">
+                        <div className="flex items-center justify-between mb-6">
+                            <h2 className="text-2xl font-headline font-bold text-on-surface">{editingVideoId ? 'Edit Video' : 'Add Video'}</h2>
+                            <button onClick={() => { setShowAddModal(false); setRawInput(''); setEditingVideoId(null); setSaveError(null); }} className="text-on-surface/50 hover:text-on-surface p-2 rounded-full hover:bg-surface-container-highest transition-colors"><X size={20} /></button>
+                        </div>
+                        <div className="space-y-5">
+                            <div>
+                                <label className="flex items-center gap-2 text-[10px] font-label font-bold uppercase tracking-widest text-on-surface/60 mb-2"><Link2 size={13} /> YouTube or Vimeo link *</label>
+                                <textarea value={rawInput} onChange={e => handleUrlInput(e.target.value)} placeholder="Paste URL or <iframe> embed code" rows={3} className="w-full bg-surface-container-lowest border border-outline-variant/30 focus:border-primary/50 outline-none rounded-xl p-4 resize-none text-sm font-mono text-on-surface transition-colors" autoFocus />
+                                {rawInput.trim() && (
+                                    <div className={clsx('mt-2 flex items-center gap-2 text-xs font-body px-3 py-2.5 rounded-lg border', parsedLegacy ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20')}>
+                                        {parsedLegacy ? <><CheckCircle2 size={14} /> {parsedLegacy.platform} detected</> : <><AlertCircle size={14} /> Unrecognised link</>}
                                     </div>
                                 )}
                             </div>
-
+                            <div className="grid grid-cols-2 gap-5">
+                                <div>
+                                    <label className="block text-[10px] font-label font-bold uppercase tracking-widest text-on-surface/60 mb-2">Title *</label>
+                                    <input value={newVideo.title} onChange={e => setNewVideo({ ...newVideo, title: e.target.value })} className="w-full bg-surface-container-lowest border border-outline-variant/30 focus:border-primary/50 outline-none rounded-xl p-3.5 text-sm text-on-surface transition-colors" />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-label font-bold uppercase tracking-widest text-on-surface/60 mb-2">Category *</label>
+                                    <select value={newVideo.category} onChange={e => setNewVideo({ ...newVideo, category: e.target.value })} className="w-full bg-surface-container-lowest border border-outline-variant/30 focus:border-primary/50 outline-none rounded-xl p-3.5 text-sm text-on-surface transition-colors appearance-none">
+                                        <option value="">Select</option>
+                                        {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                                    </select>
+                                </div>
+                            </div>
                             <div>
-                                <label className="block text-sm text-navy-200 mb-1 flex items-center gap-2">
-                                    <Image size={14} /> Thumbnail URL
-                                </label>
-                                <input
-                                    type="url"
-                                    value={newVideo.thumbnailUrl}
-                                    onChange={e => setNewVideo({ ...newVideo, thumbnailUrl: e.target.value })}
-                                    placeholder="https://example.com/thumbnail.jpg (optional)"
-                                    className="w-full clay-input p-3"
-                                />
+                                <label className="block text-[10px] font-label font-bold uppercase tracking-widest text-on-surface/60 mb-2">Description</label>
+                                <textarea value={newVideo.description} onChange={e => setNewVideo({ ...newVideo, description: e.target.value })} rows={2} className="w-full bg-surface-container-lowest border border-outline-variant/30 focus:border-primary/50 outline-none rounded-xl p-3.5 text-sm text-on-surface resize-none transition-colors" />
                             </div>
-
+                            <div className="flex items-center gap-3 p-4 bg-surface-container-lowest rounded-xl border border-outline-variant/30">
+                                <input type="checkbox" id="isLocked" checked={newVideo.isLocked} onChange={e => setNewVideo({ ...newVideo, isLocked: e.target.checked })} className="w-4 h-4 rounded" />
+                                <label htmlFor="isLocked" className="text-sm font-body text-on-surface/80 flex items-center cursor-pointer"><Lock size={13} className="inline mr-2 text-on-surface/50" />Lock for coaching clients only</label>
+                            </div>
+                            {/* PDF upload */}
                             <div>
-                                <label className="block text-sm text-navy-200 mb-1">Description</label>
-                                <textarea
-                                    value={newVideo.description}
-                                    onChange={e => setNewVideo({ ...newVideo, description: e.target.value })}
-                                    placeholder="Brief description of the video content..."
-                                    rows={3}
-                                    className="w-full clay-input p-3 resize-none"
-                                />
-                            </div>
-
-                            <div className="flex items-center gap-3">
-                                <input
-                                    type="checkbox"
-                                    id="isLocked"
-                                    checked={newVideo.isLocked}
-                                    onChange={e => setNewVideo({ ...newVideo, isLocked: e.target.checked })}
-                                    className="w-4 h-4 rounded accent-gold-500"
-                                />
-                                <label htmlFor="isLocked" className="text-sm text-navy-200">
-                                    <Lock size={12} className="inline mr-1" /> Lock for Coaching Clients Only
-                                </label>
-                            </div>
-                        </div>
-
-                        <div className="flex gap-3 mt-6">
-                            <button onClick={() => setShowAddModal(false)} className="flex-1 clay-button bg-navy-800 hover:bg-navy-700 text-white py-3">
-                                Cancel
-                            </button>
-                            <button
-                                onClick={handleAddVideo}
-                                disabled={!newVideo.title || !newVideo.category || !newVideo.videoUrl}
-                                className="flex-1 clay-button bg-gradient-to-r from-gold-400 to-gold-600 disabled:from-navy-700 disabled:to-navy-700 disabled:cursor-not-allowed text-navy-950 py-3"
-                            >
-                                Add Video
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Add Category Modal */}
-            {showCategoryModal && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-200">
-                    <div className="clay-card p-6 max-w-sm w-full mx-4 animate-in zoom-in-95 duration-200">
-                        <div className="flex items-center justify-between mb-6">
-                            <h2 className="text-xl font-bold text-white">Add New Category</h2>
-                            <button onClick={() => setShowCategoryModal(false)} className="text-navy-300 hover:text-white">
-                                <X size={20} />
-                            </button>
-                        </div>
-
-                        <div>
-                            <label className="block text-sm text-navy-200 mb-1">Category Name</label>
-                            <input
-                                type="text"
-                                value={newCategory}
-                                onChange={e => setNewCategory(e.target.value)}
-                                placeholder="e.g. Recovery, Supplements..."
-                                className="w-full clay-input p-3"
-                            />
-                        </div>
-
-                        <div className="mt-4">
-                            <p className="text-xs text-navy-400 mb-2">Existing categories:</p>
-                            <div className="flex flex-wrap gap-2">
-                                {categories.map(cat => (
-                                    <span key={cat} className="px-2 py-1 clay-card-sm rounded text-xs text-navy-200">{cat}</span>
+                                <label className="flex items-center gap-2 text-[10px] font-label font-bold uppercase tracking-widest text-on-surface/60 mb-3"><FileText size={13} /> PDFs</label>
+                                {pdfFiles.map((pdf, i) => (
+                                    <div key={i} className="flex items-center gap-3 mb-2 bg-surface-container-lowest border border-outline-variant/30 px-4 py-3 rounded-xl">
+                                        <FileText size={16} className="text-primary shrink-0" />
+                                        <span className="text-sm font-body text-on-surface truncate flex-1">{pdf.name}</span>
+                                        <button onClick={() => setPdfFiles(p => p.filter((_, j) => j !== i))} className="text-red-400 hover:text-red-300 transition-colors"><X size={15} /></button>
+                                    </div>
                                 ))}
+                                <label className={clsx('flex items-center justify-center gap-2 px-5 py-4 rounded-xl border border-dashed text-sm font-bold tracking-wide transition-all', uploadingPdf ? 'opacity-60 cursor-wait border-outline-variant/30 text-on-surface/50' : 'cursor-pointer border-outline-variant/50 hover:border-primary/50 hover:text-primary text-on-surface/60 hover:bg-primary/5')}>
+                                    {uploadingPdf ? <><Loader2 size={16} className="animate-spin" /> Uploading…</> : <><Plus size={16} /> Add PDF</>}
+                                    <input type="file" accept=".pdf,application/pdf" className="hidden" disabled={uploadingPdf} onChange={e => { const f = e.target.files?.[0]; if (f) handlePdfUpload(f); e.target.value = ''; }} />
+                                </label>
                             </div>
                         </div>
-
-                        <div className="flex gap-3 mt-6">
-                            <button onClick={() => setShowCategoryModal(false)} className="flex-1 clay-button bg-navy-800 hover:bg-navy-700 text-white py-3">
-                                Cancel
-                            </button>
-                            <button
-                                onClick={handleAddCategory}
-                                disabled={!newCategory.trim()}
-                                className="flex-1 clay-button bg-gradient-to-r from-gold-400 to-gold-600 disabled:from-navy-700 disabled:to-navy-700 disabled:cursor-not-allowed text-navy-950 py-3"
-                            >
-                                Add Category
+                        {saveError && (
+                            <div className="mt-5 flex items-start gap-3 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm font-body">
+                                <AlertCircle size={16} className="shrink-0 mt-0.5" />{saveError}
+                            </div>
+                        )}
+                        <div className="flex gap-3 mt-7">
+                            <button onClick={() => { setShowAddModal(false); setRawInput(''); setEditingVideoId(null); setSaveError(null); setPdfFiles([]); }} className="flex-1 px-5 py-3.5 rounded-xl font-label text-[10px] font-bold uppercase tracking-widest text-on-surface bg-surface-container hover:bg-surface-container-high border border-outline-variant/30 transition-all">Cancel</button>
+                            <button onClick={handleAddVideo} disabled={!newVideo.title || !newVideo.category || !newVideo.videoUrl} className="flex-1 px-5 py-3.5 rounded-xl font-label text-[10px] font-bold uppercase tracking-widest gold-gradient text-on-primary-fixed disabled:opacity-40 disabled:pointer-events-none shadow-lg shadow-primary/20 active:scale-95 transition-all">
+                                {editingVideoId ? 'Update Video' : 'Save Video'}
                             </button>
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* Video Player Modal */}
+            {/* ── Legacy Category Modal ─────────────────────────────────────── */}
+            {showCategoryModal && (
+                <div className="fixed inset-0 bg-surface/90 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-200 p-4">
+                    <div className="bg-surface-container-low p-8 max-w-sm w-full mx-4 rounded-2xl animate-in zoom-in-95 duration-200 ghost-border shadow-2xl">
+                        <div className="flex items-center justify-between mb-6">
+                            <h2 className="text-2xl font-headline font-bold text-on-surface">Add Category</h2>
+                            <button onClick={() => setShowCategoryModal(false)} className="text-on-surface/50 hover:text-on-surface p-2 rounded-full hover:bg-surface-container-highest transition-colors"><X size={20} /></button>
+                        </div>
+                        <input type="text" value={newLegacyCategory} onChange={e => setNewLegacyCategory(e.target.value)} placeholder="e.g. Recovery" className="w-full bg-surface-container-lowest border border-outline-variant/30 focus:border-primary/50 outline-none rounded-xl p-3.5 text-sm text-on-surface transition-colors" />
+                        <div className="flex gap-3 mt-6">
+                            <button onClick={() => setShowCategoryModal(false)} className="flex-1 px-5 py-3.5 rounded-xl font-label text-[10px] font-bold uppercase tracking-widest text-on-surface bg-surface-container border border-outline-variant/30 transition-all">Cancel</button>
+                            <button onClick={() => { if (newLegacyCategory.trim()) { addCategory(newLegacyCategory.trim()); setNewLegacyCategory(''); setShowCategoryModal(false); } }} disabled={!newLegacyCategory.trim()} className="flex-1 px-5 py-3.5 rounded-xl font-label text-[10px] font-bold uppercase tracking-widest gold-gradient text-on-primary-fixed disabled:opacity-40 disabled:pointer-events-none active:scale-95 transition-all">Add</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ── Legacy Video Player ───────────────────────────────────────── */}
             {activeVideo && (
-                <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-[100] animate-in fade-in duration-200">
-                    <button 
-                        onClick={() => setActiveVideo(null)} 
-                        className="absolute flex items-center gap-2 top-8 right-8 text-white/50 hover:text-white transition-colors"
-                    >
-                        <span className="font-bold tracking-widest text-sm uppercase">Close</span>
-                        <X size={32} />
+                <div className="fixed inset-0 bg-surface/95 backdrop-blur-xl flex flex-col items-center justify-center z-[100] animate-in fade-in duration-200 p-4">
+                    <button onClick={() => setActiveVideo(null)} className="absolute top-6 right-6 flex items-center gap-2 text-on-surface/50 hover:text-on-surface transition-colors bg-surface-container-low p-2 pr-4 rounded-full border border-outline-variant/30">
+                        <X size={20} className="bg-surface-container-highest p-1 rounded-full" />
+                        <span className="text-[10px] font-label font-bold uppercase tracking-widest">Close</span>
                     </button>
-                    
-                    <div className="w-full max-w-5xl aspect-video px-4 animate-in zoom-in-95 duration-300">
-                        <div className="relative w-full h-full">
-                            <iframe
-                                key={activeVideo.id}
-                                src={getEmbedUrl(activeVideo)}
-                                title={activeVideo.title}
-                                className="w-full h-full rounded-2xl shadow-2xl border-2 border-white/10"
-                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                                allowFullScreen
-                                referrerPolicy="strict-origin-when-cross-origin"
-                            ></iframe>
-                            {/* Per-user watermark — sibling overlay, pointer-events: none */}
-                            <VideoWatermark />
+                    <div className="w-full max-w-5xl animate-in zoom-in-95 duration-300">
+                        <div className="rounded-2xl overflow-hidden shadow-2xl border border-outline-variant/30">
+                            <VideoPlayer url={getPlayUrl(activeVideo)} />
                         </div>
                         <div className="mt-6 text-center">
-                            <h2 className="text-2xl font-bold text-white mb-2">{activeVideo.title}</h2>
-                            <p className="text-navy-200 max-w-2xl mx-auto">{activeVideo.description}</p>
+                            <h2 className="text-2xl font-headline font-extrabold text-on-surface mb-2">{activeVideo.title}</h2>
+                            {activeVideo.pdfFiles && activeVideo.pdfFiles.length > 0 && (
+                                <div className="mt-6 text-left bg-surface-container-low p-5 rounded-2xl border border-outline-variant/30 max-w-2xl mx-auto">
+                                    <h3 className="text-[10px] font-label font-bold text-primary mb-3 uppercase tracking-widest flex items-center gap-2"><FileText size={14} />Resources</h3>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                        {activeVideo.pdfFiles.map((pdf, i) => (
+                                            <a key={i} href={pdf.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 bg-surface-container-lowest px-4 py-3 rounded-xl border border-outline-variant/30 hover:border-primary/40 transition-colors group">
+                                                <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center group-hover:bg-primary group-hover:text-on-primary text-primary transition-colors"><FileText size={16} /></div>
+                                                <span className="flex-1 text-sm font-body font-medium text-on-surface truncate">{pdf.name}</span>
+                                                <Download size={16} className="text-on-surface/30 group-hover:text-primary transition-colors" />
+                                            </a>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>

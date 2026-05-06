@@ -49,7 +49,7 @@ function nextStreak(prev: ActivityStreak | undefined, today: string): ActivitySt
 }
 
 export const awardXp = onCall(
-    { region: 'us-central1', memory: '256MiB' },
+    { region: 'us-central1', memory: '256MiB', invoker: 'public' },
     async (request) => {
         const uid = request.auth?.uid;
         if (!uid) throw new HttpsError('unauthenticated', 'Sign in required.');

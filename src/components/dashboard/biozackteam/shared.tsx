@@ -112,24 +112,49 @@ export function ContinueAcademyCard({ courses, userProgress, onNavigate }: {
             onClick={() => onNavigate('/library')}
             style={{
                 position: 'relative', borderRadius: 20, overflow: 'hidden', cursor: 'pointer',
-                minHeight: 180, padding: '24px 24px 28px',
-                background: `linear-gradient(135deg, rgb(var(--primary) / 0.18), rgb(var(--surface-container)))`,
-                border: `1px solid ${t.outline}`,
+                minHeight: 220, padding: 0,
+                border: `1px solid ${t.outline}`, boxShadow: '0 8px 40px 0 rgba(0,0,0,0.25)',
             }}
         >
-            <Eyebrow>{tx('academyEyebrow')}</Eyebrow>
-            <h2 style={{ fontFamily: t.display, fontSize: 24, fontWeight: 400, color: t.onSurface, margin: '8px 0 12px', letterSpacing: '-0.02em' }}>
-                {tx('academyEmptyTitle')}
-            </h2>
-            <p style={{ fontFamily: t.body, fontSize: 13, color: t.onSurfaceVariant, margin: '0 0 16px' }}>
-                {tx('academyEmptySub')}
-            </p>
-            <span style={{
-                display: 'inline-block', padding: '8px 18px', borderRadius: 999,
-                background: goldGradient, color: t.onPrimaryFixed,
-                fontFamily: t.body, fontSize: 12, fontWeight: 600,
-                letterSpacing: '0.04em', textTransform: 'uppercase',
-            }}>{tx('browseAcademyCta')}</span>
+            {/* Layered background: classroom photo, goal-tinted gradient, dark fade for legibility. */}
+            <div style={{
+                position: 'absolute', inset: 0,
+                backgroundImage: 'url(/courses-hero.jpg)',
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+            }} />
+            <div style={{
+                position: 'absolute', inset: 0,
+                background: `linear-gradient(135deg, rgb(var(--primary) / 0.18), rgb(var(--surface-container)))`,
+                opacity: 0.55, mixBlendMode: 'multiply',
+            }} />
+            <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(0,0,0,0.10) 0%, rgba(0,0,0,0.50) 55%, rgba(0,0,0,0.82) 100%)' }} />
+            <div style={{ position: 'relative', zIndex: 1, padding: 24, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', minHeight: 220 }}>
+                <div style={{
+                    fontFamily: t.body, fontSize: 11, fontWeight: 600,
+                    letterSpacing: '0.16em', textTransform: 'uppercase',
+                    color: '#e6c364', marginBottom: 6,
+                }}>
+                    {tx('academyEyebrow')}
+                </div>
+                <h2 style={{
+                    fontFamily: t.display, fontSize: 22, fontWeight: 600,
+                    color: '#fff', margin: '0 0 4px', letterSpacing: '-0.02em',
+                    textShadow: '0 2px 12px rgba(0,0,0,0.5)',
+                }}>
+                    {tx('academyEmptyTitle')}
+                </h2>
+                <p style={{ fontFamily: t.body, fontSize: 12, color: 'rgba(255,255,255,0.82)', margin: '0 0 14px' }}>
+                    {tx('academyEmptySub')}
+                </p>
+                <span style={{
+                    alignSelf: 'flex-start',
+                    padding: '8px 18px', borderRadius: 999,
+                    background: goldGradient, color: t.onPrimaryFixed,
+                    fontFamily: t.body, fontSize: 12, fontWeight: 600,
+                    letterSpacing: '0.04em', textTransform: 'uppercase',
+                }}>{tx('browseAcademyCta')}</span>
+            </div>
         </div>
     );
 
@@ -152,9 +177,12 @@ export function ContinueAcademyCard({ courses, userProgress, onNavigate }: {
             <div
                 style={{
                     position: 'absolute', inset: 0,
+                    // Course-specific cover takes priority. Falls back to the
+                    // generic courses photo so the card never feels flat even
+                    // when a coach hasn't set a cover yet.
                     background: cover
                         ? `url(${cover}) center/cover no-repeat`
-                        : `linear-gradient(135deg, ${t.primary} 0%, ${t.primaryContainer} 100%)`,
+                        : `url(/courses-hero.jpg) center/cover no-repeat`,
                 }}
             />
             <div
@@ -249,17 +277,39 @@ export function TodayWorkoutCard({ activeProgram, getTodaysDay, todaysDayNumber,
     const goal = (activeProgram as { programGoal?: string }).programGoal;
     const heroBg = isRest ? GOAL_GRADIENT.rest : (GOAL_GRADIENT[goal ?? ''] ?? GOAL_GRADIENT.muscle_gain);
 
+    // Deep-link to today's day if a program is active and not a rest day.
+    // Rest days: stay on the program overview so user can see the full week.
+    const targetPath = isRest ? '/workouts' : `/workouts/day/${todaysDayNumber}`;
+
     return (
         <div
-            onClick={() => onNavigate('/workouts')}
+            onClick={() => onNavigate(targetPath)}
             style={{
                 position: 'relative', borderRadius: 20, overflow: 'hidden', cursor: 'pointer',
                 minHeight: 220, padding: 0,
                 border: `1px solid ${t.outline}`, boxShadow: '0 8px 40px 0 rgba(0,0,0,0.25)',
             }}
         >
-            <div style={{ position: 'absolute', inset: 0, background: heroBg }} />
-            <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.45) 60%, rgba(0,0,0,0.78) 100%)' }} />
+            {/* Layered background:
+                1. Hero photo (only on training days — rest days stay on the muted gradient).
+                2. Goal-themed gradient as a tinted overlay (multiply blend) so the
+                   photo still reads through but the card keeps its goal color.
+                3. Bottom darkening gradient for text legibility. */}
+            {!isRest && (
+                <div style={{
+                    position: 'absolute', inset: 0,
+                    backgroundImage: 'url(/workout-hero.jpg)',
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center',
+                }} />
+            )}
+            <div style={{
+                position: 'absolute', inset: 0,
+                background: heroBg,
+                opacity: isRest ? 1 : 0.55,
+                mixBlendMode: isRest ? 'normal' : 'multiply',
+            }} />
+            <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(0,0,0,0.10) 0%, rgba(0,0,0,0.50) 55%, rgba(0,0,0,0.82) 100%)' }} />
             <div style={{ position: 'relative', zIndex: 1, padding: 24, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: 220 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
                     <div style={{

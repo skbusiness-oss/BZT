@@ -1,8 +1,10 @@
+import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { useLanguage } from '../context/LanguageContext';
-import { Mail, Shield, Calendar, User, Award, Activity } from 'lucide-react';
+import { Mail, Shield, Calendar, User, Award, Activity, Edit2, Target } from 'lucide-react';
 import { ProgressPanel } from '../components/profile/ProgressPanel';
+import { CommunityBaselineForm } from '../components/profile/CommunityBaselineForm';
 
 function calculateAge(birthdate: string): number {
     const birth = new Date(birthdate);
@@ -30,9 +32,16 @@ export const Profile = () => {
     const { clients } = useData();
     const { t } = useLanguage();
 
+    // Auto-open of the Week 0 baseline now lives in AuthenticatedShell as a
+    // global gate — runs on first sign-in across any route. Here we only
+    // expose the manual "Edit profile info" entry point.
+    const [showBaseline, setShowBaseline] = useState(false);
+
     if (!user) return null;
 
     const client = clients.find(c => c.userId === user.id);
+    const isCommunity = user.role === 'community';
+    const hasBaseline = Boolean(user.communityProfileStartedAt);
 
     return (
         <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500 pt-4 pb-20">
@@ -69,6 +78,43 @@ export const Profile = () => {
                     </div>
                 </div>
             </section>
+
+            {/* Community Week 0 baseline — only for community users */}
+            {isCommunity && hasBaseline && (
+                <section className="bg-surface-container-low rounded-2xl p-8 ghost-border">
+                    <div className="flex items-center justify-between mb-6">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20">
+                                <Target size={20} className="text-primary" />
+                            </div>
+                            <h3 className="font-headline font-bold text-2xl text-on-surface tracking-tight">{t('personalInfo')}</h3>
+                        </div>
+                        <button
+                            onClick={() => setShowBaseline(true)}
+                            className="px-4 py-2 rounded-xl border border-outline-variant/30 text-on-surface/70 hover:text-primary hover:border-primary/40 text-[10px] font-label font-bold uppercase tracking-widest inline-flex items-center gap-2 transition-colors"
+                        >
+                            <Edit2 size={12} /> {t('edit')}
+                        </button>
+                    </div>
+                    <div className="space-y-1 bg-surface-container-lowest rounded-xl border border-outline-variant/30 p-2">
+                        {user.age !== undefined && (
+                            <Row icon={<Calendar size={18} />} label={t('age')} value={`${user.age} ${t('yearsOld')}`} isLast={false} />
+                        )}
+                        {user.heightCm !== undefined && (
+                            <Row icon={<User size={18} />} label={t('height')} value={`${user.heightCm} cm`} isLast={false} />
+                        )}
+                        {user.goal && (
+                            <Row icon={<Target size={18} />} label={t('goal')} value={t(`goal${user.goal.charAt(0).toUpperCase()}${user.goal.slice(1).replace(/_(\w)/g, (_, c) => c.toUpperCase())}` as any)} isLast={false} />
+                        )}
+                        {user.currentWeightKg !== undefined && (
+                            <Row icon={<Activity size={18} />} label={t('currentWeight')} value={`${user.currentWeightKg} kg`} isLast={false} />
+                        )}
+                        {user.targetWeightKg !== undefined && (
+                            <Row icon={<Award size={18} />} label="Target" value={`${user.targetWeightKg} kg`} isLast={true} />
+                        )}
+                    </div>
+                </section>
+            )}
 
             {/* Personal Details — only show for clients with data */}
             {client && (client.birthdate || client.gender || client.fitnessLevel) && (
@@ -131,6 +177,19 @@ export const Profile = () => {
             <div className="text-center text-on-surface/30 text-[10px] font-label font-bold uppercase tracking-widest pt-8">
                             BioZackTeam · v1.0.0
             </div>
+
+            {showBaseline && (
+                <CommunityBaselineForm
+                    onClose={() => setShowBaseline(false)}
+                    initial={hasBaseline ? {
+                        age: user.age,
+                        heightCm: user.heightCm,
+                        goal: user.goal,
+                        currentWeightKg: user.currentWeightKg,
+                        targetWeightKg: user.targetWeightKg,
+                    } : undefined}
+                />
+            )}
         </div>
     );
 };

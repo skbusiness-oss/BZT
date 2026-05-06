@@ -19,7 +19,8 @@ import { Settings } from './pages/Settings';
 import { AdminSetup } from './pages/AdminSetup';
 import { ErrorBoundary } from './components/shared/ErrorBoundary';
 import { TosModal } from './components/shared/TosModal';
-import React from 'react';
+import { CommunityBaselineForm } from './components/profile/CommunityBaselineForm';
+import React, { useState, useEffect } from 'react';
 
 import { Loader2 } from 'lucide-react';
 
@@ -49,15 +50,32 @@ const RequireActive = ({ children }: { children: React.ReactNode }) => {
     return <>{children}</>;
 };
 
-// Shell that gates the authenticated app behind a ToS acceptance modal.
-// Once tosAcceptedAt is present in the user doc, this just renders <Layout />.
+// Shell that gates the authenticated app behind two onboarding modals:
+//   1. ToS acceptance — until tosAcceptedAt is set on the user doc.
+//   2. Community Week 0 baseline — community users only, until
+//      communityProfileStartedAt is set.
+// Both are blocking overlays. ToS comes first; once it's accepted, the
+// baseline form takes over for community accounts.
 const AuthenticatedShell = () => {
     const { user } = useAuth();
     const showTos = !!user && !user.tosAcceptedAt;
+    const needsBaseline =
+        !!user && !showTos
+        && user.role === 'community'
+        && !user.communityProfileStartedAt;
+
+    // Controlled by needsBaseline initially; once user submits, the user doc
+    // updates → needsBaseline goes false → modal unmounts. We don't expose a
+    // close handler here because closing without saving would leave the user
+    // staring at a half-onboarded shell.
+    const [baselineOpen, setBaselineOpen] = useState(false);
+    useEffect(() => { setBaselineOpen(needsBaseline); }, [needsBaseline]);
+
     return (
         <>
             <Layout />
             {showTos && <TosModal />}
+            {baselineOpen && <CommunityBaselineForm onClose={() => setBaselineOpen(false)} />}
         </>
     );
 };

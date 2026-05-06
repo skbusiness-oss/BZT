@@ -1,5 +1,4 @@
 import { useState, useMemo } from 'react';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import {
     LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
@@ -8,7 +7,6 @@ import { useData } from '../../context/DataContext';
 import { useSelfLogs, BodyMeasurements as Meas } from '../../hooks/useSelfLogs';
 import { levelFromScore, levelProgress } from '../../lib/activityScore';
 import { CheckInCompare } from '../checkin/CheckInCompare';
-import { db } from '../../lib/firebase';
 
 const t = {
     surface: 'rgb(var(--surface))',
@@ -260,6 +258,102 @@ function ProgressSlider({ label, value, onChange, max = 10 }: {
     );
 }
 
+// ─── WeeklyCheckIn — community members only ─────────────────────────────────
+// Captures one row per week: weight + optional notes. Once submitted, the
+// log is server-side locked (Firestore rule blocks update/delete on
+// resource.data.locked == true). Next week, a fresh log opens.
+function WeeklyCheckIn({ existingLog, onSave }: {
+    existingLog?: { weight?: number; notes?: string; locked?: boolean };
+    onSave: (p: { weight: number; notes: string }) => Promise<void>;
+}) {
+    const [weight, setWeight] = useState<string>(existingLog?.weight?.toString() ?? '');
+    const [notes, setNotes] = useState<string>(existingLog?.notes ?? '');
+    const [saving, setSaving] = useState(false);
+    const [saved, setSaved] = useState(false);
+    const isLocked = existingLog?.locked === true;
+    const valid = Number(weight) > 20 && Number(weight) < 350;
+
+    const handleSave = async () => {
+        if (!valid || isLocked) return;
+        setSaving(true);
+        try {
+            await onSave({ weight: Number(weight), notes });
+            setSaved(true);
+            setTimeout(() => setSaved(false), 2000);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <Card variant="glass">
+            <Eyebrow>Weekly check-in</Eyebrow>
+            <h2 style={{ fontFamily: t.display, fontSize: 22, fontWeight: 400, color: t.onSurface, margin: '8px 0 8px', letterSpacing: '-0.02em' }}>
+                {isLocked ? 'This week is logged.' : 'Update your weight and progress once per week.'}
+            </h2>
+            {isLocked && (
+                <p style={{ fontFamily: t.body, fontSize: 12, color: t.onSurfaceVariant, marginBottom: 16 }}>
+                    Locked. Next entry opens at the start of the next week.
+                </p>
+            )}
+            <div style={{ marginBottom: 16, marginTop: 16 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+                    <span style={{ fontFamily: t.body, fontSize: 13, color: t.onSurface, fontWeight: 500 }}>Current weight</span>
+                    <span style={{ fontFamily: t.body, fontSize: 11, color: t.onSurfaceMuted, letterSpacing: '0.08em' }}>kg</span>
+                </div>
+                <input
+                    type="number" inputMode="decimal" step="0.1"
+                    value={weight} disabled={isLocked}
+                    onChange={(e) => setWeight(e.target.value)}
+                    placeholder="80.0"
+                    style={{
+                        width: '100%', padding: '12px 0',
+                        fontFamily: t.display, fontSize: 24, fontWeight: 400,
+                        color: isLocked ? t.onSurfaceMuted : t.onSurface,
+                        background: 'transparent', border: 'none',
+                        borderBottom: `2px solid ${t.outlineVariant}`,
+                        outline: 'none',
+                    }}
+                />
+            </div>
+            <div style={{ marginBottom: 24 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+                    <span style={{ fontFamily: t.body, fontSize: 13, color: t.onSurface, fontWeight: 500 }}>Notes</span>
+                    <span style={{ fontFamily: t.body, fontSize: 11, color: t.onSurfaceMuted, letterSpacing: '0.08em' }}>optional</span>
+                </div>
+                <textarea
+                    value={notes} disabled={isLocked} rows={3}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="How did this week go?"
+                    style={{
+                        width: '100%', padding: '10px 12px',
+                        fontFamily: t.body, fontSize: 13, color: t.onSurface,
+                        background: t.surfaceContainerLow, borderRadius: 12,
+                        border: `1px solid ${t.outlineVariant}`,
+                        outline: 'none', resize: 'vertical',
+                    }}
+                />
+            </div>
+            <button
+                onClick={handleSave}
+                disabled={saving || !valid || isLocked}
+                style={{
+                    width: '100%', padding: 14,
+                    fontFamily: t.body, fontSize: 13, fontWeight: 600,
+                    letterSpacing: '0.04em', textTransform: 'uppercase',
+                    color: t.onPrimaryFixed, background: isLocked ? t.surfaceContainerHighest : goldGradient,
+                    border: 'none', borderRadius: 999,
+                    cursor: (isLocked || !valid) ? 'not-allowed' : (saving ? 'wait' : 'pointer'),
+                    opacity: (isLocked || !valid) ? 0.4 : 1,
+                    transition: 'all 0.2s ease',
+                }}
+            >
+                {isLocked ? 'Locked' : saved ? '✓ Saved' : saving ? 'Saving…' : 'Submit & lock week'}
+            </button>
+        </Card>
+    );
+}
+
 function DailyCheckIn({ initial, onSave }: {
     initial?: { strength?: number; hunger?: number; energy?: number; cardioCalories?: number };
     onSave: (p: { strength: number; hunger: number; energy: number; cardioCalories: number }) => Promise<void>;
@@ -502,8 +596,10 @@ export const ProgressPanel = () => {
         [sortedByDate]
     );
 
-    const startWeight = weightHistory[0]?.weight ?? 0;
-    const goalWeight = startWeight > 0 ? Math.round(startWeight * 0.9) : 0;
+    // Real values: prefer the user's own baseline + target.
+    // Falls back to first weekly log for start, and "no goal" for target if unset.
+    const startWeight = user?.currentWeightKg ?? weightHistory[0]?.weight ?? 0;
+    const goalWeight = user?.targetWeightKg ?? 0;
 
     const latestMeas = useMemo(() => [...sortedByDate].reverse().find(l => l.measurements)?.measurements, [sortedByDate]);
     const baselineMeas = useMemo(() => sortedByDate.find(l => l.measurements)?.measurements, [sortedByDate]);
@@ -541,6 +637,24 @@ export const ProgressPanel = () => {
         await addLog({ date: todayISO(), measurements: m });
     };
 
+    // Community weekly check-in: id = weekStart (YYYY-MM-DD of Monday).
+    // Server-side lock via firestore.rules: once locked == true, the doc
+    // becomes immutable. The next week creates a fresh doc.
+    const isCommunity = user?.role === 'community';
+    const thisWeekStart = weekStartISO();
+    const thisWeekLog = logs.find(l => l.weekStart === thisWeekStart || l.id === thisWeekStart);
+
+    const handleWeeklyCheckIn = async (p: { weight: number; notes: string }) => {
+        await addLog({
+            date: thisWeekStart,
+            weight: p.weight,
+            notes: p.notes || undefined,
+            period: 'weekly',
+            weekStart: thisWeekStart,
+            locked: true,
+        });
+    };
+
     return (
         <>
             <style>{`
@@ -576,12 +690,22 @@ export const ProgressPanel = () => {
                     <MetricCard label="Logs" value={logs.length} sub="All time" />
                 </div>
 
-                {/* Daily check-in + measurements */}
+                {/* Check-in + measurements
+                    Community: weekly check-in (weight + notes, locks once submitted).
+                    Client: daily check-in (strength, hunger, energy, cardio).
+                */}
                 <div className="progress-panel-two-col" style={{
                     display: 'grid', gap: 24,
                     gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
                 }}>
-                    <DailyCheckIn initial={todayLog?.metrics} onSave={handleCheckIn} />
+                    {isCommunity ? (
+                        <WeeklyCheckIn
+                            existingLog={thisWeekLog ? { weight: thisWeekLog.weight, notes: thisWeekLog.notes, locked: thisWeekLog.locked } : undefined}
+                            onSave={handleWeeklyCheckIn}
+                        />
+                    ) : (
+                        <DailyCheckIn initial={todayLog?.metrics} onSave={handleCheckIn} />
+                    )}
                     <BodyMeasurementsCard current={latestMeas} baseline={baselineMeas} onUpdate={handleMeasUpdate} />
                 </div>
 

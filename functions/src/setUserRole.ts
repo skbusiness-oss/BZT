@@ -25,7 +25,7 @@ async function callerIsCoach(uid: string | undefined): Promise<boolean> {
 }
 
 export const setUserRole = onCall(
-    { region: 'us-central1', memory: '256MiB' },
+    { region: 'us-central1', memory: '256MiB', invoker: 'public' },
     async (request) => {
         const callerUid = request.auth?.uid;
         if (!callerUid) throw new HttpsError('unauthenticated', 'Sign in required.');

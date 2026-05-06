@@ -38,7 +38,7 @@ async function deleteCollection(path: string): Promise<void> {
 }
 
 export const deleteUser = onCall(
-    { region: 'us-central1', memory: '256MiB', timeoutSeconds: 120 },
+    { region: 'us-central1', memory: '256MiB', timeoutSeconds: 120, invoker: 'public' },
     async (request) => {
         const callerUid = request.auth?.uid;
         if (!callerUid) throw new HttpsError('unauthenticated', 'Sign in required.');
