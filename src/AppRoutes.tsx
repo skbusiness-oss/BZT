@@ -19,6 +19,7 @@ import { Community } from './pages/Community';
 import { Leaderboard } from './pages/Leaderboard';
 import { Settings } from './pages/Settings';
 import { AdminSetup } from './pages/AdminSetup';
+import { Pricing } from './pages/Pricing';
 import { ErrorBoundary } from './components/shared/ErrorBoundary';
 import { TosModal, tosAcceptedKey } from './components/shared/TosModal';
 import { CommunityBaselineForm } from './components/profile/CommunityBaselineForm';
@@ -101,6 +102,7 @@ export const AppRoutes = () => {
     return (
         <Routes>
             <Route path="/login" element={<Login />} />
+            <Route path="/pricing" element={<ErrorBoundary><Pricing /></ErrorBoundary>} />
             <Route path="/admin/setup" element={<ProtectedRoute allowedRoles={['admin']}><AdminSetup /></ProtectedRoute>} />
             <Route element={<ProtectedRoute><AuthenticatedShell /></ProtectedRoute>}>
                 <Route path="/" element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />

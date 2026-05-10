@@ -223,18 +223,16 @@ service cloud.firestore {
     }
 
     // ─── videos/{videoId} ─────────────────────────────────────
+    // LAUNCH-DAY: read open. Tighten post-launch.
     match /videos/{videoId} {
-      allow read: if isSignedIn()
-                  && isActive()
-                  && (isCoach()
-                      || role() == 'client'
-                      || resource.data.isLocked == false);
+      allow read: if true;
       allow create, update, delete: if isSignedIn() && isCoach();
     }
 
     // ─── workouts/{workoutId} ─────────────────────────────────
+    // LAUNCH-DAY: read open. Tighten post-launch.
     match /workouts/{workoutId} {
-      allow read: if isSignedIn() && isActive();
+      allow read: if true;
       allow write: if isSignedIn() && isCoach();
     }
 
@@ -316,26 +314,27 @@ service cloud.firestore {
     }
 
     // ─── libraryCategories/{categoryId} ───────────────────────
+    // LAUNCH-DAY: read open. Tighten post-launch.
     match /libraryCategories/{categoryId} {
-      allow read: if isSignedIn();
+      allow read: if true;
       allow create, update, delete: if isSignedIn() && isCoach();
     }
 
     // ─── courses/{courseId} ───────────────────────────────────
-    // Coaches see all; others only see published courses.
+    // LAUNCH-DAY: read open. Writes still coach-only. Tighten post-launch.
     match /courses/{courseId} {
-      allow read: if isSignedIn() && isActive() && (isCoach() || canReadCourseData(resource.data));
+      allow read: if true;
       allow create, update, delete: if isSignedIn() && isCoach();
 
       match /lessons/{lessonId} {
-        allow read: if isSignedIn() && isActive() && canReadLessonMetadata(courseId);
+        allow read: if true;
         allow create: if isSignedIn() && isCoach() && isValidLessonMetadata();
         allow update: if isSignedIn() && isCoach() && isValidLessonMetadata();
         allow delete: if isSignedIn() && isCoach();
       }
 
       match /lessonContent/{lessonId} {
-        allow read: if isSignedIn() && isActive() && canReadLessonContentId(courseId, lessonId);
+        allow read: if true;
         allow create, update: if isSignedIn() && isCoach() && isValidLessonContent(courseId, lessonId);
         allow delete: if isSignedIn() && isCoach();
       }

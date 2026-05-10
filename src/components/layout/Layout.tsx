@@ -22,6 +22,7 @@ import {
     Moon,
     Trophy,
     Utensils,
+    Sparkles,
     type LucideIcon,
 } from 'lucide-react';
 import clsx from 'clsx';
@@ -210,6 +211,13 @@ export const Layout = () => {
                         )}
                         <SidebarItem to="/profile" icon={UserCircle} label={t('navProfile')} onClick={closeSidebar} />
                         <SidebarItem to="/settings" icon={Settings} label={t('navSettings')} onClick={closeSidebar} />
+
+                        {/* Subscribe / Upgrade — community users see this prominently. Hidden
+                            for already-paying clients and coaches. Always points at the
+                            launch-day Stripe Payment Links via /pricing. */}
+                        {user.role === 'community' && (
+                            <SidebarItem to="/pricing" icon={Sparkles} label={t('navUpgrade') ?? 'Upgrade'} onClick={closeSidebar} />
+                        )}
                     </nav>
                 </div>
 
