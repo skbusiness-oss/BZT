@@ -13,10 +13,11 @@
  * The $299/yr tier is intentionally hidden — it only goes live AFTER the
  * 48-hour window closes, replacing the $199 tier.
  *
- * Messaging & savings calculations follow `Pricing Spec Final.pdf` exactly.
+ * Bilingual (EN/AR). Uses `useLanguage()` for both copy + dir attribute.
  */
 import { Sparkles, Check, Clock, Flame, Zap } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 
 const STRIPE_LINKS = {
     monthly: 'https://buy.stripe.com/4gMdR99d78eO6cR4g70VO05',
@@ -24,22 +25,22 @@ const STRIPE_LINKS = {
     coaching: 'https://buy.stripe.com/9B66oHexr8eOfNraEv0VO07',
 } as const;
 
-const PLATFORM_FEATURES = [
-    'Full Zero-to-Hero Academy library',
-    'Weekly live group calls',
-    'Community + monthly Q&A',
-    '100+ training programs',
-    'Diet calculator + meal plans',
-    'Progress tracking + check-ins',
-];
+const PLATFORM_FEATURE_KEYS = [
+    'pfFeatLibrary',
+    'pfFeatLiveCalls',
+    'pfFeatCommunity',
+    'pfFeatPrograms',
+    'pfFeatDietCalc',
+    'pfFeatProgress',
+] as const;
 
-const COACHING_FEATURES = [
-    'Direct messaging with Dr. Med',
-    'Custom training + diet protocols',
-    'Ongoing accountability',
-    'Platform access included — no extra fee',
-    'Priority response window',
-];
+const COACHING_FEATURE_KEYS = [
+    'coFeatDM',
+    'coFeatProtocols',
+    'coFeatAccountability',
+    'coFeatPlatform',
+    'coFeatPriority',
+] as const;
 
 function openCheckout(url: string) {
     window.open(url, '_blank', 'noopener,noreferrer');
@@ -47,34 +48,37 @@ function openCheckout(url: string) {
 
 export const Pricing = () => {
     const { user } = useAuth();
+    const { t, lang, isRTL } = useLanguage();
     const isLoggedIn = !!user;
 
     return (
-        <div className="animate-in fade-in duration-500 pb-24 max-w-7xl mx-auto px-4 md:px-0">
+        <div
+            dir={isRTL ? 'rtl' : 'ltr'}
+            className="animate-in fade-in duration-500 pb-24 max-w-7xl mx-auto px-4 md:px-0"
+        >
 
             {/* ── Hero ────────────────────────────────────────────── */}
             <section className="text-center mb-14 mt-4">
                 <span className="text-primary font-headline font-bold text-xs tracking-[0.3em] uppercase mb-3 block">
-                    Founding Member Launch
+                    {t('pricingEyebrow')}
                 </span>
                 <h1 className="font-display font-extrabold text-5xl md:text-7xl tracking-tighter leading-none text-on-surface mb-5">
-                    Just 5 dirhams
+                    {t('pricingHeroLine1')}
                     <span className="text-primary-container">.</span>
                     <br />
-                    <span className="text-primary">A day.</span>
+                    <span className="text-primary">{t('pricingHeroLine2')}</span>
                 </h1>
                 <p className="text-on-surface-variant font-body leading-relaxed max-w-xl mx-auto text-base md:text-lg mb-2">
-                    Everything Dr. Med has built — the full system, his community, and the protocols
-                    that built 200+ champions.
+                    {t('pricingHeroSub')}
                 </p>
                 <p className="text-on-surface/50 font-body text-xs uppercase tracking-[0.18em]">
-                    Cancel anytime · 7-day refund · Stripe checkout
+                    {t('pricingHeroFinePrint')}
                 </p>
 
                 {/* Launch window callout */}
                 <div className="inline-flex items-center gap-2 mt-7 px-5 py-2.5 rounded-full bg-primary/10 border border-primary/30 text-primary font-label text-[11px] font-bold uppercase tracking-[0.18em]">
                     <Clock size={14} />
-                    48-hour founding rate · locked for life
+                    {t('pricingLaunchBadge')}
                 </div>
             </section>
 
@@ -85,23 +89,23 @@ export const Pricing = () => {
                 <div className="rounded-2xl bg-surface-container-low border border-outline-variant/30 p-7 flex flex-col">
                     <div>
                         <span className="text-[10px] font-label font-bold uppercase tracking-[0.22em] text-on-surface-variant block mb-3">
-                            Pay as you go
+                            {t('tierMonthlyEyebrow')}
                         </span>
-                        <h2 className="font-headline font-extrabold text-2xl text-on-surface mb-1">Monthly</h2>
+                        <h2 className="font-headline font-extrabold text-2xl text-on-surface mb-1">{t('tierMonthlyTitle')}</h2>
                         <p className="text-xs text-on-surface-variant font-body mb-5">
-                            Recurring monthly. Cancel anytime.
+                            {t('tierMonthlyBlurb')}
                         </p>
                         <div className="flex items-baseline gap-1.5 mb-1">
                             <span className="font-display font-extrabold text-5xl text-on-surface tracking-tighter">$35</span>
-                            <span className="text-sm text-on-surface-variant font-body">/ month</span>
+                            <span className="text-sm text-on-surface-variant font-body">{t('tierMonthlyUnit')}</span>
                         </div>
-                        <div className="text-[11px] text-on-surface/40 font-body mb-6">USD · billed monthly</div>
+                        <div className="text-[11px] text-on-surface/40 font-body mb-6">{t('tierMonthlyBilling')}</div>
 
                         <ul className="space-y-2.5 mb-7">
-                            {PLATFORM_FEATURES.map(f => (
-                                <li key={f} className="flex items-start gap-2.5 text-sm font-body text-on-surface/85">
+                            {PLATFORM_FEATURE_KEYS.map(k => (
+                                <li key={k} className="flex items-start gap-2.5 text-sm font-body text-on-surface/85">
                                     <Check size={15} className="text-primary shrink-0 mt-0.5" />
-                                    <span>{f}</span>
+                                    <span>{t(k)}</span>
                                 </li>
                             ))}
                         </ul>
@@ -111,7 +115,7 @@ export const Pricing = () => {
                         onClick={() => openCheckout(STRIPE_LINKS.monthly)}
                         className="mt-auto w-full py-3.5 rounded-xl font-label text-[11px] font-bold uppercase tracking-[0.18em] bg-surface-container hover:bg-surface-container-high text-on-surface border border-outline-variant/40 transition-all active:scale-[0.99]"
                     >
-                        Start monthly
+                        {t('tierMonthlyCta')}
                     </button>
                 </div>
 
@@ -124,39 +128,39 @@ export const Pricing = () => {
                     {/* Badge */}
                     <div className="relative -mt-1 -mx-1 mb-3">
                         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-primary to-primary-container text-on-primary font-label text-[10px] font-extrabold uppercase tracking-[0.18em]">
-                            <Flame size={11} /> Founding rate · 48h only
+                            <Flame size={11} /> {t('tierFoundingBadge')}
                         </span>
                     </div>
 
                     <div className="relative">
                         <span className="text-[10px] font-label font-bold uppercase tracking-[0.22em] text-primary block mb-3">
-                            Yearly · Founding rate
+                            {t('tierFoundingEyebrow')}
                         </span>
-                        <h2 className="font-headline font-extrabold text-2xl text-on-surface mb-1">Yearly Founding</h2>
+                        <h2 className="font-headline font-extrabold text-2xl text-on-surface mb-1">{t('tierFoundingTitle')}</h2>
                         <p className="text-xs text-on-surface-variant font-body mb-5">
-                            Locked for life. As long as you stay subscribed, you keep $199/yr forever.
+                            {t('tierFoundingBlurb')}
                         </p>
                         <div className="flex items-baseline gap-1.5 mb-1">
                             <span className="font-display font-extrabold text-5xl text-primary tracking-tighter">$199</span>
-                            <span className="text-sm text-on-surface-variant font-body">/ year</span>
+                            <span className="text-sm text-on-surface-variant font-body">{t('tierFoundingUnit')}</span>
                         </div>
                         <div className="text-[11px] text-on-surface-variant font-body mb-1">
-                            ≈ <span className="text-primary font-bold">$0.55 / day</span> · just <span className="text-primary font-bold">5 MAD / day</span>
+                            {t('tierFoundingDailyPrefix')} <span className="text-primary font-bold">{t('tierFoundingDailyUsd')}</span> {t('tierFoundingDailyJoin')} <span className="text-primary font-bold">{t('tierFoundingDailyMad')}</span>
                         </div>
                         <div className="text-[11px] text-emerald-400 font-body font-bold mb-6">
-                            Save $221 vs monthly · 53% off
+                            {t('tierFoundingSavings')}
                         </div>
 
                         <ul className="space-y-2.5 mb-7">
-                            {PLATFORM_FEATURES.map(f => (
-                                <li key={f} className="flex items-start gap-2.5 text-sm font-body text-on-surface/85">
+                            {PLATFORM_FEATURE_KEYS.map(k => (
+                                <li key={k} className="flex items-start gap-2.5 text-sm font-body text-on-surface/85">
                                     <Check size={15} className="text-primary shrink-0 mt-0.5" />
-                                    <span>{f}</span>
+                                    <span>{t(k)}</span>
                                 </li>
                             ))}
                             <li className="flex items-start gap-2.5 text-sm font-body text-primary font-bold">
                                 <Sparkles size={15} className="text-primary shrink-0 mt-0.5" />
-                                <span>Founding-member rate locked for life</span>
+                                <span>{t('tierFoundingLockedBullet')}</span>
                             </li>
                         </ul>
                     </div>
@@ -165,36 +169,35 @@ export const Pricing = () => {
                         onClick={() => openCheckout(STRIPE_LINKS.yearlyLaunch)}
                         className="relative mt-auto w-full py-3.5 rounded-xl font-label text-[11px] font-bold uppercase tracking-[0.18em] bg-gradient-to-r from-primary to-primary-container text-on-primary shadow-lg shadow-primary/30 hover:shadow-primary/40 transition-all active:scale-[0.99]"
                     >
-                        Lock in $199 · 48h only
+                        {t('tierFoundingCta')}
                     </button>
                 </div>
 
                 {/* COACHING ── $149 */}
                 <div className="rounded-2xl bg-surface-container-low border border-outline-variant/30 p-7 flex flex-col relative overflow-hidden">
-                    {/* Subtle accent for coaching */}
                     <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/5 rounded-full blur-3xl" />
 
                     <div className="relative">
                         <span className="text-[10px] font-label font-bold uppercase tracking-[0.22em] text-purple-400 block mb-3">
-                            Personal Coaching
+                            {t('tierCoachingEyebrow')}
                         </span>
-                        <h2 className="font-headline font-extrabold text-2xl text-on-surface mb-1">Coaching with Med</h2>
+                        <h2 className="font-headline font-extrabold text-2xl text-on-surface mb-1">{t('tierCoachingTitle')}</h2>
                         <p className="text-xs text-on-surface-variant font-body mb-5">
-                            Direct messages, custom protocols, ongoing accountability.
+                            {t('tierCoachingBlurb')}
                         </p>
                         <div className="flex items-baseline gap-1.5 mb-1">
                             <span className="font-display font-extrabold text-5xl text-on-surface tracking-tighter">$149</span>
-                            <span className="text-sm text-on-surface-variant font-body">/ month</span>
+                            <span className="text-sm text-on-surface-variant font-body">{t('tierCoachingUnit')}</span>
                         </div>
                         <div className="text-[11px] text-on-surface/40 font-body mb-6">
-                            Platform access included · no extra fee
+                            {t('tierCoachingBundled')}
                         </div>
 
                         <ul className="space-y-2.5 mb-7">
-                            {COACHING_FEATURES.map(f => (
-                                <li key={f} className="flex items-start gap-2.5 text-sm font-body text-on-surface/85">
+                            {COACHING_FEATURE_KEYS.map(k => (
+                                <li key={k} className="flex items-start gap-2.5 text-sm font-body text-on-surface/85">
                                     <Check size={15} className="text-purple-400 shrink-0 mt-0.5" />
-                                    <span>{f}</span>
+                                    <span>{t(k)}</span>
                                 </li>
                             ))}
                         </ul>
@@ -204,7 +207,7 @@ export const Pricing = () => {
                         onClick={() => openCheckout(STRIPE_LINKS.coaching)}
                         className="relative mt-auto w-full py-3.5 rounded-xl font-label text-[11px] font-bold uppercase tracking-[0.18em] bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 border border-purple-400/40 transition-all active:scale-[0.99]"
                     >
-                        Start coaching
+                        {t('tierCoachingCta')}
                     </button>
                 </div>
             </section>
@@ -216,17 +219,15 @@ export const Pricing = () => {
                         <Zap size={20} className="text-primary" />
                     </div>
                     <div className="min-w-0">
-                        <h3 className="font-headline font-extrabold text-lg text-on-surface mb-2">How it works</h3>
-                        <ol className="space-y-2 text-sm font-body text-on-surface/80 list-decimal pl-5">
-                            <li>Click your tier above → Stripe checkout opens in a new tab.</li>
-                            <li>Pay with card, Apple Pay, or Google Pay — Stripe handles everything secure.</li>
-                            <li>{isLoggedIn
-                                ? 'Your account is upgraded by the team within 1 hour. You\'ll get an email confirming access.'
-                                : 'Create your account at /login first, then come back. Your account is upgraded within 1 hour of payment.'}</li>
-                            <li>Sign in to the platform — full access unlocked.</li>
+                        <h3 className="font-headline font-extrabold text-lg text-on-surface mb-2">{t('pricingHowTitle')}</h3>
+                        <ol className={`space-y-2 text-sm font-body text-on-surface/80 list-decimal ${isRTL ? 'pr-5' : 'pl-5'}`}>
+                            <li>{t('pricingHowStep1')}</li>
+                            <li>{t('pricingHowStep2')}</li>
+                            <li>{isLoggedIn ? t('pricingHowStep3LoggedIn') : t('pricingHowStep3Guest')}</li>
+                            <li>{t('pricingHowStep4')}</li>
                         </ol>
                         <p className="mt-4 text-[12px] text-on-surface/50 font-body">
-                            7-day no-questions refund. Email <a href="mailto:zack@biozack.com" className="text-primary hover:underline">zack@biozack.com</a> for support.
+                            {t('pricingHowSupport')} <a href="mailto:zack@biozack.com" className="text-primary hover:underline">zack@biozack.com</a>{lang === 'ar' ? '' : ' '}{t('pricingHowSupportSuffix')}
                         </p>
                     </div>
                 </div>
@@ -234,9 +235,7 @@ export const Pricing = () => {
 
             {/* ── Footer fine print ────────────────────────────── */}
             <p className="text-center text-[11px] font-body text-on-surface/40 leading-relaxed max-w-2xl mx-auto">
-                Prices in USD. Stripe Tax automatically handles VAT for international buyers.
-                Yearly subscribers can cancel anytime — access continues until the end of the paid period.
-                Founding-member rate persists on every renewal as long as the subscription stays active.
+                {t('pricingFinePrint')}
             </p>
         </div>
     );

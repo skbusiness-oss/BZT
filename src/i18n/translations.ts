@@ -960,6 +960,76 @@ export const translations = {
     weeksActiveLabel:          { en: 'Weeks active',        ar: 'أسابيع النشاط' },
     totalChangeLabel:          { en: 'Total change',        ar: 'إجمالي التغيير' },
     checkInsReviewedLabel:     { en: 'Check-ins reviewed',  ar: 'تسجيلات مراجَعة' },
+
+    // ── Pricing / Subscribe (launch-day, Stripe Payment Links) ────
+    navUpgrade:                { en: 'Upgrade',                                          ar: 'الترقية' },
+
+    // Hero
+    pricingEyebrow:            { en: 'Founding Member Launch',                           ar: 'إطلاق الأعضاء المؤسسين' },
+    pricingHeroLine1:          { en: 'Just 5 dirhams',                                   ar: 'فقط 5 دراهم' },
+    pricingHeroLine2:          { en: 'A day.',                                           ar: 'في اليوم.' },
+    pricingHeroSub:            { en: 'Everything Dr. Med has built — the full system, his community, and the protocols that built 200+ champions.', ar: 'كل ما بناه دكتور ميد — النظام الكامل، مجتمعه، والبروتوكولات التي صنعت أكثر من 200 بطل.' },
+    pricingHeroFinePrint:      { en: 'Cancel anytime · 7-day refund · Stripe checkout',  ar: 'الإلغاء في أي وقت · استرداد خلال 7 أيام · الدفع عبر سترايب' },
+    pricingLaunchBadge:        { en: '48-hour founding rate · locked for life',          ar: 'سعر تأسيسي لمدة 48 ساعة · مثبّت مدى الحياة' },
+
+    // Tier · Monthly
+    tierMonthlyEyebrow:        { en: 'Pay as you go',                                    ar: 'ادفع شهرياً' },
+    tierMonthlyTitle:          { en: 'Monthly',                                          ar: 'شهري' },
+    tierMonthlyBlurb:          { en: 'Recurring monthly. Cancel anytime.',               ar: 'اشتراك شهري متجدد. الإلغاء في أي وقت.' },
+    tierMonthlyUnit:           { en: '/ month',                                          ar: '/ الشهر' },
+    tierMonthlyBilling:        { en: 'USD · billed monthly',                             ar: 'بالدولار · فوترة شهرية' },
+    tierMonthlyCta:            { en: 'Start monthly',                                    ar: 'ابدأ الاشتراك الشهري' },
+
+    // Tier · Yearly Founding ($199)
+    tierFoundingBadge:         { en: 'Founding rate · 48h only',                         ar: 'سعر تأسيسي · 48 ساعة فقط' },
+    tierFoundingEyebrow:       { en: 'Yearly · Founding rate',                           ar: 'سنوي · سعر تأسيسي' },
+    tierFoundingTitle:         { en: 'Yearly Founding',                                  ar: 'العضوية التأسيسية السنوية' },
+    tierFoundingBlurb:         { en: 'Locked for life. As long as you stay subscribed, you keep $199/yr forever.', ar: 'مثبّت مدى الحياة. ما دمت مشتركاً، تبقى على 199$/سنة إلى الأبد.' },
+    tierFoundingUnit:          { en: '/ year',                                           ar: '/ السنة' },
+    tierFoundingDailyPrefix:   { en: '≈',                                                ar: '≈' },
+    tierFoundingDailyUsd:      { en: '$0.55 / day',                                      ar: '0.55$ في اليوم' },
+    tierFoundingDailyMad:      { en: '5 MAD / day',                                      ar: '5 درهم في اليوم' },
+    tierFoundingDailyJoin:     { en: '· just',                                           ar: '· فقط' },
+    tierFoundingSavings:       { en: 'Save $221 vs monthly · 53% off',                   ar: 'وفّر 221$ مقارنة بالشهري · خصم 53٪' },
+    tierFoundingLockedBullet:  { en: 'Founding-member rate locked for life',             ar: 'سعر العضو المؤسس مثبّت مدى الحياة' },
+    tierFoundingCta:           { en: 'Lock in $199 · 48h only',                          ar: 'ثبّت 199$ · 48 ساعة فقط' },
+
+    // Tier · Coaching ($149)
+    tierCoachingEyebrow:       { en: 'Personal Coaching',                                ar: 'تدريب شخصي' },
+    tierCoachingTitle:         { en: 'Coaching with Med',                                ar: 'تدريب مع ميد' },
+    tierCoachingBlurb:         { en: 'Direct messages, custom protocols, ongoing accountability.', ar: 'رسائل مباشرة، بروتوكولات مخصّصة، متابعة مستمرة.' },
+    tierCoachingUnit:          { en: '/ month',                                          ar: '/ الشهر' },
+    tierCoachingBundled:       { en: 'Platform access included · no extra fee',          ar: 'الوصول إلى المنصّة مشمول · بدون رسوم إضافية' },
+    tierCoachingCta:           { en: 'Start coaching',                                   ar: 'ابدأ التدريب' },
+
+    // Platform feature bullets (shown on Monthly + Yearly Founding cards)
+    pfFeatLibrary:             { en: 'Full Zero-to-Hero Academy library',                ar: 'مكتبة أكاديمية Zero-to-Hero الكاملة' },
+    pfFeatLiveCalls:           { en: 'Weekly live group calls',                          ar: 'مكالمات جماعية مباشرة أسبوعية' },
+    pfFeatCommunity:           { en: 'Community + monthly Q&A',                          ar: 'المجتمع + جلسة أسئلة وأجوبة شهرية' },
+    pfFeatPrograms:            { en: '100+ training programs',                           ar: 'أكثر من 100 برنامج تدريبي' },
+    pfFeatDietCalc:            { en: 'Diet calculator + meal plans',                     ar: 'حاسبة الحمية + خطط الوجبات' },
+    pfFeatProgress:            { en: 'Progress tracking + check-ins',                    ar: 'متابعة التقدم + التسجيلات الأسبوعية' },
+
+    // Coaching feature bullets
+    coFeatDM:                  { en: 'Direct messaging with Dr. Med',                    ar: 'مراسلة مباشرة مع دكتور ميد' },
+    coFeatProtocols:           { en: 'Custom training + diet protocols',                 ar: 'بروتوكولات تدريب وحمية مخصّصة' },
+    coFeatAccountability:      { en: 'Ongoing accountability',                           ar: 'متابعة ومحاسبة مستمرة' },
+    coFeatPlatform:            { en: 'Platform access included — no extra fee',          ar: 'الوصول إلى المنصّة مشمول — بدون رسوم إضافية' },
+    coFeatPriority:            { en: 'Priority response window',                         ar: 'أولوية في الردود' },
+
+    // How-it-works
+    pricingHowTitle:           { en: 'How it works',                                     ar: 'كيف يعمل الاشتراك' },
+    pricingHowStep1:           { en: 'Click your tier above → Stripe checkout opens in a new tab.', ar: 'اضغط على باقتك بالأعلى → ستفتح صفحة الدفع الآمنة عبر سترايب في نافذة جديدة.' },
+    pricingHowStep2:           { en: 'Pay with card, Apple Pay, or Google Pay — Stripe handles everything secure.', ar: 'ادفع ببطاقة، Apple Pay أو Google Pay — كل العملية آمنة عبر سترايب.' },
+    pricingHowStep3LoggedIn:   { en: 'Your account is upgraded by the team within 1 hour. You\'ll get an email confirming access.', ar: 'سيقوم الفريق بترقية حسابك خلال ساعة. سيصلك بريد إلكتروني بتأكيد الوصول.' },
+    pricingHowStep3Guest:      { en: 'Create your account at /login first, then come back. Your account is upgraded within 1 hour of payment.', ar: 'أنشئ حسابك من /login أولاً ثم عُد. سيتم ترقية حسابك خلال ساعة من الدفع.' },
+    pricingHowStep4:           { en: 'Sign in to the platform — full access unlocked.', ar: 'سجّل الدخول إلى المنصّة — الوصول الكامل مفعّل.' },
+    pricingHowSupport:         { en: '7-day no-questions refund. Email',                 ar: 'استرداد خلال 7 أيام بدون أسئلة. للدعم راسل' },
+    pricingHowSupportSuffix:   { en: 'for support.',                                     ar: '.' },
+
+    // Footer fine print
+    pricingFinePrint:          { en: 'Prices in USD. Stripe Tax automatically handles VAT for international buyers. Yearly subscribers can cancel anytime — access continues until the end of the paid period. Founding-member rate persists on every renewal as long as the subscription stays active.', ar: 'الأسعار بالدولار. ضريبة سترايب تتعامل تلقائياً مع ضريبة القيمة المضافة للمشترين الدوليين. يمكن للمشتركين السنويين الإلغاء في أي وقت — يستمر الوصول حتى نهاية الفترة المدفوعة. يبقى سعر العضو المؤسس عند كل تجديد ما دام الاشتراك فعّالاً.' },
+
 } as const;
 
 export type TranslationKey = keyof typeof translations;
