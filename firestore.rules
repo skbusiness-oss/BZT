@@ -29,6 +29,16 @@ service cloud.firestore {
       return request.auth.uid == uid;
     }
 
+    // Belt-and-suspenders gate: a user with `disabled == true` must not be
+    // able to read shared content during the brief window between being
+    // banned and the AuthContext live-subscribe signing them out. We don't
+    // gate `users/{uid}` itself with this — the user needs to read their
+    // own doc to discover they're disabled and trigger the sign-out.
+    function isActive() {
+      return !exists(/databases/$(database)/documents/users/$(request.auth.uid))
+          || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.disabled != true;
+    }
+
     function isValidString(s, maxLen) {
       return s is string && s.size() > 0 && s.size() <= maxLen;
     }
@@ -130,7 +140,7 @@ service cloud.firestore {
       // Community/client self-tracked weight + body measurements.
       // Owner: full read/write. Coach/admin: read-only (view-as).
       match /selfLogs/{logId} {
-        allow read: if isSignedIn() && (isOwner(uid) || isCoach());
+        allow read: if isSignedIn() && isActive() && (isOwner(uid) || isCoach());
         allow create: if isSignedIn() && isOwner(uid)
                               && request.resource.data.keys().hasOnly(
                                    ['date', 'weight', 'measurements', 'metrics', 'notes',
@@ -149,6 +159,7 @@ service cloud.firestore {
     // ─── clients/{clientId} ───────────────────────────────────
     match /clients/{clientId} {
       allow read: if isSignedIn()
+                  && isActive()
                   && (resource.data.userId == request.auth.uid || isCoach());
       allow create, delete: if isSignedIn() && isCoach();
       allow update: if isSignedIn()
@@ -168,6 +179,7 @@ service cloud.firestore {
     // ─── checkIns/{checkInId} ─────────────────────────────────
     match /checkIns/{checkInId} {
       allow read: if isSignedIn()
+                  && isActive()
                   && (resource.data.clientId == request.auth.uid || isCoach());
 
       // Client can only create a checkIn for themselves; also enforce userId matches
@@ -197,6 +209,7 @@ service cloud.firestore {
     // ─── videos/{videoId} ─────────────────────────────────────
     match /videos/{videoId} {
       allow read: if isSignedIn()
+                  && isActive()
                   && (isCoach()
                       || role() == 'client'
                       || resource.data.isLocked == false);
@@ -205,13 +218,14 @@ service cloud.firestore {
 
     // ─── workouts/{workoutId} ─────────────────────────────────
     match /workouts/{workoutId} {
-      allow read: if isSignedIn();
+      allow read: if isSignedIn() && isActive();
       allow write: if isSignedIn() && isCoach();
     }
 
     // ─── messages/{messageId} ─────────────────────────────────
     match /messages/{messageId} {
       allow read: if isSignedIn()
+                  && isActive()
                   && (resource.data.senderId == request.auth.uid
                       || resource.data.receiverId == request.auth.uid);
 
@@ -229,7 +243,7 @@ service cloud.firestore {
 
     // ─── posts/{postId} ───────────────────────────────────────
     match /posts/{postId} {
-      allow read: if isSignedIn();
+      allow read: if isSignedIn() && isActive();
 
       // authorId must match caller; authorRole must match caller's actual role
       // (prevents spoofing e.g. a community member posting as 'coach')
@@ -248,7 +262,7 @@ service cloud.firestore {
 
       // ── comments ────────────────────────────────────────────
       match /comments/{commentId} {
-        allow read: if isSignedIn();
+        allow read: if isSignedIn() && isActive();
 
         allow create: if isSignedIn()
                       && request.resource.data.authorId == request.auth.uid
@@ -277,18 +291,18 @@ service cloud.firestore {
     // ─── courses/{courseId} ───────────────────────────────────
     // Coaches see all; others only see published courses.
     match /courses/{courseId} {
-      allow read: if isSignedIn() && (isCoach() || canReadCourseData(resource.data));
+      allow read: if isSignedIn() && isActive() && (isCoach() || canReadCourseData(resource.data));
       allow create, update, delete: if isSignedIn() && isCoach();
 
       match /lessons/{lessonId} {
-        allow read: if isSignedIn() && canReadLessonMetadata(courseId);
+        allow read: if isSignedIn() && isActive() && canReadLessonMetadata(courseId);
         allow create: if isSignedIn() && isCoach() && isValidLessonMetadata();
         allow update: if isSignedIn() && isCoach() && isValidLessonMetadata();
         allow delete: if isSignedIn() && isCoach();
       }
 
       match /lessonContent/{lessonId} {
-        allow read: if isSignedIn() && canReadLessonContentId(courseId, lessonId);
+        allow read: if isSignedIn() && isActive() && canReadLessonContentId(courseId, lessonId);
         allow create, update: if isSignedIn() && isCoach() && isValidLessonContent(courseId, lessonId);
         allow delete: if isSignedIn() && isCoach();
       }
@@ -297,7 +311,7 @@ service cloud.firestore {
     // ─── userLessonProgress/{progressId} ─────────────────────
     // progressId = "{userId}_{courseId}_{lessonId}"
     match /userLessonProgress/{progressId} {
-      allow read: if isSignedIn() && (request.auth.uid == resource.data.userId || isCoach());
+      allow read: if isSignedIn() && isActive() && (request.auth.uid == resource.data.userId || isCoach());
       allow create: if isSignedIn()
                     && progressId == request.auth.uid + '_' + request.resource.data.courseId + '_' + request.resource.data.lessonId
                     && isValidLessonProgressWrite(progressId);
@@ -313,7 +327,7 @@ service cloud.firestore {
     // ─── userCourseProgress/{progressId} ─────────────────────
     // Legacy summary collection; course progress is now derived from userLessonProgress.
     match /userCourseProgress/{progressId} {
-      allow read: if isSignedIn() && (request.auth.uid == resource.data.userId || isCoach());
+      allow read: if isSignedIn() && isActive() && (request.auth.uid == resource.data.userId || isCoach());
       allow create, update: if isSignedIn() && isCoach();
       allow delete: if false;
     }
@@ -333,9 +347,12 @@ service cloud.firestore {
 
     // ─── deletionLogs/{uid} ───────────────────────────────────
     // Per-user deletion log written when coach bans a community member.
-    // One doc per banned uid (overwritable on re-ban). Coach-only.
+    // One doc per banned uid (overwritable on re-ban). Owner can read their
+    // own tombstone (the AuthContext sign-in tombstone gate needs this);
+    // create/update remain coach-only.
     match /deletionLogs/{uid} {
-      allow read, create, update: if isSignedIn() && isCoach();
+      allow read: if isSignedIn() && (isOwner(uid) || isCoach());
+      allow create, update: if isSignedIn() && isCoach();
       allow delete: if false;
     }
 
@@ -343,8 +360,29 @@ service cloud.firestore {
     // Stores each user's active training program.
     // Users manage their own; coaches can assign to any user.
     match /userPrograms/{userId} {
-      allow read: if isSignedIn() && (isOwner(userId) || isCoach());
+      allow read: if isSignedIn() && isActive() && (isOwner(userId) || isCoach());
       allow write: if isSignedIn() && (isOwner(userId) || isCoach());
+    }
+
+    // ─── userDiets/{userId} ───────────────────────────────────
+    // Stores each user's currently-assigned diet plan.
+    // Owner self-assigns via the diet wizard; coaches assign + swap on
+    // weekly check-in. Mirrors userPrograms — same trust model, no
+    // shape constraint (the snapshot insulates the user from catalog edits).
+    match /userDiets/{userId} {
+      allow read: if isSignedIn() && isActive() && (isOwner(userId) || isCoach());
+      allow write: if isSignedIn() && (isOwner(userId) || isCoach());
+    }
+
+    // ─── audienceProfiles/{anonId} ────────────────────────────
+    // Post-deletion ICP analytics snapshots. Written ONLY by the
+    // deleteUser Cloud Function (server-side admin SDK bypasses these
+    // rules). Coaches/admins can read for analytics; nobody can write
+    // or delete from the client SDK. The anonId is a random id, NOT
+    // the original uid — re-identification is impossible by design.
+    match /audienceProfiles/{anonId} {
+      allow read: if isCoach();
+      allow write: if false;
     }
   }
 }

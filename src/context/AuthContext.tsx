@@ -48,6 +48,24 @@ const secondaryAuth = getAuth(secondaryApp);
 
 const IDLE_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 const LAST_ACTIVE_KEY = 'bzt-lastActiveAt';
+/** Skip the visibility-driven token refresh for this many ms after a
+ *  fresh sign-in. iOS PWAs flip visibility transiently during autofill
+ *  / FaceID, and a force-refresh in that window has been observed to
+ *  fail with transient errors and trigger a spurious sign-out
+ *  (a.k.a. the "double-login" bug). */
+const POST_SIGNIN_GRACE_MS = 60 * 1000;
+/** Auth error codes that genuinely warrant signing the user out. Any
+ *  other failure from `getIdToken(true)` is treated as transient
+ *  (network, keychain race) and ignored. */
+const HARD_AUTH_ERROR_CODES = new Set([
+  'auth/user-token-expired',
+  'auth/user-disabled',
+  'auth/user-not-found',
+  'auth/id-token-expired',
+  'auth/id-token-revoked',
+  'auth/invalid-user-token',
+  'auth/requires-recent-login',
+]);
 
 const touchLastActive = () => {
   try {
@@ -103,6 +121,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [freshUserDocLoaded, setFreshUserDocLoaded] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const userDocUnsubRef = useRef<Unsubscribe | null>(null);
+  /** Wall-clock ms when the most recent successful signIn() resolved.
+   *  Used to gate the visibility-driven token refresh — see #3 fix. */
+  const signedInAtRef = useRef<number>(0);
 
   const clearAuthError = () => setAuthError(null);
 
@@ -152,30 +173,72 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return;
       }
 
-      // Make sure the doc exists before subscribing. Self-registered community
-      // users may sign in with no Firestore profile yet.
+      // Tombstone gate (public-launch hardening): if `deletionLogs/{uid}`
+      // exists for this uid the account was previously deleted by a coach.
+      // We MUST fail-closed: sign them out and refuse to proceed. The
+      // earlier version swallowed all errors here, including
+      // permission-denied — which silently let deleted accounts re-sign-in
+      // any time the rules read failed. Now we treat permission-denied /
+      // unavailable as a *gate failure* (refuse sign-in) and only allow
+      // the flow to continue if we got a definitive "no tombstone".
       try {
-        const initialSnap = await getDoc(doc(db, 'users', firebaseUser.uid));
-        if (!initialSnap.exists()) {
-          const isPlatformOwner = firebaseUser.email === 'souktanimohamed@gmail.com';
-          const initialRole: Role = isPlatformOwner ? 'admin' : 'community';
-
-          const defaultProfile = {
-            displayName:
-              firebaseUser.displayName ||
-              firebaseUser.email?.split('@')[0] ||
-              'User',
-            email: firebaseUser.email || '',
-            role: initialRole,
-            createdAt: serverTimestamp(),
-            macros: null,
-            stripeCustomerId: null,
-          };
-          await setDoc(doc(db, 'users', firebaseUser.uid), defaultProfile);
+        const tombstone = await getDoc(doc(db, 'deletionLogs', firebaseUser.uid));
+        if (tombstone.exists()) {
+          setAuthError('This account has been removed. Please contact your coach.');
+          await firebaseSignOut(auth).catch(() => { /* ignore */ });
+          setUser(null);
+          setFreshUserDocLoaded(true);
+          setLoading(false);
+          return;
         }
-      } catch {
-        // If we can't read/write the user doc (rules / network), still try to
-        // subscribe below; the listener will surface the real error if any.
+      } catch (err) {
+        // Fail-closed. Anything other than a confirmed "no tombstone" is
+        // treated as a sign-in refusal — better to lock out a real user
+        // for a few seconds during a network hiccup than to let a
+        // tombstoned account back in.
+        // eslint-disable-next-line no-console
+        console.warn('[AuthContext] Tombstone check failed — refusing sign-in:', err);
+        setAuthError('Could not verify account status. Please try again.');
+        await firebaseSignOut(auth).catch(() => { /* ignore */ });
+        setUser(null);
+        setFreshUserDocLoaded(true);
+        setLoading(false);
+        return;
+      }
+
+      // We do NOT auto-create users/{uid} on sign-in anymore for arbitrary
+      // accounts. The previous behavior — silently creating a
+      // `defaultProfile` whenever the doc was missing — was an
+      // account-resurrection vector: a user whose Firestore doc was wiped
+      // but whose Auth record survived would get a brand-new `community`
+      // profile on next sign-in, bypassing any out-of-band deletion that
+      // didn't write a tombstone. Account creation now happens exactly
+      // once per user, in coach-driven flows (AddClientModal) or via the
+      // platform-owner bootstrap below.
+      //
+      // Platform-owner bootstrap: the founder's email is allowed to
+      // self-create an admin doc on first sign-in. This is the ONLY
+      // exception — every other path requires an explicitly-created doc.
+      try {
+        if (firebaseUser.email === 'souktanimohamed@gmail.com') {
+          const initialSnap = await getDoc(doc(db, 'users', firebaseUser.uid));
+          if (!initialSnap.exists()) {
+            await setDoc(doc(db, 'users', firebaseUser.uid), {
+              displayName:
+                firebaseUser.displayName ||
+                firebaseUser.email?.split('@')[0] ||
+                'Admin',
+              email: firebaseUser.email,
+              role: 'admin' satisfies Role,
+              createdAt: serverTimestamp(),
+              macros: null,
+              stripeCustomerId: null,
+            });
+          }
+        }
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn('[AuthContext] Platform-owner bootstrap skipped:', err);
       }
 
       // Now subscribe in real-time to users/{uid}. This catches role changes,
@@ -270,7 +333,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
   }, []);
 
-  // ── visibilitychange: force token refresh + idle-stamp on foreground ─────
+  // ── visibilitychange: silent token refresh + idle-stamp on foreground ────
+  // History notes:
+  //   - We used to flip `freshUserDocLoaded → false` here so AppRoutes would
+  //     re-show its loading spinner until the user-doc snapshot fired again.
+  //     Removed: the live `onSnapshot` to `users/{uid}` already delivers
+  //     role/disabled changes mid-session; the gated re-render only created
+  //     a spurious spinner flash on every app return.
+  //   - We used to sign the user out on ANY token-refresh failure. Removed:
+  //     iOS Safari fires visibility transiently during autofill/FaceID
+  //     immediately after sign-in, and the force-refresh in that window can
+  //     fail with transient network/keychain errors — which then signed the
+  //     user back out and produced the "double-login" symptom.
+  //
+  // Current behavior:
+  //   1. Stamp last-active so the idle-timeout doesn't fire spuriously.
+  //   2. Skip force-refresh if we're inside the post-sign-in grace window.
+  //   3. Otherwise, force-refresh in the background — silent. The UI is
+  //      NOT gated on this; the snapshot listener handles state changes.
+  //   4. Only sign out if the refresh fails with a code that genuinely
+  //      indicates the credential was revoked / expired (set above).
   useEffect(() => {
     const onVisibilityChange = async () => {
       if (document.visibilityState !== 'visible') return;
@@ -281,22 +363,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const current = auth.currentUser;
       if (!current) return;
 
-      // Mark that we need to wait for a fresh user-doc snapshot before we
-      // trust any cached UI for protected routes.
-      setFreshUserDocLoaded(false);
+      // Skip the force-refresh entirely in the post-sign-in grace window.
+      // The token we just got is fresh; refreshing it again can transiently
+      // fail on iOS PWA and trigger a sign-out loop.
+      if (Date.now() - signedInAtRef.current < POST_SIGNIN_GRACE_MS) return;
 
       try {
         await current.getIdToken(/* forceRefresh */ true);
-      } catch {
-        // Token refresh failed — most likely the user was disabled or deleted
-        // while the PWA was backgrounded. Sign them out hard.
-        try {
-          await firebaseSignOut(auth);
-        } catch {
-          /* ignore */
+      } catch (err: unknown) {
+        const code = (err as { code?: string })?.code ?? '';
+        // Only sign out on real revocation / expiry. Transient errors
+        // (network, keychain race) get swallowed — the next snapshot or
+        // the next user action will surface any actual problem.
+        if (HARD_AUTH_ERROR_CODES.has(code)) {
+          try { await firebaseSignOut(auth); } catch { /* ignore */ }
+          setUser(null);
         }
-        setUser(null);
-        setFreshUserDocLoaded(false);
       }
     };
 
@@ -309,6 +391,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       await signInWithEmailAndPassword(auth, email, password);
       touchLastActive();
+      // Stamp the sign-in time so the visibility handler can skip its
+      // force-refresh during the grace window — see #3 fix.
+      signedInAtRef.current = Date.now();
       return {};
     } catch (error: unknown) {
       return { error: getFirebaseErrorMessage((error as { code?: string })?.code ?? '') };

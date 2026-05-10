@@ -1,16 +1,39 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { doc, updateDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { useActiveProgram } from '../../hooks/useActiveProgram';
 import { useAcademy } from '../../context/AcademyContext';
 import { useCommunity } from '../../context/CommunityContext';
-import { levelFromScore, levelProgress } from '../../lib/activityScore';
+import { useAssignedDiet } from '../../hooks/useAssignedDiet';
+import { db } from '../../lib/firebase';
+import { computeDietProfile, matchDiet } from '../../lib/dietCalculator';
+import { dietPlans } from '../../data/diets';
+import type { Sex, ActivityLevel, DietGoal, MealsPerDay } from '../../types';
+
+// Activity-level enum → translation key. Mirrors the same pair in
+// DietWizard / CommunityBaselineForm so the intake picker reads
+// consistently across all three surfaces.
+const ACTIVITY_KEY: Record<ActivityLevel, string> = {
+    sedentary: 'activitySedentary',
+    light:     'activityLight',
+    moderate:  'activityModerate',
+    active:    'activityActive',
+    extra:     'activityExtra',
+};
+const ACTIVITY_DESC_KEY: Record<ActivityLevel, string> = {
+    sedentary: 'activitySedentaryDesc',
+    light:     'activityLightDesc',
+    moderate:  'activityModerateDesc',
+    active:    'activityActiveDesc',
+    extra:     'activityExtraDesc',
+};
 import {
     t as bzt, goldGradient,
-    Card, Eyebrow, MetricCard,
-    ContinueAcademyCard, TodayWorkoutCard, CommunityActivityCard, ProgressCTA, YourStandingCard,
+    WeekStatusPanel,
+    ContinueAcademyCard, TodayWorkoutCard, TodayDietCard, CommunityActivityCard, ProgressCTA,
 } from './biozackteam/shared';
 import {
     Calendar,
@@ -24,6 +47,149 @@ import {
     Clock,
 } from 'lucide-react';
 
+// ─── Client welcome header — editorial hero, mirrors Community shape ──────
+function getGreetingKey(): 'goodMorning' | 'goodAfternoon' | 'goodEvening' {
+    const h = new Date().getHours();
+    if (h < 12) return 'goodMorning';
+    if (h < 18) return 'goodAfternoon';
+    return 'goodEvening';
+}
+
+function ClientWelcomeHeader({
+    firstName, initials, weekNumber, programLength, weekStreak, weekStatus,
+}: {
+    firstName: string;
+    initials: string;
+    weekNumber: number;
+    programLength: number;
+    weekStreak: number;
+    weekStatus: string;
+}) {
+    const { t: tStrict, lang } = useLanguage();
+    const t = tStrict as unknown as (k: string) => string | undefined;
+    const greeting = t(getGreetingKey()) ?? 'Hello';
+    const today = new Date().toLocaleDateString(lang === 'ar' ? 'ar' : undefined, {
+        weekday: 'long', day: 'numeric', month: 'long',
+    });
+    const statusLabel = weekStatus === 'pending'
+        ? t('checkInPendingStatus')
+        : weekStatus === 'submitted'
+            ? t('awaitingReviewStatus')
+            : t('reviewedStatus');
+    const statusDotColor = weekStatus === 'reviewed'
+        ? '#10b981'
+        : weekStatus === 'submitted'
+            ? bzt.primary
+            : '#f59e0b';
+
+    return (
+        <div
+            className="bzt-rise-in"
+            style={{
+                display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between',
+                flexWrap: 'wrap', gap: 24, marginBottom: 32, paddingLeft: 4,
+            }}
+        >
+            <div style={{ maxWidth: 720, minWidth: 0, flex: 1 }}>
+                {/* Date eyebrow with thin gold accent line */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+                    <span aria-hidden style={{
+                        display: 'block', width: 24, height: 1,
+                        background: `linear-gradient(90deg, ${bzt.primary}, transparent)`,
+                    }} />
+                    <span style={{
+                        fontFamily: bzt.body, fontSize: 11, fontWeight: 700,
+                        letterSpacing: '0.22em', textTransform: 'uppercase',
+                        color: bzt.onSurfaceVariant,
+                    }}>
+                        {today}
+                    </span>
+                </div>
+
+                <h1 style={{
+                    fontFamily: bzt.display,
+                    fontSize: 'clamp(2.25rem, 5vw, 3.5rem)',
+                    fontWeight: 300, lineHeight: 1.02, letterSpacing: '-0.035em',
+                    color: bzt.onSurface, margin: 0,
+                }}>
+                    <span style={{ display: 'block', fontWeight: 300 }}>{greeting},</span>
+                    <span style={{
+                        fontWeight: 600, background: goldGradient,
+                        WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+                        display: 'inline-block',
+                    }}>
+                        {firstName}
+                    </span>
+                </h1>
+
+                {/* Status chip — week + status pill, plus a streak badge if active */}
+                <div
+                    className="bzt-rise-in"
+                    style={{ marginTop: 18, display: 'flex', flexWrap: 'wrap', gap: 8, animationDelay: '180ms' }}
+                >
+                    <div style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 12,
+                        padding: '8px 14px 8px 12px', borderRadius: 999,
+                        background: bzt.surfaceContainerLow,
+                        border: `1px solid ${bzt.outline}`,
+                    }}>
+                        <span style={{
+                            width: 6, height: 6, borderRadius: '50%',
+                            background: statusDotColor,
+                            boxShadow: `0 0 8px ${statusDotColor}`,
+                        }} />
+                        <span style={{
+                            fontFamily: bzt.body, fontSize: 13, fontWeight: 600, color: bzt.onSurface,
+                        }}>
+                            {t('week')} {weekNumber} <span style={{ color: bzt.onSurfaceVariant, fontWeight: 500 }}>/ {programLength}</span>
+                        </span>
+                        <span style={{ width: 1, height: 14, background: bzt.outline }} />
+                        <span style={{
+                            fontFamily: bzt.body, fontSize: 13, fontWeight: 500, color: bzt.onSurfaceVariant,
+                        }}>
+                            {statusLabel}
+                        </span>
+                    </div>
+                    {weekStreak > 0 && (
+                        <div style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 6,
+                            padding: '8px 14px', borderRadius: 999,
+                            background: 'rgb(var(--primary) / 0.10)',
+                            border: '1px solid rgb(var(--primary) / 0.25)',
+                        }}>
+                            <span style={{
+                                fontFamily: bzt.body, fontSize: 13, fontWeight: 700, color: bzt.primary,
+                            }}>
+                                {weekStreak}
+                            </span>
+                            <span style={{
+                                fontFamily: bzt.body, fontSize: 12, fontWeight: 500, color: bzt.onSurfaceVariant,
+                            }}>
+                                {t('weekCheckInStreak')}
+                            </span>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            <div
+                className="bzt-rise-in"
+                style={{
+                    width: 64, height: 64, borderRadius: '50%',
+                    background: bzt.surfaceContainerHighest,
+                    border: `1px solid ${bzt.outline}`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontFamily: bzt.display, fontSize: 20, fontWeight: 600,
+                    color: bzt.primary, letterSpacing: '0.04em',
+                    flexShrink: 0,
+                    boxShadow: `0 8px 24px rgb(0 0 0 / 0.20), inset 0 0 0 1px rgb(var(--primary) / 0.08)`,
+                    animationDelay: '80ms',
+                }}
+            >{initials}</div>
+        </div>
+    );
+}
+
 export const ClientDashboard = () => {
     const { user } = useAuth();
     const { t: tStrict } = useLanguage();
@@ -31,7 +197,8 @@ export const ClientDashboard = () => {
     const { clients, getClientWeeks, completeOnboarding, createProgram, uploadPhoto } = useData();
     const navigate = useNavigate();
     const { activeProgram, getTodaysDay, todaysDayNumber } = useActiveProgram();
-    const { courses, userProgress } = useAcademy();
+    const { assignedDietId, snapshot: assignedDietSnapshot } = useAssignedDiet();
+    const { courses, userProgress, lessons, loadLessons } = useAcademy();
     const { posts } = useCommunity();
 
     const client = clients.find(c => c.userId === user?.id);
@@ -43,12 +210,13 @@ export const ClientDashboard = () => {
         startingWeight: '',
         height: '',
         goal: 'fat_loss',
-        activityLevel: 'sedentary',
+        activityLevel: 'moderate',
         dietHistory: '',
         injuries: '',
         birthdate: '',
         gender: '',
         fitnessLevel: 'beginner',
+        mealsPerDay: '3',
     });
 
     // Photo upload state for onboarding
@@ -101,18 +269,85 @@ export const ClientDashboard = () => {
         }
     };
 
-    const handleIntakeSubmit = () => {
-        if (client && formData.startingWeight && formData.height && formData.birthdate && formData.gender) {
-            completeOnboarding(client.id, {
-                ...formData,
-                // store photo URLs in intake data so coach can see them
-                frontPhoto: photoUrls.front ?? '',
-                sidePhoto: photoUrls.side ?? '',
-                backPhoto: photoUrls.back ?? '',
-            }, photoUrls);
-            createProgram(client.id, defaultTargets);
-        } else {
+    // Map the client's onboarding goal to the diet calculator's calorie-
+    // adjustment taxonomy. Same logic as DietWizard / community baseline.
+    const onboardGoalToDietGoal = (g: string): DietGoal => {
+        if (g === 'fat_loss')    return 'cut';
+        if (g === 'muscle_gain') return 'lean_bulk';
+        if (g === 'recomp')      return 'recomp';
+        if (g === 'performance') return 'maintain';
+        return 'maintain';
+    };
+
+    const ageFromBirthdate = (iso: string): number | null => {
+        if (!iso) return null;
+        const d = new Date(iso);
+        if (Number.isNaN(d.getTime())) return null;
+        const now = new Date();
+        let age = now.getFullYear() - d.getFullYear();
+        const m = now.getMonth() - d.getMonth();
+        if (m < 0 || (m === 0 && now.getDate() < d.getDate())) age--;
+        return age > 0 ? age : null;
+    };
+
+    const handleIntakeSubmit = async () => {
+        if (!client || !user) {
             alert(t('fillRequired'));
+            return;
+        }
+        if (!(formData.startingWeight && formData.height && formData.birthdate && formData.gender)) {
+            alert(t('fillRequired'));
+            return;
+        }
+
+        // 1. Existing intake/program writes (unchanged behaviour).
+        completeOnboarding(client.id, {
+            ...formData,
+            frontPhoto: photoUrls.front ?? '',
+            sidePhoto: photoUrls.side ?? '',
+            backPhoto: photoUrls.back ?? '',
+        }, photoUrls);
+        createProgram(client.id, defaultTargets);
+
+        // 2. Compute + persist dietProfile and auto-assign the matched plan.
+        //    Best-effort — if any of the diet writes fail we still let the
+        //    client through onboarding with the workout program.
+        try {
+            const age = ageFromBirthdate(formData.birthdate);
+            if (age == null) return;
+            const profile = computeDietProfile({
+                sex: formData.gender as Sex,
+                age,
+                weightKg: Number(formData.startingWeight),
+                heightCm: Number(formData.height),
+                activityLevel: formData.activityLevel as ActivityLevel,
+                goal: onboardGoalToDietGoal(formData.goal),
+                mealsPerDay: Number(formData.mealsPerDay) as MealsPerDay,
+            });
+
+            await updateDoc(doc(db, 'users', user.id), {
+                dietProfile: { ...profile, calculatedAt: serverTimestamp(), updatedAt: serverTimestamp() },
+            });
+
+            const matched = matchDiet(profile, dietPlans);
+            if (matched) {
+                await setDoc(doc(db, 'userDiets', user.id), {
+                    id: user.id,
+                    userId: user.id,
+                    dietId: matched.id,
+                    snapshot: {
+                        name: matched.name,
+                        mealsPerDay: matched.mealsPerDay,
+                        calories: matched.calories,
+                        macros: matched.macros,
+                        pdfUrl: matched.pdfUrl ?? null,
+                    },
+                    assignedAt: serverTimestamp(),
+                });
+            }
+        } catch (e) {
+            // eslint-disable-next-line no-console
+            console.error('Failed to compute/save diet on intake submit:', e);
         }
     };
 
@@ -316,6 +551,61 @@ export const ClientDashboard = () => {
                         </div>
                     </section>
 
+                    {/* Activity Level — drives the diet calorie calculator. */}
+                    <section className="space-y-5">
+                        <h2 className="text-xl font-headline font-bold text-on-surface border-b border-outline-variant/30 pb-3">
+                            {t('activityLevel') ?? 'Activity level'}
+                        </h2>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            {(['sedentary', 'light', 'moderate', 'active', 'extra'] as const).map(a => (
+                                <button
+                                    key={a}
+                                    type="button"
+                                    onClick={() => setFormData({ ...formData, activityLevel: a })}
+                                    className={`flex flex-col gap-1 p-4 rounded-xl border text-left transition-all ${
+                                        formData.activityLevel === a
+                                            ? 'bg-primary/10 border-primary/50'
+                                            : 'bg-surface-container border-outline-variant/30 hover:border-outline-variant/50'
+                                    }`}
+                                >
+                                    <span className={`font-headline font-bold text-sm ${formData.activityLevel === a ? 'text-primary' : 'text-on-surface'}`}>{t(ACTIVITY_KEY[a as ActivityLevel])}</span>
+                                    <span className="text-[12px] font-body text-on-surface/55">{t(ACTIVITY_DESC_KEY[a as ActivityLevel])}</span>
+                                </button>
+                            ))}
+                        </div>
+                    </section>
+
+                    {/* Meals per day — drives plan matching (3 vs 4 meal variant). */}
+                    <section className="space-y-5">
+                        <h2 className="text-xl font-headline font-bold text-on-surface border-b border-outline-variant/30 pb-3">
+                            {t('mealsPerDay') ?? 'Meals/day'}
+                        </h2>
+                        <div className="grid grid-cols-2 gap-3">
+                            {(['3', '4'] as const).map(n => (
+                                <button
+                                    key={n}
+                                    type="button"
+                                    onClick={() => setFormData({ ...formData, mealsPerDay: n })}
+                                    className={`p-5 rounded-xl border text-left transition-all ${
+                                        formData.mealsPerDay === n
+                                            ? 'bg-primary/10 border-primary/50'
+                                            : 'bg-surface-container border-outline-variant/30 hover:border-outline-variant/50'
+                                    }`}
+                                >
+                                    <div className="font-headline font-extrabold text-2xl text-on-surface mb-1">{n}</div>
+                                    <div className="text-sm font-headline font-bold text-on-surface mb-0.5">
+                                        {n} {t('mealsPerDay') ?? 'meals/day'}
+                                    </div>
+                                    <div className="text-[12px] font-body text-on-surface/55 leading-snug">
+                                        {n === '3'
+                                            ? (t('threeMealsBlurb') ?? 'Bigger meals, simpler routine.')
+                                            : (t('fourMealsBlurb') ?? 'Smaller meals, steady energy.')}
+                                    </div>
+                                </button>
+                            ))}
+                        </div>
+                    </section>
+
                     {/* Submit */}
                     <div className="pt-8 border-t border-outline-variant/30">
                         <button
@@ -386,178 +676,208 @@ export const ClientDashboard = () => {
         return streak;
     })();
 
-    const lastWeight = weeks[currentWeekIndex - 1]?.minWeight;
-
     // Real activity score + streak from the user doc
     const xp = user?.activityScore ?? 0;
-    const level = levelFromScore(xp);
-    const xpPct = levelProgress(xp);
     const dailyStreak = user?.streak?.current ?? 0;
     const bestStreak = user?.streak?.best ?? 0;
+
+    // Set of YYYY-MM-DD dates where the client filled in a daily entry within
+    // the current week. Feeds the calendar-strip "logged" indicator.
+    // Plain computation rather than useMemo — this code path is reached
+    // only after three early returns above, so a hook here would violate
+    // the rules-of-hooks (was the source of a past React #310). The set
+    // has ≤7 entries, so memoization is unnecessary.
+    const loggedDates = (() => {
+        const set = new Set<string>();
+        const entries = currentWeekData?.dailyEntries ?? [];
+        for (const e of entries) {
+            const hasData = (e.carbs ?? 0) > 0 || (e.protein ?? 0) > 0 || (e.fats ?? 0) > 0 || (typeof e.weight === 'number' && e.weight > 0);
+            if (hasData && e.date) set.add(e.date);
+        }
+        return set;
+    })();
 
     const firstName = client.name.split(' ')[0];
     const initials = client.name.split(' ').map(s => s[0]).join('').slice(0, 2).toUpperCase() || 'ME';
 
     return (
         <div style={{ fontFamily: bzt.body, color: bzt.onSurface, padding: '8px 0 40px' }}>
-            {/* 1. Coach feedback banner */}
-            {latestReviewedWeek && (
-                <Card
+            {/* 1. Editorial welcome header — time-of-day greeting, big name,
+                   status chip showing week N · status. Same shape as the
+                   community dashboard so the brand reads consistently. */}
+            <ClientWelcomeHeader
+                firstName={firstName}
+                initials={initials}
+                weekNumber={client.currentWeek}
+                programLength={client.programLength}
+                weekStreak={weekStreak}
+                weekStatus={currentWeekData.status}
+            />
+
+            {/* 3. Combined week status panel — calendar + streak ring + level + rank.
+                   For coaching clients, the calendar dots fire on days where a daily
+                   entry was filled within the current week (currentWeekData.dailyEntries). */}
+            <div style={{ marginBottom: 24 }}>
+                <WeekStatusPanel
+                    uid={user?.id}
+                    score={xp}
+                    currentStreak={dailyStreak}
+                    bestStreak={bestStreak}
+                    logCount={weeks.filter(w => w.status === 'submitted' || w.status === 'reviewed').length}
+                    loggedDates={loggedDates}
+                    onNavigate={navigate}
+                />
+            </div>
+
+            {/* 4. Weekly check-in hero — consolidates the prior dual cards
+                   (status row + coach-feedback banner) into one image-backed card.
+                   States: pending / submitted (awaiting review) / reviewed (with quote). */}
+            <div style={{ marginBottom: 24 }}>
+                <div
                     onClick={() => navigate('/checkin')}
+                    className="bzt-hero-card"
                     style={{
-                        marginBottom: 24,
-                        background: `linear-gradient(135deg, rgb(var(--primary) / 0.08), ${bzt.surfaceContainerLow})`,
+                        position: 'relative', borderRadius: 20, overflow: 'hidden',
+                        cursor: 'pointer', minHeight: 240, padding: 0,
                         border: `1px solid ${bzt.outline}`,
+                        boxShadow: '0 8px 40px 0 rgba(0,0,0,0.25)',
                     }}
                 >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
-                        <div style={{
-                            width: 48, height: 48, borderRadius: '50%',
-                            background: `rgb(var(--primary) / 0.15)`, border: `1px solid ${bzt.outline}`,
-                            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                        }}>
-                            <MessageSquare size={20} style={{ color: bzt.primary }} />
-                        </div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                            <h3 style={{
-                                fontFamily: bzt.display, fontSize: 18, fontWeight: 600,
-                                color: bzt.onSurface, margin: 0, letterSpacing: '-0.01em',
-                            }}>
-                                {t('coachReviewedYourWeek')} {latestReviewedWeek.weekNumber}!
-                            </h3>
-                            <p style={{
-                                fontFamily: bzt.body, fontSize: 13, color: bzt.onSurfaceVariant,
-                                margin: '4px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                            }}>
-                                "{latestReviewedWeek.coachFeedback}"
-                            </p>
-                        </div>
-                        <span style={{
-                            fontFamily: bzt.body, fontSize: 11, fontWeight: 600, color: bzt.primary,
-                            textTransform: 'uppercase', letterSpacing: '0.1em', flexShrink: 0,
-                        }}>{t('readCta')}</span>
-                    </div>
-                </Card>
-            )}
+                    {/* Layered: coach photo (kbruns on hover), gold tint (multiply),
+                        bottom dark fade for readability. */}
+                    <div className="bzt-hero-photo" style={{
+                        position: 'absolute', inset: 0,
+                        backgroundImage: 'url(/checkin-hero.jpg)',
+                        backgroundSize: 'cover',
+                        backgroundPosition: 'center 25%',
+                    }} />
+                    <div style={{
+                        position: 'absolute', inset: 0,
+                        background: `linear-gradient(135deg, rgb(var(--primary) / 0.4), rgb(var(--primary-container) / 0.25))`,
+                        mixBlendMode: 'multiply',
+                    }} />
+                    <div style={{
+                        position: 'absolute', inset: 0,
+                        background: 'linear-gradient(180deg, rgba(0,0,0,0.10) 0%, rgba(0,0,0,0.55) 55%, rgba(0,0,0,0.85) 100%)',
+                    }} />
 
-            {/* 2. Header */}
-            <div style={{
-                display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between',
-                flexWrap: 'wrap', gap: 24, marginBottom: 32, paddingLeft: 12,
-            }}>
-                <div style={{ maxWidth: 700 }}>
-                    <Eyebrow>{t('biozackTeamCoaching')}</Eyebrow>
-                    <h1 style={{
-                        fontFamily: bzt.display, fontSize: 'clamp(2rem, 4vw, 3rem)',
-                        fontWeight: 300, lineHeight: 1.02, letterSpacing: '-0.03em',
-                        color: bzt.onSurface, margin: '12px 0 0',
+                    <div style={{
+                        position: 'relative', zIndex: 1, padding: 24,
+                        display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+                        minHeight: 240,
                     }}>
-                        {t('welcomeBack')}{' '}
-                        <span style={{
-                            fontWeight: 600, background: goldGradient,
-                            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
-                        }}>{firstName}</span>
-                    </h1>
-                    <p style={{
-                        fontFamily: bzt.body, fontSize: 14, color: bzt.onSurfaceVariant,
-                        marginTop: 10, letterSpacing: '0.01em',
-                    }}>
-                        {t('week')} {client.currentWeek} {t('weekOfLabel')} {client.programLength}
-                        {weekStreak > 0 ? ` · ${weekStreak} ${t('weekCheckInStreak')}` : ''}
-                        {' · '}
-                        {currentWeekData.status === 'pending'
-                            ? t('checkInPendingStatus')
-                            : currentWeekData.status === 'submitted'
-                                ? t('awaitingReviewStatus')
-                                : t('reviewedStatus')}
-                    </p>
-                </div>
-                <div style={{
-                    width: 56, height: 56, borderRadius: '50%',
-                    background: bzt.surfaceContainerHighest, border: `1px solid ${bzt.outline}`,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontFamily: bzt.display, fontSize: 18, fontWeight: 500,
-                    color: bzt.primary, letterSpacing: '0.04em',
-                }}>{initials}</div>
-            </div>
+                        {/* Top — eyebrow + status pill */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
+                            <div style={{
+                                fontFamily: bzt.body, fontSize: 11, fontWeight: 600,
+                                letterSpacing: '0.16em', textTransform: 'uppercase',
+                                color: 'rgba(255,255,255,0.82)',
+                            }}>
+                                {t('weeklyCheckInEyebrow')}
+                            </div>
+                            <div style={{
+                                padding: '6px 12px', borderRadius: 999,
+                                background: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)',
+                                color: '#fff', fontFamily: bzt.body, fontSize: 11, fontWeight: 600,
+                                textTransform: 'uppercase', letterSpacing: '0.1em', whiteSpace: 'nowrap',
+                                display: 'flex', alignItems: 'center', gap: 6,
+                            }}>
+                                {currentWeekData.status === 'pending' && <><Clock size={13} /> {t('dueLabel')}</>}
+                                {currentWeekData.status === 'submitted' && <><CheckCircle2 size={13} /> {t('submittedLabel')}</>}
+                                {currentWeekData.status === 'reviewed' && <><MessageSquare size={13} /> {t('reviewedStatus')}</>}
+                            </div>
+                        </div>
 
-            {/* 3. Stats row */}
-            <div style={{
-                display: 'grid', gap: 16, marginBottom: 24,
-                gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-            }}>
-                <MetricCard label={t('dailyStreakLabel') ?? 'Daily Streak'} value={dailyStreak} unit={t('daysUnit')} sub={dailyStreak > 0 ? `${t('bestPrefix')} ${bestStreak} ${t('daysUnit')}` : (t('logTodayToStart') ?? 'Log today to start')} hero />
-                <MetricCard label={t('levelLabel') ?? 'Level'} value={level} sub={`${xp} ${t('xpUnit')} · ${xpPct}% ${t('xpToNext')}`} />
-                <MetricCard label={t('lastWeightLabel') ?? 'Last Weight'} value={lastWeight ?? '--'} unit={t('kgUnit')} sub={lastWeight ? `${t('week')} ${currentWeekIndex}` : (t('noDataYet') ?? 'No data yet')} />
-            </div>
-
-            {/* 4. Weekly check-in (coach-specific) */}
-            <div style={{ marginBottom: 24 }}>
-                <Card variant="bright">
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, marginBottom: 16 }}>
+                        {/* Bottom — title, status copy, coach quote (if reviewed), CTA */}
                         <div>
-                            <Eyebrow>{t('weeklyCheckInEyebrow')}</Eyebrow>
                             <h2 style={{
-                                fontFamily: bzt.display, fontSize: 24, fontWeight: 500,
-                                color: bzt.onSurface, margin: '8px 0 4px', letterSpacing: '-0.02em',
+                                fontFamily: bzt.display, fontSize: 26, fontWeight: 600,
+                                color: '#fff', margin: '0 0 4px', letterSpacing: '-0.02em',
+                                textShadow: '0 2px 12px rgba(0,0,0,0.5)',
                             }}>
-                                {t('weeklyCheckIn') || t('thisWeekTitle')}
+                                {t('week')} {client.currentWeek} · {
+                                    currentWeekData.status === 'reviewed'
+                                        ? t('reviewedStatus')
+                                        : currentWeekData.status === 'submitted'
+                                            ? t('awaitingReviewStatus')
+                                            : t('pendingSubmission')
+                                }
                             </h2>
-                            <p style={{ fontFamily: bzt.body, fontSize: 13, color: bzt.onSurfaceVariant, margin: 0 }}>
-                                {t('week')} {client.currentWeek} ·{' '}
-                                {currentWeekData.status === 'pending'
-                                    ? t('pendingSubmission')
-                                    : currentWeekData.status === 'submitted'
-                                        ? t('submittedAwaitingReview')
-                                        : t('reviewedStatus')}
-                            </p>
+                            {/* Subtitle drops the duplicate "Weekly check-in" wording for the
+                                pending state — the eyebrow already announces the section. */}
+                            {currentWeekData.status !== 'pending' && (
+                                <p style={{
+                                    fontFamily: bzt.body, fontSize: 12,
+                                    color: 'rgba(255,255,255,0.82)',
+                                    margin: '0 0 12px',
+                                }}>
+                                    {currentWeekData.status === 'reviewed'
+                                        ? t('coachReviewedYourWeek')
+                                        : t('submittedAwaitingReview')}
+                                </p>
+                            )}
+
+                            {/* Coach feedback note — show whenever any prior week has been
+                                reviewed, regardless of THIS week's status. The user wants
+                                their last received feedback visible while they're working
+                                on the current week. */}
+                            {latestReviewedWeek?.coachFeedback && (
+                                <p style={{
+                                    fontFamily: bzt.body, fontSize: 13, fontStyle: 'italic',
+                                    color: 'rgba(255,255,255,0.92)',
+                                    margin: '0 0 14px',
+                                    overflow: 'hidden', display: '-webkit-box',
+                                    WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const,
+                                    paddingLeft: 14, position: 'relative',
+                                }}>
+                                    {/* Quote mark instead of side-stripe (impeccable rule: no side stripes) */}
+                                    <span aria-hidden style={{
+                                        position: 'absolute', left: 0, top: -4,
+                                        fontSize: 22, color: 'rgb(var(--primary))',
+                                        fontFamily: bzt.display, lineHeight: 1,
+                                    }}>“</span>
+                                    {latestReviewedWeek.coachFeedback}
+                                </p>
+                            )}
+
+                            {/* CTA — combines submit/view with read-feedback when both
+                                actions are useful at once. Center dot acts as a separator.
+                                Pulses softly when status === pending so the user has a
+                                visual cue that they need to submit (no anxiety; just a heartbeat). */}
+                            <span
+                                className={currentWeekData.status === 'pending' ? 'bzt-pulse-soft' : ''}
+                                style={{
+                                    display: 'inline-flex', alignItems: 'center', gap: 8,
+                                    padding: '8px 18px', borderRadius: 999,
+                                    background: goldGradient, color: bzt.onPrimaryFixed,
+                                    fontFamily: bzt.body, fontSize: 12, fontWeight: 600,
+                                    letterSpacing: '0.04em', textTransform: 'uppercase',
+                                }}
+                            >
+                                <Calendar size={14} />
+                                {currentWeekData.status === 'reviewed' ? (
+                                    // Already reviewed — coach already gave feedback for THIS week
+                                    t('readCta')
+                                ) : currentWeekData.status === 'submitted' ? (
+                                    // Awaiting review — view what was submitted, plus optionally read prior feedback
+                                    latestReviewedWeek?.coachFeedback
+                                        ? <>{t('viewCheckIn')} <span style={{ opacity: 0.7 }}>·</span> {t('readCta')}</>
+                                        : t('viewCheckIn')
+                                ) : (
+                                    // Pending — submit this week, plus read prior feedback if it exists
+                                    latestReviewedWeek?.coachFeedback
+                                        ? <>{t('submitThisWeekCta')} <span style={{ opacity: 0.7 }}>·</span> {t('readCta')}</>
+                                        : t('submitThisWeekCta')
+                                )}
+                            </span>
                         </div>
-                        {currentWeekData.status === 'pending' && (
-                            <div style={{
-                                display: 'flex', alignItems: 'center', gap: 6,
-                                padding: '6px 12px', borderRadius: 8,
-                                background: `rgb(var(--primary) / 0.10)`, border: `1px solid ${bzt.outline}`,
-                                color: bzt.primary, fontFamily: bzt.body, fontSize: 11, fontWeight: 600,
-                                textTransform: 'uppercase', letterSpacing: '0.1em', whiteSpace: 'nowrap',
-                            }}>
-                                <Clock size={13} /> {t('dueLabel')}
-                            </div>
-                        )}
-                        {currentWeekData.status === 'submitted' && (
-                            <div style={{
-                                display: 'flex', alignItems: 'center', gap: 6,
-                                padding: '6px 12px', borderRadius: 8,
-                                background: bzt.surfaceContainer, border: `1px solid ${bzt.outlineVariant}`,
-                                color: bzt.onSurfaceVariant, fontFamily: bzt.body, fontSize: 11, fontWeight: 600,
-                                textTransform: 'uppercase', letterSpacing: '0.1em', whiteSpace: 'nowrap',
-                            }}>
-                                <CheckCircle2 size={13} /> {t('submittedLabel')}
-                            </div>
-                        )}
                     </div>
-                    <button
-                        onClick={() => navigate('/checkin')}
-                        style={{
-                            width: '100%', padding: 14,
-                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                            fontFamily: bzt.body, fontSize: 13, fontWeight: 600,
-                            letterSpacing: '0.04em', textTransform: 'uppercase',
-                            color: bzt.onPrimaryFixed, background: goldGradient,
-                            border: 'none', borderRadius: 999, cursor: 'pointer',
-                            boxShadow: '0 4px 12px rgb(var(--primary) / 0.25)',
-                        }}
-                    >
-                        <Calendar size={16} />
-                        {currentWeekData.status === 'pending'
-                            ? (t('updateDailyTracking') || t('submitThisWeekCta'))
-                            : (t('viewCheckIn') || t('viewCheckInCta'))}
-                    </button>
-                </Card>
+                </div>
             </div>
 
             {/* 5. Continue Academy */}
             <div style={{ marginBottom: 24 }}>
-                <ContinueAcademyCard courses={courses} userProgress={userProgress} onNavigate={navigate} />
+                <ContinueAcademyCard courses={courses} userProgress={userProgress} lessons={lessons} loadLessons={loadLessons} onNavigate={navigate} />
             </div>
 
             {/* 6. Today's Workout */}
@@ -570,19 +890,29 @@ export const ClientDashboard = () => {
                 />
             </div>
 
-            {/* 7. Your Standing (private rank widget) */}
+            {/* 7. Today's Diet — deep-links to /diets/plan/:id when assigned. */}
             <div style={{ marginBottom: 24 }}>
-                <YourStandingCard uid={user?.id} score={xp} onNavigate={navigate} />
+                <TodayDietCard
+                    dietProfile={user?.dietProfile}
+                    assignedDietId={assignedDietId}
+                    assignedSnapshot={assignedDietSnapshot}
+                    onNavigate={navigate}
+                />
             </div>
-            {/* (clients are never coaches, so no role-split CTA shown) */}
 
-            {/* 8. Community Activity */}
+            {/* 8. Progress CTA — chart + caveman "what's inside" preview. */}
             <div style={{ marginBottom: 24 }}>
-                <CommunityActivityCard posts={posts.slice(0, 3)} onNavigate={navigate} />
+                <ProgressCTA
+                    onNavigate={navigate}
+                    weightHistory={weeks
+                        .map(w => (w.dailyEntries ?? []).filter(e => typeof e.weight === 'number' && (e.weight as number) > 0).slice(-1)[0]?.weight as number | undefined)
+                        .filter((n): n is number => typeof n === 'number')}
+                />
             </div>
 
-            {/* 9. Progress CTA */}
-            <ProgressCTA onNavigate={navigate} />
+            {/* 9. Community Activity — last, so the social pull doesn't
+                 distract from the user's own program/plan/progress. */}
+            <CommunityActivityCard posts={posts.slice(0, 3)} onNavigate={navigate} />
         </div>
     );
 };

@@ -1,12 +1,14 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import {
     LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
+import { useLanguage } from '../../context/LanguageContext';
 import { useSelfLogs, BodyMeasurements as Meas } from '../../hooks/useSelfLogs';
 import { levelFromScore, levelProgress } from '../../lib/activityScore';
 import { CheckInCompare } from '../checkin/CheckInCompare';
+import type { Week } from '../../types';
 
 const t = {
     surface: 'rgb(var(--surface))',
@@ -89,21 +91,130 @@ function StatBlock({ label, value, gold }: { label: string; value: string; gold?
     );
 }
 
-function MetricCard({ label, value, unit, sub, hero }: {
-    label: string; value: string | number; unit?: string; sub?: string; hero?: boolean;
+// (Removed: MetricCard helper. The 3-up Streak / Level / Logs grid was
+// replaced by a single switchable StatusCarousel below.)
+
+// ─── StatusCarousel ─────────────────────────────────────────────────────
+// Single switchable card replacing the 3 stacked Streak / Level / Logs metric
+// cards. Two interactions:
+//   - Tap dots / arrows to flip between slides.
+//   - Touch swipe (horizontal) on mobile.
+// No auto-rotate — the user said "switch between," meaning a deliberate flip.
+// Auto-rotation also tends to fight reading on a metric, so we stay still.
+function StatusCarousel({ slides }: {
+    slides: { label: string; value: string | number; unit?: string; sub?: string }[];
 }) {
+    const [idx, setIdx] = useState(0);
+    // Track direction so the entrance animation matches the user's intent —
+    // arrow-right / swipe-left = new slide enters from the right.
+    const [dir, setDir] = useState<1 | -1>(1);
+    const touchStartX = useRef<number | null>(null);
+
+    const go = (n: number) => {
+        const next = (n + slides.length) % slides.length;
+        setDir(next > idx || (idx === slides.length - 1 && next === 0) ? 1 : -1);
+        setIdx(next);
+    };
+
+    const handleTouchStart = (e: React.TouchEvent) => {
+        touchStartX.current = e.touches[0].clientX;
+    };
+    const handleTouchEnd = (e: React.TouchEvent) => {
+        if (touchStartX.current == null) return;
+        const dx = e.changedTouches[0].clientX - touchStartX.current;
+        if (Math.abs(dx) > 40) go(idx + (dx < 0 ? 1 : -1));
+        touchStartX.current = null;
+    };
+    const enterClass = dir === 1 ? 'bzt-slide-in-right' : 'bzt-slide-in-left';
+
+    const slide = slides[idx];
     return (
-        <Card variant={hero ? 'glass' : 'default'}>
-            <Eyebrow>{label}</Eyebrow>
-            <div style={{ marginTop: 16, display: 'flex', alignItems: 'baseline', gap: 6 }}>
-                <span style={{
-                    fontFamily: t.display, fontSize: hero ? 52 : 40, fontWeight: 300,
-                    lineHeight: 1, letterSpacing: '-0.03em',
-                    color: hero ? t.primary : t.onSurface,
-                }}>{value}</span>
-                {unit && <span style={{ fontFamily: t.body, fontSize: 13, color: t.onSurfaceVariant }}>{unit}</span>}
+        <Card variant="glass" style={{ overflow: 'hidden', position: 'relative' }}>
+            <div
+                tabIndex={0}
+                role="region"
+                aria-roledescription="carousel"
+                aria-label={slide.label}
+                onTouchStart={handleTouchStart}
+                onTouchEnd={handleTouchEnd}
+                onKeyDown={(e) => {
+                    if (e.key === 'ArrowLeft')  { e.preventDefault(); go(idx - 1); }
+                    if (e.key === 'ArrowRight') { e.preventDefault(); go(idx + 1); }
+                }}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, outline: 'none' }}
+            >
+                <button
+                    onClick={() => go(idx - 1)}
+                    aria-label="Previous"
+                    style={{
+                        width: 36, height: 36, borderRadius: '50%',
+                        border: `1px solid ${t.outline}`, background: 'transparent',
+                        color: t.onSurfaceVariant, cursor: 'pointer', flexShrink: 0,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        transition: 'all 0.2s ease',
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.color = t.primary; e.currentTarget.style.borderColor = t.primary; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.color = t.onSurfaceVariant; e.currentTarget.style.borderColor = t.outline; }}
+                >‹</button>
+
+                <div style={{ flex: 1, textAlign: 'center', minHeight: 110, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                    <Eyebrow>{slide.label}</Eyebrow>
+                    <div
+                        key={`${idx}-row`}
+                        className={enterClass}
+                        style={{ marginTop: 12, display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 6 }}
+                    >
+                        <span style={{
+                            fontFamily: t.display, fontSize: 56, fontWeight: 300,
+                            lineHeight: 1, letterSpacing: '-0.03em',
+                            color: t.primary,
+                        }}>{slide.value}</span>
+                        {slide.unit && <span style={{ fontFamily: t.body, fontSize: 14, color: t.onSurfaceVariant }}>{slide.unit}</span>}
+                    </div>
+                    {slide.sub && (
+                        <div
+                            key={`${idx}-sub`}
+                            className={enterClass}
+                            style={{
+                                marginTop: 12, fontFamily: t.body, fontSize: 12,
+                                color: t.onSurfaceVariant,
+                                animationDelay: '40ms',
+                            }}
+                        >{slide.sub}</div>
+                    )}
+                </div>
+
+                <button
+                    onClick={() => go(idx + 1)}
+                    aria-label="Next"
+                    style={{
+                        width: 36, height: 36, borderRadius: '50%',
+                        border: `1px solid ${t.outline}`, background: 'transparent',
+                        color: t.onSurfaceVariant, cursor: 'pointer', flexShrink: 0,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        transition: 'all 0.2s ease',
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.color = t.primary; e.currentTarget.style.borderColor = t.primary; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.color = t.onSurfaceVariant; e.currentTarget.style.borderColor = t.outline; }}
+                >›</button>
             </div>
-            {sub && <div style={{ marginTop: 10, fontFamily: t.body, fontSize: 12, color: t.onSurfaceVariant }}>{sub}</div>}
+
+            {/* Dots */}
+            <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 18 }}>
+                {slides.map((_, i) => (
+                    <button
+                        key={i}
+                        onClick={() => setIdx(i)}
+                        aria-label={`Slide ${i + 1}`}
+                        style={{
+                            width: i === idx ? 24 : 6, height: 6, borderRadius: 999,
+                            border: 'none', cursor: 'pointer',
+                            background: i === idx ? goldGradient : t.surfaceContainerHighest,
+                            transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+                        }}
+                    />
+                ))}
+            </div>
         </Card>
     );
 }
@@ -233,13 +344,16 @@ function MetricsChart({ data }: { data: { date: string; strength: number; energy
     );
 }
 
-function ProgressSlider({ label, value, onChange, max = 10 }: {
-    label: string; value: number; onChange: (v: number) => void; max?: number;
+// 1–10 slider used by the community weekly check-in for subjective metrics
+// (strength / hunger / energy). Renders a thin gold-filled track with a
+// numeric "value / max" readout to the right of the label.
+function ProgressSlider({ label, value, onChange, max = 10, disabled }: {
+    label: string; value: number; onChange: (v: number) => void; max?: number; disabled?: boolean;
 }) {
     const pct = ((value - 1) / (max - 1)) * 100;
     return (
-        <div style={{ marginBottom: 22 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+        <div style={{ marginBottom: 18 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                 <span style={{ fontFamily: t.body, fontSize: 13, color: t.onSurface, fontWeight: 500 }}>{label}</span>
                 <span style={{ fontFamily: t.display, fontSize: 16, fontWeight: 500, color: t.primary }}>
                     {value}<span style={{ color: t.onSurfaceMuted, fontWeight: 300 }}> / {max}</span>
@@ -247,11 +361,13 @@ function ProgressSlider({ label, value, onChange, max = 10 }: {
             </div>
             <input
                 type="range" min={1} max={max} value={value}
+                disabled={disabled}
                 onChange={(e) => onChange(Number(e.target.value))}
                 className="progress-panel-slider"
                 style={{
                     width: '100%',
                     background: `linear-gradient(to right, ${t.primary} 0%, ${t.primaryContainer} ${pct}%, ${t.surfaceContainerHighest} ${pct}%, ${t.surfaceContainerHighest} 100%)`,
+                    opacity: disabled ? 0.5 : 1,
                 }}
             />
         </div>
@@ -259,30 +375,69 @@ function ProgressSlider({ label, value, onChange, max = 10 }: {
 }
 
 // ─── WeeklyCheckIn — community members only ─────────────────────────────────
-// Captures one row per week: weight + optional notes. Once submitted, the
-// log is server-side locked (Firestore rule blocks update/delete on
-// resource.data.locked == true). Next week, a fresh log opens.
-function WeeklyCheckIn({ existingLog, onSave }: {
-    existingLog?: { weight?: number; notes?: string; locked?: boolean };
-    onSave: (p: { weight: number; notes: string }) => Promise<void>;
+// Captures one row per submission: weight + subjective metrics (strength /
+// hunger / energy on a 1–10 scale, cardio calories) + optional notes. Once
+// submitted, the log is server-side locked (Firestore rule blocks update/
+// delete on resource.data.locked == true). Next entry opens 7 full days
+// after the last submission (rolling window — NOT Monday-reset).
+//
+// Sliders feed `metrics` on the SelfLog so the MetricsChart below renders
+// a trend over time. Founder direction: keep these on the WEEKLY card for
+// community — not a separate daily flow.
+//
+// Two lock signals:
+//   - `existingLog.locked` — today's entry already exists and is server-locked.
+//   - `isWindowLocked` — last submission was less than 7 days ago, render
+//     a status card showing "Last submitted X · Next available Y".
+function WeeklyCheckIn({ existingLog, isWindowLocked, lastSubmittedDate, nextAvailableAt, onSave }: {
+    existingLog?: {
+        weight?: number; notes?: string; locked?: boolean;
+        metrics?: { strength?: number; hunger?: number; energy?: number; cardioCalories?: number };
+    };
+    isWindowLocked?: boolean;
+    lastSubmittedDate?: string | null;
+    nextAvailableAt?: string | null;
+    onSave: (p: {
+        weight: number; notes: string;
+        metrics: { strength: number; hunger: number; energy: number; cardioCalories: number };
+    }) => Promise<void>;
 }) {
+    const { t: tx } = useLanguage();
     const [weight, setWeight] = useState<string>(existingLog?.weight?.toString() ?? '');
     const [notes, setNotes] = useState<string>(existingLog?.notes ?? '');
+    const [strength, setStrength] = useState<number>(existingLog?.metrics?.strength ?? 7);
+    const [hunger, setHunger] = useState<number>(existingLog?.metrics?.hunger ?? 4);
+    const [energy, setEnergy] = useState<number>(existingLog?.metrics?.energy ?? 8);
+    const [cardioCalories, setCardioCalories] = useState<string>(
+        existingLog?.metrics?.cardioCalories?.toString() ?? ''
+    );
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
-    const isLocked = existingLog?.locked === true;
-    const valid = Number(weight) > 20 && Number(weight) < 350;
+    const isLocked = existingLog?.locked === true || isWindowLocked === true;
+    const cardioNum = cardioCalories === '' ? 0 : Number(cardioCalories);
+    const cardioValid = Number.isFinite(cardioNum) && cardioNum >= 0 && cardioNum <= 2000;
+    const valid = Number(weight) > 20 && Number(weight) < 350 && cardioValid;
 
     const handleSave = async () => {
         if (!valid || isLocked) return;
         setSaving(true);
         try {
-            await onSave({ weight: Number(weight), notes });
+            await onSave({
+                weight: Number(weight),
+                notes,
+                metrics: { strength, hunger, energy, cardioCalories: cardioNum },
+            });
             setSaved(true);
             setTimeout(() => setSaved(false), 2000);
         } finally {
             setSaving(false);
         }
+    };
+
+    // Friendly date format for "Last submitted" / "Next available" strings.
+    const fmt = (iso: string) => {
+        const d = new Date(iso);
+        return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
     };
 
     return (
@@ -292,13 +447,21 @@ function WeeklyCheckIn({ existingLog, onSave }: {
                 {isLocked ? 'This week is logged.' : 'Update your weight and progress once per week.'}
             </h2>
             {isLocked && (
-                <p style={{ fontFamily: t.body, fontSize: 12, color: t.onSurfaceVariant, marginBottom: 16 }}>
-                    Locked. Next entry opens at the start of the next week.
-                </p>
+                <div style={{
+                    fontFamily: t.body, fontSize: 12, color: t.onSurfaceVariant,
+                    marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 4,
+                }}>
+                    {lastSubmittedDate && (
+                        <span>Last submitted: <strong style={{ color: t.onSurface }}>{fmt(lastSubmittedDate)}</strong></span>
+                    )}
+                    {nextAvailableAt && (
+                        <span>Next available: <strong style={{ color: t.primary }}>{fmt(nextAvailableAt)}</strong></span>
+                    )}
+                </div>
             )}
             <div style={{ marginBottom: 16, marginTop: 16 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
-                    <span style={{ fontFamily: t.body, fontSize: 13, color: t.onSurface, fontWeight: 500 }}>Current weight</span>
+                    <span style={{ fontFamily: t.body, fontSize: 13, color: t.onSurface, fontWeight: 500 }}>{tx('currentWeightLabel')}</span>
                     <span style={{ fontFamily: t.body, fontSize: 11, color: t.onSurfaceMuted, letterSpacing: '0.08em' }}>kg</span>
                 </div>
                 <input
@@ -316,15 +479,44 @@ function WeeklyCheckIn({ existingLog, onSave }: {
                     }}
                 />
             </div>
+
+            {/* Subjective sliders + cardio — feed `metrics` on the log so the
+                MetricsChart below renders a trend across submitted weeks. */}
+            <div style={{ marginBottom: 16 }}>
+                <ProgressSlider label="Strength" value={strength} onChange={setStrength} disabled={isLocked} />
+                <ProgressSlider label="Hunger"   value={hunger}   onChange={setHunger}   disabled={isLocked} />
+                <ProgressSlider label="Energy"   value={energy}   onChange={setEnergy}   disabled={isLocked} />
+                <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+                        <span style={{ fontFamily: t.body, fontSize: 13, color: t.onSurface, fontWeight: 500 }}>{tx('cardioCaloriesLabel')}</span>
+                        <span style={{ fontFamily: t.body, fontSize: 11, color: t.onSurfaceMuted, letterSpacing: '0.08em' }}>0–2000 / week</span>
+                    </div>
+                    <input
+                        type="number" inputMode="numeric" min={0} max={2000}
+                        value={cardioCalories} disabled={isLocked}
+                        onChange={(e) => setCardioCalories(e.target.value)}
+                        placeholder="0"
+                        style={{
+                            width: '100%', padding: '10px 0',
+                            fontFamily: t.display, fontSize: 18, fontWeight: 400,
+                            color: isLocked ? t.onSurfaceMuted : t.onSurface,
+                            background: 'transparent', border: 'none',
+                            borderBottom: `2px solid ${t.outlineVariant}`,
+                            outline: 'none',
+                        }}
+                    />
+                </div>
+            </div>
+
             <div style={{ marginBottom: 24 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
-                    <span style={{ fontFamily: t.body, fontSize: 13, color: t.onSurface, fontWeight: 500 }}>Notes</span>
-                    <span style={{ fontFamily: t.body, fontSize: 11, color: t.onSurfaceMuted, letterSpacing: '0.08em' }}>optional</span>
+                    <span style={{ fontFamily: t.body, fontSize: 13, color: t.onSurface, fontWeight: 500 }}>{tx('notesWord')}</span>
+                    <span style={{ fontFamily: t.body, fontSize: 11, color: t.onSurfaceMuted, letterSpacing: '0.08em' }}>{tx('notesOptional')}</span>
                 </div>
                 <textarea
                     value={notes} disabled={isLocked} rows={3}
                     onChange={(e) => setNotes(e.target.value)}
-                    placeholder="How did this week go?"
+                    placeholder={tx('howDidThisWeekGo')}
                     style={{
                         width: '100%', padding: '10px 12px',
                         fontFamily: t.body, fontSize: 13, color: t.onSurface,
@@ -354,79 +546,9 @@ function WeeklyCheckIn({ existingLog, onSave }: {
     );
 }
 
-function DailyCheckIn({ initial, onSave }: {
-    initial?: { strength?: number; hunger?: number; energy?: number; cardioCalories?: number };
-    onSave: (p: { strength: number; hunger: number; energy: number; cardioCalories: number }) => Promise<void>;
-}) {
-    const [form, setForm] = useState({
-        strength: initial?.strength ?? 7,
-        hunger: initial?.hunger ?? 4,
-        energy: initial?.energy ?? 8,
-        cardioCalories: initial?.cardioCalories ?? 0,
-    });
-    const [saving, setSaving] = useState(false);
-    const [saved, setSaved] = useState(false);
-    const [focused, setFocused] = useState(false);
-    const valid = form.cardioCalories >= 0 && form.cardioCalories <= 2000;
-
-    const handleSave = async () => {
-        if (!valid) return;
-        setSaving(true);
-        try {
-            await onSave(form);
-            setSaved(true);
-            setTimeout(() => setSaved(false), 2000);
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    return (
-        <Card variant="glass">
-            <Eyebrow>Today's Check-in</Eyebrow>
-            <h2 style={{ fontFamily: t.display, fontSize: 22, fontWeight: 400, color: t.onSurface, margin: '8px 0 20px', letterSpacing: '-0.02em' }}>
-                Two minutes. Every day.
-            </h2>
-            <ProgressSlider label="Strength" value={form.strength} onChange={v => setForm({ ...form, strength: v })} />
-            <ProgressSlider label="Hunger" value={form.hunger} onChange={v => setForm({ ...form, hunger: v })} />
-            <ProgressSlider label="Energy" value={form.energy} onChange={v => setForm({ ...form, energy: v })} />
-            <div style={{ marginBottom: 24 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
-                    <span style={{ fontFamily: t.body, fontSize: 13, color: t.onSurface, fontWeight: 500 }}>Cardio Calories</span>
-                    <span style={{ fontFamily: t.body, fontSize: 11, color: t.onSurfaceMuted, letterSpacing: '0.08em' }}>0–2000</span>
-                </div>
-                <input
-                    type="number" value={form.cardioCalories}
-                    onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
-                    onChange={(e) => setForm({ ...form, cardioCalories: Number(e.target.value) })}
-                    style={{
-                        width: '100%', padding: '12px 0',
-                        fontFamily: t.display, fontSize: 20, fontWeight: 400, color: t.onSurface,
-                        background: 'transparent', border: 'none',
-                        borderBottom: `2px solid ${focused ? t.primary : t.outlineVariant}`,
-                        outline: 'none', transition: 'border-color 0.2s ease',
-                        boxShadow: focused ? `0 4px 16px -6px ${t.primary}` : 'none',
-                    }}
-                />
-            </div>
-            <button
-                onClick={handleSave}
-                disabled={saving || !valid}
-                style={{
-                    width: '100%', padding: 14,
-                    fontFamily: t.body, fontSize: 13, fontWeight: 600,
-                    letterSpacing: '0.04em', textTransform: 'uppercase',
-                    color: t.onPrimaryFixed, background: goldGradient,
-                    border: 'none', borderRadius: 999,
-                    cursor: saving ? 'wait' : 'pointer', opacity: valid ? 1 : 0.4,
-                    transition: 'all 0.2s ease',
-                }}
-            >
-                {saved ? '✓ Saved' : saving ? 'Saving…' : 'Save Check-in'}
-            </button>
-        </Card>
-    );
-}
+// (Removed: DailyCheckIn card. The strength/hunger/energy/cardio sliders are
+// now exclusively part of the coaching weekly check-in flow at /checkin —
+// they don't belong on the profile surface.)
 
 function BodyMeasurementsCard({ current, baseline, onUpdate }: {
     current?: Meas; baseline?: Meas; onUpdate: (m: Meas) => Promise<void>;
@@ -569,10 +691,54 @@ function PhotoGallery({ photos }: { photos: { weekNumber: number; front?: string
     );
 }
 
+// CompareToggle — keeps the heavy CheckInCompare UI out of the initial render.
+// Click to expand; click again to collapse. Saves vertical space + reduces
+// the chart/photo work on every profile mount.
+function CompareToggle({ weeks }: { weeks: Week[] }) {
+    const [open, setOpen] = useState(false);
+    const { t: tx } = useLanguage();
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <button
+                onClick={() => setOpen(o => !o)}
+                aria-expanded={open}
+                className="bzt-press"
+                style={{
+                    width: '100%', padding: '14px 20px',
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    fontFamily: t.body, fontSize: 13, fontWeight: 600,
+                    color: t.onSurface, background: t.surfaceContainerLow,
+                    border: `1px solid ${open ? t.primary : t.outline}`, borderRadius: 14, cursor: 'pointer',
+                    transition: 'border-color 0.2s cubic-bezier(0.16, 1, 0.3, 1), background 0.2s ease',
+                }}
+                onMouseEnter={(e) => { if (!open) e.currentTarget.style.borderColor = t.primary; }}
+                onMouseLeave={(e) => { if (!open) e.currentTarget.style.borderColor = t.outline; }}
+            >
+                <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{ fontFamily: t.body, fontSize: 11, fontWeight: 600, letterSpacing: '0.16em', textTransform: 'uppercase', color: t.onSurfaceVariant }}>
+                        {tx('compareCheckIns')}
+                    </span>
+                </span>
+                <span style={{
+                    fontFamily: t.body, fontSize: 18, color: t.primary,
+                    transform: open ? 'rotate(45deg)' : 'rotate(0deg)',
+                    transition: 'transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+                }}>＋</span>
+            </button>
+            {open && (
+                <div className="bzt-rise-in">
+                    <CheckInCompare weeks={weeks} />
+                </div>
+            )}
+        </div>
+    );
+}
+
 export const ProgressPanel = () => {
     const { user } = useAuth();
     const { clients, getClientWeeks } = useData();
     const { logs, addLog } = useSelfLogs();
+    const { t: t_ } = useLanguage(); // `t_` because `t` is already the BZT token map above
 
     const sortedByDate = useMemo(() => [...logs].sort((a, b) => a.date.localeCompare(b.date)), [logs]);
 
@@ -603,7 +769,6 @@ export const ProgressPanel = () => {
 
     const latestMeas = useMemo(() => [...sortedByDate].reverse().find(l => l.measurements)?.measurements, [sortedByDate]);
     const baselineMeas = useMemo(() => sortedByDate.find(l => l.measurements)?.measurements, [sortedByDate]);
-    const todayLog = sortedByDate.find(l => l.date === todayISO());
 
     // Real activity score + streak from the user doc
     const xp = user?.activityScore ?? 0;
@@ -629,28 +794,53 @@ export const ProgressPanel = () => {
         [clientWeeks]
     );
 
-    const handleCheckIn = async (p: { strength: number; hunger: number; energy: number; cardioCalories: number }) => {
-        await addLog({ date: todayISO(), metrics: p });
-    };
-
     const handleMeasUpdate = async (m: Meas) => {
         await addLog({ date: todayISO(), measurements: m });
     };
 
-    // Community weekly check-in: id = weekStart (YYYY-MM-DD of Monday).
-    // Server-side lock via firestore.rules: once locked == true, the doc
-    // becomes immutable. The next week creates a fresh doc.
+    // Community weekly check-in: rolling 7-day window from the last submission,
+    // NOT Monday-reset. User submits → row becomes locked → next available 7
+    // full days after submittedAt. Doc id = the actual submission date so each
+    // entry maps cleanly to one calendar day.
+    //
+    // Locking is server-enforced via firestore.rules (resource.data.locked == true
+    // blocks update + delete). The "available again at" gate below is purely a UX
+    // hint — submitting before nextAvailableAt would still succeed in Firestore;
+    // we just don't render the form.
     const isCommunity = user?.role === 'community';
-    const thisWeekStart = weekStartISO();
-    const thisWeekLog = logs.find(l => l.weekStart === thisWeekStart || l.id === thisWeekStart);
+    const todayKey = todayISO();
+    const weeklyLogs = useMemo(
+        () => sortedByDate.filter(l => l.period === 'weekly').sort((a, b) => b.date.localeCompare(a.date)),
+        [sortedByDate]
+    );
+    const lastWeeklyLog = weeklyLogs[0];
+    const lastSubmittedDate = lastWeeklyLog?.date ?? null;
 
-    const handleWeeklyCheckIn = async (p: { weight: number; notes: string }) => {
+    // Next available = lastSubmittedDate + 7 days. If no prior log, available now.
+    const nextAvailableAt = useMemo(() => {
+        if (!lastSubmittedDate) return null;
+        const d = new Date(lastSubmittedDate);
+        d.setDate(d.getDate() + 7);
+        return d.toISOString().slice(0, 10);
+    }, [lastSubmittedDate]);
+
+    const isWeeklyLocked = !!nextAvailableAt && nextAvailableAt > todayKey;
+    const todaysWeeklyLog = lastWeeklyLog && lastWeeklyLog.date === todayKey ? lastWeeklyLog : undefined;
+
+    const handleWeeklyCheckIn = async (p: {
+        weight: number; notes: string;
+        metrics: { strength: number; hunger: number; energy: number; cardioCalories: number };
+    }) => {
+        // Persist with today's date as the doc id. Each weekly entry is its own
+        // document — no overwrite of prior weeks. `weekStart` is kept for charts
+        // that group by week boundary. `metrics` powers the MetricsChart trend.
         await addLog({
-            date: thisWeekStart,
+            date: todayKey,
             weight: p.weight,
             notes: p.notes || undefined,
+            metrics: p.metrics,
             period: 'weekly',
-            weekStart: thisWeekStart,
+            weekStart: weekStartISO(),
             locked: true,
         });
     };
@@ -678,33 +868,44 @@ export const ProgressPanel = () => {
                 @media (max-width: 980px) {
                     .progress-panel-two-col { grid-template-columns: 1fr !important; }
                 }
+                @keyframes bzt-fade-in {
+                    from { opacity: 0; transform: translateY(4px); }
+                    to   { opacity: 1; transform: translateY(0); }
+                }
             `}</style>
             <div style={{ fontFamily: t.body, color: t.onSurface, display: 'flex', flexDirection: 'column', gap: 24 }}>
-                {/* Level + streak */}
-                <div style={{
-                    display: 'grid', gap: 16,
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-                }}>
-                    <MetricCard label="Current Streak" value={currentStreak} unit="days" sub={`Best: ${bestStreak} days`} hero />
-                    <MetricCard label="Level" value={level} sub={`${xp} XP · ${xpPct}% to next`} />
-                    <MetricCard label="Logs" value={logs.length} sub="All time" />
-                </div>
+                {/* Single switchable card — replaces the prior 3 stacked metric tiles.
+                    Slides through Streak / Level / Logs. Tap arrows, dots, or swipe. */}
+                <StatusCarousel
+                    slides={[
+                        { label: t_('currentStreakLabel'), value: currentStreak, unit: t_('daysUnit'), sub: `${t_('bestPrefix')} ${bestStreak} ${t_('daysUnit')}` },
+                        { label: t_('levelLabel'),         value: level,                          sub: `${xp} ${t_('xpUnit')} · ${xpPct}% ${t_('xpToNext')}` },
+                        { label: t_('logsLabel'),          value: logs.length,                    sub: t_('allTimeLabel') },
+                    ]}
+                />
 
-                {/* Check-in + measurements
-                    Community: weekly check-in (weight + notes, locks once submitted).
-                    Client: daily check-in (strength, hunger, energy, cardio).
-                */}
+                {/* Check-in + measurements.
+                    Community: weekly check-in card (weight + notes, server-locked).
+                    Client: daily strength/hunger/energy sliders are NOT shown here —
+                    that flow lives in /checkin (their existing weekly coaching path).
+                    Only the body-measurements card remains for clients on profile. */}
                 <div className="progress-panel-two-col" style={{
                     display: 'grid', gap: 24,
-                    gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
+                    gridTemplateColumns: isCommunity ? 'minmax(0, 1fr) minmax(0, 1fr)' : '1fr',
                 }}>
-                    {isCommunity ? (
+                    {isCommunity && (
                         <WeeklyCheckIn
-                            existingLog={thisWeekLog ? { weight: thisWeekLog.weight, notes: thisWeekLog.notes, locked: thisWeekLog.locked } : undefined}
+                            existingLog={todaysWeeklyLog ? {
+                                weight: todaysWeeklyLog.weight,
+                                notes: todaysWeeklyLog.notes,
+                                locked: todaysWeeklyLog.locked,
+                                metrics: todaysWeeklyLog.metrics,
+                            } : undefined}
+                            isWindowLocked={isWeeklyLocked}
+                            lastSubmittedDate={lastSubmittedDate}
+                            nextAvailableAt={nextAvailableAt}
                             onSave={handleWeeklyCheckIn}
                         />
-                    ) : (
-                        <DailyCheckIn initial={todayLog?.metrics} onSave={handleCheckIn} />
                     )}
                     <BodyMeasurementsCard current={latestMeas} baseline={baselineMeas} onUpdate={handleMeasUpdate} />
                 </div>
@@ -718,8 +919,11 @@ export const ProgressPanel = () => {
                 {/* Photos (coaching clients only) */}
                 <PhotoGallery photos={weekPhotos} />
 
-                {/* Week comparison (coaching clients only) */}
-                {clientWeeks.length >= 2 && <CheckInCompare weeks={clientWeeks} />}
+                {/* Week comparison (coaching clients only) — collapsed by default
+                    so the profile doesn't render the heavy compare UI on every load. */}
+                {clientWeeks.length >= 2 && (
+                    <CompareToggle weeks={clientWeeks} />
+                )}
             </div>
         </>
     );

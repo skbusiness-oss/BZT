@@ -1,6 +1,7 @@
 import clsx from 'clsx';
-import { BookOpen, ChevronUp, ChevronDown, Edit2, Trash2, Eye, EyeOff, Lock } from 'lucide-react';
+import { BookOpen, ChevronUp, ChevronDown, Edit2, Trash2, Eye, EyeOff, Lock, Copy } from 'lucide-react';
 import { Course, LibraryCategory, UserCourseProgress } from '../../types';
+import { useLanguage } from '../../context/LanguageContext';
 
 interface Props {
     course: Course;
@@ -17,25 +18,37 @@ interface Props {
     onEdit?: () => void;
     onArchive?: () => void;
     onTogglePublish?: () => void;
+    /** Deep-copy this course to a new draft. Optional so non-managing
+     *  surfaces (or older callers) don't have to pass it. */
+    onDuplicate?: () => void;
+    /** Disable the duplicate button while a clone is in flight. */
+    duplicateBusy?: boolean;
 }
 
+// Falls back to a neutral surface-container style when `course.level` is
+// missing or unrecognized — without this, the badge renders class=""
+// which collapses to a transparent pill (looks broken). (§1.7.5)
 const LEVEL_COLOR: Record<string, string> = {
     beginner: 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20',
     intermediate: 'text-amber-400 bg-amber-400/10 border-amber-400/20',
     advanced: 'text-red-400 bg-red-400/10 border-red-400/20',
 };
+const LEVEL_COLOR_FALLBACK = 'text-on-surface-variant bg-surface-container-highest border-outline-variant/30';
 
 const TYPE_LABEL: Record<string, string> = {
     academy: 'Core Curriculum',
     recorded_live: 'Live Session',
     bonus: 'Bonus',
 };
+const TYPE_LABEL_FALLBACK = 'Course';
 
 export const CourseCard = ({
     course, categories, progress, lessonCount = 0,
     isManaging, isFirst, isLast, canAccess,
     onSelect, onMoveUp, onMoveDown, onEdit, onArchive, onTogglePublish,
+    onDuplicate, duplicateBusy,
 }: Props) => {
+    const { t } = useLanguage();
     const completedCount = progress?.completedLessonIds.length ?? 0;
     const pct = lessonCount > 0 ? Math.round((completedCount / lessonCount) * 100) : 0;
     const isComplete = lessonCount > 0 && completedCount >= lessonCount;
@@ -43,18 +56,23 @@ export const CourseCard = ({
         .filter(c => course.categoryIds.includes(c.id))
         .map(c => c.name)
         .slice(0, 2);
+    // Locked teaser state — visible to non-managing audiences, but the card
+    // is non-interactive (cover + title only, no entry into the course).
+    // Coaches in manage mode keep full access via the "Lessons" button.
+    const isLockedTeaser = !!course.isLocked && !isManaging;
+    const interactable = canAccess && !isManaging && !isLockedTeaser;
 
     return (
         <div className={clsx(
             'glass-card rounded-2xl overflow-hidden flex flex-col group transition-all duration-500',
-            canAccess && !isManaging ? 'hover:-translate-y-2 cursor-pointer' : '',
+            interactable ? 'hover:-translate-y-2 cursor-pointer' : '',
             !canAccess && 'opacity-70',
             !course.isPublished && isManaging && 'border border-dashed border-outline-variant/40',
         )}>
             {/* Thumbnail */}
             <div
                 className="relative h-48 overflow-hidden"
-                onClick={() => canAccess && !isManaging ? onSelect() : undefined}
+                onClick={() => interactable ? onSelect() : undefined}
             >
                 {course.coverImageUrl ? (
                     <img
@@ -72,8 +90,11 @@ export const CourseCard = ({
 
                 {/* Level badge — top left */}
                 <div className="absolute top-3 left-3 flex flex-wrap gap-1.5">
-                    <span className={clsx('px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border', LEVEL_COLOR[course.level])}>
-                        {course.level}
+                    <span className={clsx(
+                        'px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border',
+                        LEVEL_COLOR[course.level] ?? LEVEL_COLOR_FALLBACK,
+                    )}>
+                        {course.level ?? 'unset'}
                     </span>
                     {!course.isPublished && isManaging && (
                         <span className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest bg-surface-container-highest/80 text-on-surface-variant border border-outline-variant/30 backdrop-blur">
@@ -87,10 +108,23 @@ export const CourseCard = ({
                     )}
                 </div>
 
-                {/* Type badge — top right */}
-                <div className="absolute top-3 right-3">
+                {/* Type badge + lock pill — top right */}
+                <div className="absolute top-3 right-3 flex items-center gap-1.5">
+                    {isLockedTeaser && (
+                        <span
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full backdrop-blur text-[10px] font-bold uppercase tracking-widest"
+                            style={{
+                                background: 'rgb(var(--primary) / 0.20)',
+                                color: 'rgb(var(--primary))',
+                                border: '1px solid rgb(var(--primary) / 0.35)',
+                            }}
+                            title="Locked — coming soon"
+                        >
+                            <Lock size={11} strokeWidth={2.5} /> Locked
+                        </span>
+                    )}
                     <span className="px-2.5 py-1 rounded-full bg-surface-container-highest/80 backdrop-blur text-on-surface text-[10px] font-bold uppercase tracking-widest">
-                        {TYPE_LABEL[course.courseType]}
+                        {TYPE_LABEL[course.courseType] ?? TYPE_LABEL_FALLBACK}
                     </span>
                 </div>
 
@@ -114,7 +148,7 @@ export const CourseCard = ({
                     ))}
                     {catNames.length === 0 && (
                         <span className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
-                            {TYPE_LABEL[course.courseType]}
+                            {TYPE_LABEL[course.courseType] ?? TYPE_LABEL_FALLBACK}
                         </span>
                     )}
                 </div>
@@ -122,9 +156,9 @@ export const CourseCard = ({
                 <h3
                     className={clsx(
                         'text-xl font-headline font-extrabold mb-2 leading-tight transition-colors',
-                        canAccess && !isManaging && 'group-hover:text-primary',
+                        interactable && 'group-hover:text-primary',
                     )}
-                    onClick={() => canAccess && !isManaging ? onSelect() : undefined}
+                    onClick={() => interactable ? onSelect() : undefined}
                 >
                     {course.title}
                 </h3>
@@ -150,7 +184,7 @@ export const CourseCard = ({
                 {/* Meta row */}
                 <div className="flex items-center gap-4 mt-4 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
                     <span className="flex items-center gap-1"><BookOpen size={12} />{lessonCount} Lessons</span>
-                    {!canAccess && <span className="text-on-surface/40 flex items-center gap-1"><Lock size={12} />Upgrade to unlock</span>}
+                    {!canAccess && <span className="text-on-surface/40 flex items-center gap-1"><Lock size={12} />{t('upgradeToUnlock')}</span>}
                 </div>
 
                 {/* Manage controls */}
@@ -174,6 +208,14 @@ export const CourseCard = ({
                         >
                             {course.isPublished ? <EyeOff size={14} /> : <Eye size={14} />}
                         </button>
+                        {onDuplicate && (
+                            <button
+                                onClick={onDuplicate}
+                                disabled={duplicateBusy}
+                                className="p-2 rounded-full bg-surface-container text-on-surface-variant hover:text-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                title="Duplicate course"
+                            ><Copy size={14} /></button>
+                        )}
                         <button
                             onClick={onArchive}
                             className="p-2 rounded-full bg-surface-container text-on-surface-variant hover:text-red-400 transition-colors"

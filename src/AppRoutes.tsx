@@ -8,6 +8,8 @@ import { CoachReview } from './pages/CoachReview';
 import { Clients } from './pages/Clients';
 import { VideoLibrary } from './pages/VideoLibrary';
 import { Workouts } from './pages/Workouts';
+import { Diets } from './pages/Diets';
+import { PlanDetail } from './pages/PlanDetail';
 import { WorkoutDayView } from './components/workouts/WorkoutDayView';
 import { ProgramBrowse } from './pages/ProgramBrowse';
 import { UserView } from './pages/UserView';
@@ -18,7 +20,7 @@ import { Leaderboard } from './pages/Leaderboard';
 import { Settings } from './pages/Settings';
 import { AdminSetup } from './pages/AdminSetup';
 import { ErrorBoundary } from './components/shared/ErrorBoundary';
-import { TosModal } from './components/shared/TosModal';
+import { TosModal, tosAcceptedKey } from './components/shared/TosModal';
 import { CommunityBaselineForm } from './components/profile/CommunityBaselineForm';
 import React, { useState, useEffect } from 'react';
 
@@ -57,8 +59,23 @@ const RequireActive = ({ children }: { children: React.ReactNode }) => {
 // Both are blocking overlays. ToS comes first; once it's accepted, the
 // baseline form takes over for community accounts.
 const AuthenticatedShell = () => {
-    const { user } = useAuth();
-    const showTos = !!user && !user.tosAcceptedAt;
+    const { user, freshUserDocLoaded } = useAuth();
+    // Local-device hint, set by TosModal on accept. Belt-and-suspenders for
+    // when Firestore hasn't replied yet on a returning device — the user has
+    // already accepted, so we never want the modal to flash again here.
+    const localTosHint = !!user && (() => {
+        try { return !!localStorage.getItem(tosAcceptedKey(user.id)); }
+        catch { return false; }
+    })();
+    // Only show ToS once we have a confirmed-fresh user doc AND neither the
+    // server field nor the local hint says it was accepted. This prevents
+    // every spurious mount (post-foreground, after a route change) from
+    // briefly rendering the modal while the snapshot is in-flight.
+    const showTos =
+        !!user
+        && freshUserDocLoaded
+        && !user.tosAcceptedAt
+        && !localTosHint;
     const needsBaseline =
         !!user && !showTos
         && user.role === 'community'
@@ -112,6 +129,8 @@ export const AppRoutes = () => {
                 <Route path="/workouts" element={<ErrorBoundary><RequireActive><Workouts /></RequireActive></ErrorBoundary>} />
                 <Route path="/workouts/day/:dayNumber" element={<ErrorBoundary><RequireActive><WorkoutDayView /></RequireActive></ErrorBoundary>} />
                 <Route path="/workouts/program/:programId" element={<ErrorBoundary><RequireActive><ProgramBrowse /></RequireActive></ErrorBoundary>} />
+                <Route path="/diets" element={<ErrorBoundary><RequireActive><Diets /></RequireActive></ErrorBoundary>} />
+                <Route path="/diets/plan/:id" element={<ErrorBoundary><RequireActive><PlanDetail /></RequireActive></ErrorBoundary>} />
                 <Route path="/users/:userId/view" element={
                     <ProtectedRoute allowedRoles={['coach', 'admin']}>
                         <ErrorBoundary><UserView /></ErrorBoundary>

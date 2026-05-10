@@ -8,7 +8,10 @@
  * `publicProfiles/{uid}` going forward.
  */
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
-import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore';
+import {
+    getFirestore, FieldValue, Timestamp,
+    Firestore, Transaction,
+} from 'firebase-admin/firestore';
 
 // --- Constants (mirror src/lib/activityScore.ts) ---
 const XP_TABLE: Record<string, number> = {
@@ -48,6 +51,94 @@ function nextStreak(prev: ActivityStreak | undefined, today: string): ActivitySt
     };
 }
 
+/**
+ * Verify the underlying domain event for a (source, sourceId) pair actually
+ * exists and belongs to the caller. Without this, a user could forge
+ * `awardXp({ source: 'SELF_LOG', sourceId: 'fake' })` to inflate their
+ * leaderboard rank. Reads happen inside the same transaction so they're
+ * consistent with the rest of the credit operation.
+ *
+ * Must be called BEFORE any tx.set/tx.update in the same transaction
+ * (Firestore transaction rule: reads before writes).
+ */
+async function verifySource(
+    tx: Transaction,
+    db: Firestore,
+    uid: string,
+    source: string,
+    sourceId: string,
+): Promise<void> {
+    if (source === 'SELF_LOG') {
+        // sourceId is the date (YYYY-MM-DD).
+        const snap = await tx.get(db.doc(`users/${uid}/selfLogs/${sourceId}`));
+        if (!snap.exists) throw new HttpsError('not-found', 'Self log not found.');
+        return;
+    }
+
+    if (source === 'WEEKLY_CHECKIN') {
+        // sourceId is the check-in doc id, e.g. `${clientId}-w${weekNum}`.
+        const snap = await tx.get(db.doc(`checkIns/${sourceId}`));
+        if (!snap.exists) throw new HttpsError('not-found', 'Check-in not found.');
+        const data = snap.data() ?? {};
+        // Must belong to caller. Either userId or clientId field works
+        // depending on how the doc was written across the codebase.
+        if (data.userId !== uid && data.clientId !== uid) {
+            throw new HttpsError('permission-denied', 'Check-in does not belong to caller.');
+        }
+        return;
+    }
+
+    if (source === 'POST') {
+        // sourceId is the post doc id.
+        const snap = await tx.get(db.doc(`posts/${sourceId}`));
+        if (!snap.exists) throw new HttpsError('not-found', 'Post not found.');
+        if (snap.data()?.authorId !== uid) {
+            throw new HttpsError('permission-denied', 'Post does not belong to caller.');
+        }
+        return;
+    }
+
+    if (source === 'COMMENT') {
+        // sourceId format: `${postId}/${commentId}` (set by the client).
+        const [postId, commentId] = sourceId.split('/');
+        if (!postId || !commentId) {
+            throw new HttpsError('invalid-argument', 'COMMENT sourceId must be `postId/commentId`.');
+        }
+        const snap = await tx.get(db.doc(`posts/${postId}/comments/${commentId}`));
+        if (!snap.exists) throw new HttpsError('not-found', 'Comment not found.');
+        if (snap.data()?.authorId !== uid) {
+            throw new HttpsError('permission-denied', 'Comment does not belong to caller.');
+        }
+        return;
+    }
+
+    if (source === 'LESSON_COMPLETE') {
+        // sourceId format: `${courseId}/${lessonId}`.
+        const [courseId, lessonId] = sourceId.split('/');
+        if (!courseId || !lessonId) {
+            throw new HttpsError('invalid-argument', 'LESSON_COMPLETE sourceId must be `courseId/lessonId`.');
+        }
+        const progressId = `${uid}_${courseId}_${lessonId}`;
+        const snap = await tx.get(db.doc(`userLessonProgress/${progressId}`));
+        if (!snap.exists) throw new HttpsError('not-found', 'Lesson progress not found.');
+        if (snap.data()?.status !== 'completed') {
+            throw new HttpsError('failed-precondition', 'Lesson not yet completed.');
+        }
+        return;
+    }
+
+    // Fail-closed: any source we didn't explicitly verify above is rejected.
+    // WORKOUT_DAY and STREAK_MILESTONE_7 are derived server-side events;
+    // when client-callable, add their own verification branch above. The
+    // top-level XP_TABLE membership check is necessary but not sufficient
+    // — without this default-throw, a client could spoof any future source
+    // we add to XP_TABLE before its verifySource branch is wired up.
+    throw new HttpsError(
+        'invalid-argument',
+        `Source "${source}" is not client-callable; no verification path.`,
+    );
+}
+
 export const awardXp = onCall(
     { region: 'us-central1', memory: '256MiB', invoker: 'public' },
     async (request) => {
@@ -85,6 +176,11 @@ export const awardXp = onCall(
             if (userData.disabled === true) {
                 throw new HttpsError('permission-denied', 'Account disabled.');
             }
+
+            // Verify the underlying domain event exists and belongs to the
+            // caller. Must run before any tx.set/tx.update so all reads
+            // happen first (Firestore transaction constraint).
+            await verifySource(tx, db, uid, source, sourceId);
 
             const today = todayISO();
             const prevStreak = userData.streak as ActivityStreak | undefined;

@@ -14,6 +14,7 @@ import { ManageLessonModal } from '../components/academy/ManageLessonModal';
 import { useAcademy } from '../context/AcademyContext';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 import { buildEmbedUrl } from '../lib/videoUtils';
 import type { Course, Lesson, LessonResource, LibraryCategory } from '../types';
 
@@ -27,13 +28,14 @@ type LessonFormData = Omit<Lesson, 'id' | 'createdAt' | 'updatedAt' | 'createdBy
 
 export const VideoLibrary = () => {
     const { user } = useAuth();
+    const { t } = useLanguage();
     const {
         videos, categories, addVideo, updateVideo, removeVideo,
         addCategory, uploadVideoPdf,
     } = useData();
     const {
         courses, libraryCategories, lessons, lessonContent, lessonProgress, userProgress, loading: academyLoading,
-        loadLessons, loadLessonContent, createCourse, updateCourse, archiveCourse, moveCourse,
+        loadLessons, loadLessonContent, createCourse, updateCourse, archiveCourse, moveCourse, duplicateCourse,
         createLesson, updateLesson, archiveLesson, moveLesson,
         createCategory, updateCategory, archiveCategory,
         getLessonResourceUrl, markLessonStarted, markLessonComplete,
@@ -164,6 +166,22 @@ export const VideoLibrary = () => {
 
     const handleTogglePublish = async (course: Course) => {
         await updateCourse(course.id, { isPublished: !course.isPublished });
+    };
+
+    // Track which course is mid-clone so we can disable the button + render
+    // a busy state in the card. Cleared after the new course id is back.
+    const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
+    const handleDuplicateCourse = async (course: Course) => {
+        if (duplicatingId) return; // serialize — one clone at a time
+        setDuplicatingId(course.id);
+        try {
+            await duplicateCourse(course.id);
+        } catch (err) {
+            console.error('Failed to duplicate course:', err);
+            window.alert('Failed to duplicate course. See console for details.');
+        } finally {
+            setDuplicatingId(null);
+        }
     };
 
     // ── Lesson CRUD handlers ──────────────────────────────────────────────────
@@ -314,13 +332,13 @@ export const VideoLibrary = () => {
             {/* ── Editorial Header ─────────────────────────────────────────── */}
             <section className="mb-10">
                 <span className="text-primary font-headline font-bold text-sm tracking-[0.3em] uppercase mb-3 block">
-                    Zero to Hero
+                    {t('zeroToHeroEyebrow')}
                 </span>
                 <h1 className="font-display font-extrabold text-5xl md:text-7xl tracking-tighter leading-none text-on-surface mb-5">
-                    Academy<span className="text-primary-container">.</span>
+                    {t('academyTitle')}<span className="text-primary-container">.</span>
                 </h1>
                 <p className="text-on-surface-variant font-body leading-relaxed max-w-xl mb-8">
-                    A structured path from fundamentals to elite mastery. Required courses build the foundation your coaching calls are built on.
+                    {t('academyHeaderBlurb')}
                 </p>
 
                 {/* Tab bar */}
@@ -386,24 +404,60 @@ export const VideoLibrary = () => {
             {/* ── Academy Path Tab ─────────────────────────────────────────── */}
             {!activeCourse && activeTab === 'academy' && (
                 <div className="space-y-12">
-                    {/* Continue Learning banner */}
+                    {/* Continue Learning banner — hero photo treatment matching
+                        the dashboard's start-learning surface so the visual
+                        identity carries across the app. */}
                     {continueLearning && (
-                        <div className="glass-card rounded-2xl p-8 flex flex-col md:flex-row gap-6 items-start md:items-center">
-                            <div className="flex-1">
-                                <span className="text-[10px] font-headline font-bold uppercase tracking-[0.3em] text-primary block mb-2">Continue Learning</span>
-                                <h2 className="text-2xl font-headline font-extrabold text-on-surface mb-2">{continueLearning.course.title}</h2>
-                                {continueLearning.nextLesson && (
-                                    <p className="text-sm text-on-surface-variant">
-                                        Next: <span className="text-on-surface font-medium">{continueLearning.nextLesson.title}</span>
-                                    </p>
-                                )}
+                        <div
+                            className="bzt-hero-card relative overflow-hidden rounded-2xl"
+                            style={{
+                                minHeight: 220,
+                                border: '1px solid rgb(var(--outline-variant) / 0.30)',
+                                boxShadow: '0 8px 40px 0 rgba(0,0,0,0.25)',
+                            }}
+                        >
+                            <div
+                                className="bzt-hero-photo"
+                                style={{
+                                    position: 'absolute', inset: 0,
+                                    backgroundImage: 'url(/dashboard-covers/continue-learning.png)',
+                                    backgroundSize: 'cover',
+                                    backgroundPosition: 'center',
+                                }}
+                            />
+                            <div
+                                style={{
+                                    position: 'absolute', inset: 0,
+                                    background: 'linear-gradient(180deg, rgba(0,0,0,0.10) 0%, rgba(0,0,0,0.55) 60%, rgba(0,0,0,0.85) 100%)',
+                                }}
+                            />
+                            <div className="relative p-7 md:p-8 flex flex-col md:flex-row gap-6 md:items-end justify-between min-h-[220px]">
+                                <div className="flex-1">
+                                    <span
+                                        className="text-[10px] font-headline font-bold uppercase tracking-[0.3em] block mb-2"
+                                        style={{ color: '#e6c364' }}
+                                    >
+                                        Continue Learning
+                                    </span>
+                                    <h2
+                                        className="text-2xl md:text-[28px] font-headline font-extrabold mb-2 leading-tight"
+                                        style={{ color: '#fff', textShadow: '0 2px 12px rgba(0,0,0,0.5)' }}
+                                    >
+                                        {continueLearning.course.title}
+                                    </h2>
+                                    {continueLearning.nextLesson && (
+                                        <p className="text-sm" style={{ color: 'rgba(255,255,255,0.82)' }}>
+                                            Next: <span style={{ color: '#fff', fontWeight: 500 }}>{continueLearning.nextLesson.title}</span>
+                                        </p>
+                                    )}
+                                </div>
+                                <button
+                                    onClick={() => setActiveCourseId(continueLearning.course.id)}
+                                    className="gold-gradient text-on-primary-fixed px-8 py-3.5 rounded-full font-label text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 shrink-0 shadow-lg shadow-primary/30 active:scale-95 transition-all self-start md:self-end"
+                                >
+                                    Continue <ArrowRight size={14} />
+                                </button>
                             </div>
-                            <button
-                                onClick={() => setActiveCourseId(continueLearning.course.id)}
-                                className="gold-gradient text-on-primary-fixed px-8 py-3.5 rounded-full font-label text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 shrink-0 shadow-lg shadow-primary/20 active:scale-95 transition-all"
-                            >
-                                Continue <ArrowRight size={14} />
-                            </button>
                         </div>
                     )}
 
@@ -441,7 +495,7 @@ export const VideoLibrary = () => {
                         return (
                             <details>
                                 <summary className="cursor-pointer list-none text-[10px] font-label font-bold uppercase tracking-widest text-on-surface-variant hover:text-primary transition-colors mb-6">
-                                    Bonus Content ({bonus.length})
+                                    {t('bonusContent')} ({bonus.length})
                                 </summary>
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
                                     {bonus.map(course => (
@@ -464,7 +518,7 @@ export const VideoLibrary = () => {
                         <div className="glass-card rounded-2xl p-16 text-center text-on-surface/40">
                             <GraduationCap size={48} className="mx-auto mb-4 opacity-20" />
                             <p className="text-sm font-body">
-                                No academy courses yet.{isCoach && ' Switch to the Manage tab to create the first one.'}
+                                {t('noAcademyCoursesYet')}{isCoach && ` ${t('noAcademyCoursesCoachHint')}`}
                             </p>
                         </div>
                     )}
@@ -591,6 +645,8 @@ export const VideoLibrary = () => {
                                     onEdit={() => openEditCourse(course)}
                                     onArchive={() => handleArchiveCourse(course.id)}
                                     onTogglePublish={() => handleTogglePublish(course)}
+                                    onDuplicate={() => handleDuplicateCourse(course)}
+                                    duplicateBusy={duplicatingId === course.id}
                                 />
                             ))}
                         </div>

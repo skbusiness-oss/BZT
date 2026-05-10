@@ -201,9 +201,18 @@ export const ManageLessonModal = ({ lesson, courseId, nextOrder, onSave, onClose
                             <label className="block text-[10px] font-label font-bold uppercase tracking-widest text-on-surface/60 mb-2">Duration (min)</label>
                             <input
                                 type="number"
+                                step="0.1"
+                                min={0}
                                 value={form.durationMinutes ?? ''}
-                                onChange={e => set('durationMinutes', e.target.value ? Number(e.target.value) : undefined)}
-                                placeholder="e.g. 15"
+                                onChange={e => {
+                                    const raw = e.target.value;
+                                    if (!raw) { set('durationMinutes', undefined); return; }
+                                    const n = Number(raw);
+                                    // Clamp to 1 decimal at write time so we never persist
+                                    // values like 13.33333… in Firestore.
+                                    set('durationMinutes', Number.isFinite(n) ? Math.round(n * 10) / 10 : undefined);
+                                }}
+                                placeholder="e.g. 13.3"
                                 className="w-full bg-surface-container-lowest border border-outline-variant/30 focus:border-primary/50 outline-none rounded-xl p-3.5 text-sm font-body text-on-surface transition-colors"
                             />
                         </div>

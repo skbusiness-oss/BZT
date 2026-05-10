@@ -37,33 +37,20 @@
     <script type="module" src="/src/main.tsx"></script>
     
     <!-- Register Service Worker.
-         When the SW updates (e.g. after a new deploy), `controllerchange` fires
-         once the new worker takes control. We reload so the page picks up the
-         new bundle instead of staying on the old cached one. -->
+         CHANGED 2026-05-06: do NOT auto-skip-waiting on a new version.
+         Auto-skip caused a "double login" regression: the new SW would
+         activate mid-sign-in, fire controllerchange, reload the page,
+         and wipe the half-completed auth attempt. The new behavior:
+           1. The new SW installs in the background.
+           2. It stays in "waiting" state until the user closes all tabs
+              (or we explicitly post SKIP_WAITING from app code).
+           3. Their NEXT clean visit picks up the new bundle.
+         No reload listener — `controllerchange` is handled implicitly by
+         the next page load. -->
     <script>
       if ('serviceWorker' in navigator) {
-        var reloading = false;
-        navigator.serviceWorker.addEventListener('controllerchange', function () {
-          if (reloading) return;
-          reloading = true;
-          window.location.reload();
-        });
         window.addEventListener('load', function () {
           navigator.serviceWorker.register('/service-worker.js')
-            .then(function (reg) {
-              // If a new SW becomes "waiting", tell it to skip waiting so it
-              // activates immediately and triggers controllerchange.
-              if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
-              reg.addEventListener('updatefound', function () {
-                var nw = reg.installing;
-                if (!nw) return;
-                nw.addEventListener('statechange', function () {
-                  if (nw.state === 'installed' && navigator.serviceWorker.controller) {
-                    nw.postMessage({ type: 'SKIP_WAITING' });
-                  }
-                });
-              });
-            })
             .catch(function () { /* no-op */ });
         });
       }

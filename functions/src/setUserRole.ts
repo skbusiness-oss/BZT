@@ -14,14 +14,16 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 const ALLOWED_ROLES = ['community', 'client', 'coach', 'admin'] as const;
 type Role = (typeof ALLOWED_ROLES)[number];
 
-async function callerIsCoach(uid: string | undefined): Promise<boolean> {
-    if (!uid) return false;
+async function callerRole(uid: string | undefined): Promise<Role | null> {
+    if (!uid) return null;
     const claims = (await getAuth().getUser(uid)).customClaims as { role?: string } | undefined;
-    if (claims?.role === 'coach' || claims?.role === 'admin') return true;
+    const claimRole = claims?.role;
+    if (claimRole === 'coach' || claimRole === 'admin') return claimRole;
     // Fallback: read Firestore role until all coaches have been migrated to claims.
     const snap = await getFirestore().doc(`users/${uid}`).get();
     const role = snap.data()?.role;
-    return role === 'coach' || role === 'admin';
+    if (role === 'admin' || role === 'coach' || role === 'client' || role === 'community') return role;
+    return null;
 }
 
 export const setUserRole = onCall(
@@ -29,7 +31,8 @@ export const setUserRole = onCall(
     async (request) => {
         const callerUid = request.auth?.uid;
         if (!callerUid) throw new HttpsError('unauthenticated', 'Sign in required.');
-        if (!(await callerIsCoach(callerUid))) {
+        const caller = await callerRole(callerUid);
+        if (caller !== 'coach' && caller !== 'admin') {
             throw new HttpsError('permission-denied', 'Only coaches can change roles.');
         }
 
@@ -39,6 +42,22 @@ export const setUserRole = onCall(
         }
         if (!role || !ALLOWED_ROLES.includes(role as Role)) {
             throw new HttpsError('invalid-argument', `role must be one of ${ALLOWED_ROLES.join('|')}.`);
+        }
+
+        // Privilege escalation guard: only existing admins can grant the
+        // `admin` role. Without this, any coach could call
+        // `setUserRole({ targetUid: myOwnUid, role: 'admin' })` and take
+        // over the platform. Coaches can promote up to `coach` only.
+        if (role === 'admin' && caller !== 'admin') {
+            throw new HttpsError('permission-denied', 'Only admins can grant the admin role.');
+        }
+        // Symmetric guard: only an admin can demote another admin.
+        if (targetUid !== callerUid) {
+            const targetSnap = await getFirestore().doc(`users/${targetUid}`).get();
+            const targetCurrentRole = targetSnap.data()?.role;
+            if (targetCurrentRole === 'admin' && caller !== 'admin') {
+                throw new HttpsError('permission-denied', 'Only admins can change another admin\'s role.');
+            }
         }
 
         // Set claim → token now carries the new role on next refresh.

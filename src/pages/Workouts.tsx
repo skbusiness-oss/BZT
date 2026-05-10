@@ -145,12 +145,12 @@ export const Workouts = () => {
             {/* ── Page header ──────────────────────────────── */}
             <div className="flex flex-col md:flex-row justify-between gap-6 bg-surface-container-low rounded-2xl p-6 md:p-8 ghost-border">
                 <div>
-                    <span className="font-label text-[10px] font-bold uppercase tracking-widest text-primary block mb-2">Training Hub</span>
+                    <span className="font-label text-[10px] font-bold uppercase tracking-widest text-primary block mb-2">{t('trainingHubEyebrow')}</span>
                     <h1 className="text-4xl md:text-5xl font-headline font-extrabold text-on-surface tracking-tighter">{t('workoutsTitle')}</h1>
                     <p className="text-on-surface/60 font-body mt-3 max-w-lg">
                         {isCoach
                             ? t('workoutsCoachSubtitle')
-                            : 'Browse complete training programs with 10-day rotations.'}
+                            : t('workoutsCommunitySubtitle')}
                     </p>
                 </div>
                 <div className="flex flex-col gap-3 justify-end">
@@ -176,7 +176,7 @@ export const Workouts = () => {
                                 onClick={() => setShowCategoryModal(true)}
                                 className="flex-1 py-3 flex items-center justify-center gap-2 text-primary font-bold font-label text-[10px] uppercase tracking-widest rounded-xl bg-primary/5 hover:bg-primary/10 border border-primary/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
                             >
-                                <Plus size={16} /> Category
+                                <Plus size={16} /> {t('categoryNoun')}
                             </button>
                         </div>
                     )}
@@ -194,7 +194,7 @@ export const Workouts = () => {
                             : 'bg-surface-container-low text-on-surface/60 border-outline-variant/30 hover:bg-surface-container hover:text-on-surface'
                     )}
                 >
-                    <Calendar size={14} /> Training Programs
+                    <Calendar size={14} /> {t('trainingProgramsTab')}
                 </button>
 
                 {isCoach && (
@@ -207,7 +207,7 @@ export const Workouts = () => {
                                 : 'bg-surface-container-low text-on-surface/60 border-outline-variant/30 hover:bg-surface-container hover:text-on-surface'
                         )}
                     >
-                        <Dumbbell size={14} /> Custom Workouts
+                        <Dumbbell size={14} /> {t('customWorkoutsTab')}
                     </button>
                 )}
 
@@ -216,7 +216,7 @@ export const Workouts = () => {
             {/* ── Split / category filter (Programs + Custom views) ── */}
             <div className="bg-surface-container-low rounded-2xl p-6 ghost-border space-y-6">
                     <div>
-                        <span className="font-label text-[10px] font-bold uppercase tracking-widest text-on-surface/40 block mb-3">Filter by Category</span>
+                        <span className="font-label text-[10px] font-bold uppercase tracking-widest text-on-surface/40 block mb-3">{t('filterByCategory')}</span>
                         <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
                             {allCategories.map(cat => (
                                 <button
@@ -437,8 +437,8 @@ export const Workouts = () => {
                     {filteredPrograms.length === 0 && (
                         <div className="text-center py-24 bg-surface-container-low rounded-2xl ghost-border p-8">
                             <Calendar className="text-on-surface/20 mx-auto mb-6" size={48} />
-                            <p className="text-on-surface/70 font-headline font-bold text-xl mb-2">No programs found</p>
-                            <p className="text-on-surface/40 font-body text-sm">Try adjusting your split or goal filters.</p>
+                            <p className="text-on-surface/70 font-headline font-bold text-xl mb-2">{t('noProgramsFound')}</p>
+                            <p className="text-on-surface/40 font-body text-sm">{t('noProgramsFoundHint')}</p>
                         </div>
                     )}
                 </div>
@@ -583,9 +583,9 @@ export const Workouts = () => {
                     {customWorkouts.length === 0 && (
                         <div className="text-center py-24 bg-surface-container-low rounded-2xl ghost-border p-8">
                             <Dumbbell className="text-on-surface/20 mx-auto mb-6" size={48} />
-                            <p className="text-on-surface/70 font-headline font-bold text-xl mb-2">No custom workouts yet</p>
+                            <p className="text-on-surface/70 font-headline font-bold text-xl mb-2">{t('noCustomWorkoutsYet')}</p>
                             <p className="text-on-surface/40 font-body text-sm">
-                                {isCoach ? 'Create your first custom workout above.' : "Your coach hasn't created any custom workouts yet."}
+                                {isCoach ? t('noCustomWorkoutsCoachHint') : t('noCustomWorkoutsClientHint')}
                             </p>
                         </div>
                     )}

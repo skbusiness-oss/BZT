@@ -9,6 +9,9 @@ import { ProgressCharts } from '../components/dashboard/ProgressCharts';
 import { ClientInfoPanel } from '../components/checkin/ClientInfoPanel';
 import { CheckInCompare } from '../components/checkin/CheckInCompare';
 import { WorkoutWizard } from '../components/workouts/WorkoutWizard';
+import { AssignDietPicker } from '../components/diets/AssignDietPicker';
+import { dietPlans } from '../data/diets';
+import { tPlanName } from '../lib/dietTranslations';
 import type { UserActiveProgram } from '../types';
 import {
     ChevronLeft,
@@ -29,6 +32,7 @@ import {
     Shield,
     Zap,
     Flame,
+    Apple,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { MacroTarget } from '../types';
@@ -37,7 +41,7 @@ export const CoachReview = () => {
     const { clientId } = useParams<{ clientId: string }>();
     const navigate = useNavigate();
     const { clients, getClientWeeks, updateWeek, updateClient, cascadeTargets, createProgram, advanceWeek, extendProgram } = useData();
-    const { t } = useLanguage();
+    const { t, lang } = useLanguage();
 
     const client = clients.find(c => c.id === clientId);
     const weeks = client ? getClientWeeks(client.id) : [];
@@ -52,6 +56,8 @@ export const CoachReview = () => {
     const [changeTargets, setChangeTargets] = useState(false);
     const [showInfo, setShowInfo] = useState(false);
     const [showProgramWizard, setShowProgramWizard] = useState(false);
+    const [showDietPicker, setShowDietPicker] = useState(false);
+    const [clientDietId, setClientDietId] = useState<string | undefined>(undefined);
     const [clientProgram, setClientProgram] = useState<UserActiveProgram | null>(null);
 
     const [newHighCarb, setNewHighCarb] = useState<MacroTarget>({ carbs: 250, protein: 180, fats: 60, calories: 2260 });
@@ -89,6 +95,21 @@ export const CoachReview = () => {
         const unsub = onSnapshot(ref, (snap) => {
             setClientProgram(snap.exists() ? (snap.data() as UserActiveProgram) : null);
         }, () => setClientProgram(null));
+        return unsub;
+    }, [client?.userId]);
+
+    // Live-read the client's currently-assigned diet so the picker can
+    // highlight it as "Current" and we can show a swap CTA when reviewing
+    // a weekly check-in.
+    useEffect(() => {
+        if (!client?.userId) {
+            setClientDietId(undefined);
+            return;
+        }
+        const ref = doc(db, 'userDiets', client.userId);
+        const unsub = onSnapshot(ref, (snap) => {
+            setClientDietId(snap.exists() ? (snap.data() as { dietId?: string }).dietId : undefined);
+        }, () => setClientDietId(undefined));
         return unsub;
     }, [client?.userId]);
 
@@ -629,6 +650,65 @@ export const CoachReview = () => {
                                 </div>
                             )}
                         </div>
+                    )}
+
+                    {/* ── Diet assignment ─────────────────────────────────
+                        Coach picks a plan from the catalog and writes it to
+                        userDiets/{client.userId}. Shown as a sibling of the
+                        program block so weekly-check-in adjustments are one
+                        click away — when signals say "decrease carbs", the
+                        coach swaps to the next-tier-down plan here. */}
+                    {client.userId && (
+                        <div className="bg-surface-container-low rounded-2xl p-6 border border-outline-variant/30 ghost-border">
+                            <h3 className="font-headline font-bold text-on-surface flex items-center gap-2 mb-4">
+                                <Apple size={18} className="text-primary" />
+                                {t('dietPlan')}
+                            </h3>
+                            {clientDietId ? (
+                                <div className="space-y-3">
+                                    <div className="flex items-center justify-between gap-3 p-4 rounded-xl bg-surface-container border border-outline-variant/20">
+                                        <div className="min-w-0">
+                                            <div className="text-[10px] font-label font-extrabold uppercase tracking-[0.18em] text-primary mb-1">
+                                                {t('current')}
+                                            </div>
+                                            <div className="font-headline font-bold text-on-surface truncate">
+                                                {tPlanName(dietPlans.find(p => p.id === clientDietId)?.name ?? clientDietId, lang, t('mealsWord'))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => setShowDietPicker(true)}
+                                        className="w-full px-4 py-3 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface text-sm font-bold border border-outline-variant/30 hover:border-primary/30 transition-colors flex items-center justify-center gap-2"
+                                    >
+                                        <Apple size={16} />
+                                        {t('changeDiet')}
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="space-y-3">
+                                    <p className="text-on-surface/40 text-sm font-body text-center py-6 border border-dashed border-outline-variant/30 rounded-xl">
+                                        {t('noDietAssigned')}
+                                    </p>
+                                    <button
+                                        onClick={() => setShowDietPicker(true)}
+                                        className="w-full px-4 py-3 rounded-xl bg-gradient-to-r from-primary to-primary-container text-on-primary text-sm font-bold flex items-center justify-center gap-2 hover:scale-[1.01] active:scale-[0.99] transition-all"
+                                    >
+                                        <Apple size={16} />
+                                        {t('assignDiet')}
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {showDietPicker && client.userId && (
+                        <AssignDietPicker
+                            clientUserId={client.userId}
+                            clientName={client.name}
+                            currentDietId={clientDietId}
+                            onClose={() => setShowDietPicker(false)}
+                            onAssigned={() => showToast('success', `Diet assigned to ${client.name}.`)}
+                        />
                     )}
 
                     {/* Program assignment modal — embeds the same WorkoutWizard the

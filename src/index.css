@@ -1,5 +1,15 @@
 @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@300;400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@200;300;400;500;700;800;900&display=swap');
+
+/* When the document is in Arabic, every body/headline/label run uses Tajawal.
+   English/numbers fall back to Inter/Manrope which Tajawal lacks glyphs for —
+   the cascade handles that automatically. */
+html[lang="ar"],
+html[lang="ar"] body,
+html[lang="ar"] * {
+    font-family: 'Tajawal', 'Noto Sans Arabic', 'Inter', ui-sans-serif, system-ui, sans-serif !important;
+}
 
 @tailwind base;
 @tailwind components;
@@ -105,6 +115,127 @@ body {
   background-color: rgb(var(--surface));
   color: rgb(var(--on-surface));
   transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* =====================================================================
+   MOTION VOCABULARY
+   Single place where every reusable animation lives. Components
+   reference these by name; if a curve or duration needs tweaking, it's
+   tweaked here once.
+   Easing: cubic-bezier(0.16, 1, 0.3, 1) is ease-out-expo — exponential
+   settle, no bounce. Matches DESIGN.md.
+   ===================================================================== */
+
+/* Generic entrance — element becomes visible. */
+@keyframes bzt-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Card / panel entrance — fades AND rises slightly. */
+@keyframes bzt-rise-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Carousel slide — element comes in from one side. */
+@keyframes bzt-slide-in-right {
+  from { opacity: 0; transform: translateX(12px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes bzt-slide-in-left {
+  from { opacity: 0; transform: translateX(-12px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* Soft pulse — for "today" indicators or "action needed" CTAs. Keeps
+   alpha low so it never reads as urgent/anxiety; just a heartbeat. */
+@keyframes bzt-pulse-soft {
+  0%, 100% { box-shadow: 0 0 0 0 rgb(var(--primary) / 0.45); }
+  50%      { box-shadow: 0 0 0 6px rgb(var(--primary) / 0); }
+}
+
+/* Sparkline / signature draw-in — used by stroke-dashoffset on SVG paths. */
+@keyframes bzt-stroke-draw {
+  from { stroke-dashoffset: 100; }
+  to   { stroke-dashoffset: 0; }
+}
+
+/* Streak ring fill — conic gradient angle ramps from 0 to target.
+   The component sets --bzt-ring-angle as the destination. */
+@keyframes bzt-ring-fill {
+  from { background: conic-gradient(rgb(var(--primary)) 0deg, rgb(var(--surface-container-highest)) 0deg); }
+}
+
+/* Slow ambient drift — used by hero gradient halos so the page feels
+   alive without anything that demands attention. */
+@keyframes bzt-halo-drift {
+  0%   { transform: translate(0, 0)        rotate(0deg); }
+  50%  { transform: translate(2%, -1.5%)   rotate(8deg); }
+  100% { transform: translate(0, 0)        rotate(0deg); }
+}
+
+/* Image ken-burns — barely-perceptible scale + pan over many seconds.
+   Used on hero card photos when the card is hovered. */
+@keyframes bzt-kenburns {
+  0%   { transform: scale(1)    translate(0, 0); }
+  100% { transform: scale(1.06) translate(-1%, -0.5%); }
+}
+
+/* Skeleton shimmer — for loading rank / value states. */
+@keyframes bzt-shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* Honor reduced-motion preferences. Animations don't flat-out vanish —
+   they collapse to a fade so the change is still readable. */
+@media (prefers-reduced-motion: reduce) {
+  .bzt-rise-in, .bzt-fade-in, .bzt-slide-in-right, .bzt-slide-in-left {
+    animation: bzt-fade-in 0.2s ease-out both !important;
+  }
+  .bzt-pulse-soft, .bzt-halo-drift, .bzt-kenburns, .bzt-shimmer { animation: none !important; }
+}
+
+/* Utility classes — let components opt in by className alone. */
+.bzt-rise-in        { animation: bzt-rise-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.bzt-fade-in        { animation: bzt-fade-in 0.32s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.bzt-slide-in-right { animation: bzt-slide-in-right 0.32s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.bzt-slide-in-left  { animation: bzt-slide-in-left 0.32s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.bzt-pulse-soft     { animation: bzt-pulse-soft 2.4s ease-in-out infinite; }
+.bzt-halo-drift     { animation: bzt-halo-drift 18s ease-in-out infinite; }
+
+/* Hover-driven hero photo scaling. Add `bzt-hero-photo` to the
+   image-background div, and `bzt-hero-card` to the parent — the parent's
+   :hover triggers the scale on the child. */
+.bzt-hero-card .bzt-hero-photo {
+  transition: transform 1.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.bzt-hero-card:hover .bzt-hero-photo {
+  transform: scale(1.04);
+}
+
+/* Hero card lift on hover — applies to anything with .bzt-hero-card. */
+.bzt-hero-card {
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform;
+}
+.bzt-hero-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 16px 56px 0 rgba(0, 0, 0, 0.32);
+}
+.bzt-hero-card:active {
+  transform: translateY(-1px);
+  transition-duration: 0.12s;
+}
+
+/* Press feedback for primary CTAs. */
+.bzt-press {
+  transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.bzt-press:active {
+  transform: scale(0.97);
 }
 
 /* BioZackTeam — Glassmorphism System */

@@ -21,6 +21,7 @@ const BLANK: Omit<Course, 'id' | 'createdAt' | 'updatedAt' | 'createdBy'> = {
     order: 0,
     isRequired: true,
     isPublished: false,
+    isLocked: false,
     coverImageUrl: '',
     archived: false,
 };
@@ -42,6 +43,7 @@ export const ManageCourseModal = ({ course, categories, maxOrder, onSave, onClos
                 order: course.order,
                 isRequired: course.isRequired,
                 isPublished: course.isPublished,
+                isLocked: course.isLocked ?? false,
                 coverImageUrl: course.coverImageUrl ?? '',
                 archived: course.archived ?? false,
             });
@@ -207,6 +209,7 @@ export const ManageCourseModal = ({ course, categories, maxOrder, onSave, onClos
                         {[
                             { field: 'isRequired' as const, label: 'Required (part of the main Zero to Hero path)' },
                             { field: 'isPublished' as const, label: 'Published (visible to students)' },
+                            { field: 'isLocked' as const, label: 'Locked — show as teaser only (cover + title), card not clickable for non-coaches' },
                         ].map(({ field, label }) => (
                             <label key={field} className="flex items-center gap-3 p-3.5 bg-surface-container-lowest rounded-xl border border-outline-variant/30 cursor-pointer">
                                 <input
