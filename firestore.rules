@@ -12,13 +12,12 @@ service cloud.firestore {
     }
 
     function isCoach() {
-      // Prefer the custom Auth claim (set by `setUserRole` Cloud Function) — no
-      // Firestore read, matches Storage rules. Falls back to the Firestore
-      // role for accounts that haven't been migrated yet.
-      return request.auth != null && (
-        request.auth.token.role in ['coach', 'admin']
-        || role() in ['coach', 'admin']
-      );
+      // Custom Auth claim is the single source of truth. The Firestore
+      // fallback was removed — combined with the (now-locked) self-create
+      // rule below, it allowed direct-SDK self-promotion to admin. All
+      // real coaches/admins have had `setUserRole` called and a refresh-
+      // token revoke, so their next sign-in carries the claim.
+      return request.auth != null && request.auth.token.role in ['coach', 'admin'];
     }
 
     function isSignedIn() {
@@ -127,7 +126,19 @@ service cloud.firestore {
     // ONLY through the callable functions.
     match /users/{uid} {
       allow read: if isSignedIn() && (isOwner(uid) || isCoach());
-      allow create: if isSignedIn() && (isOwner(uid) || isCoach());
+      // Self-create is locked to a community-level seed doc — closes the
+      // privilege-escalation hole (a signed-in user could write
+      // role:'admin' to their own users doc and gain coach access via
+      // the rules' Firestore-role fallback). Coaches/admins keep wide
+      // create powers (used by the AddClient flow).
+      allow create: if isSignedIn() && (
+        (isOwner(uid)
+          && request.resource.data.role == 'community'
+          && request.resource.data.disabled != true
+          && (!('activityScore' in request.resource.data)
+              || request.resource.data.activityScore == 0))
+        || isCoach()
+      );
       allow delete: if false; // deletions go through deleteUser Cloud Function
       allow update: if isSignedIn() && isOwner(uid)
                     && !request.resource.data.diff(resource.data).affectedKeys()
@@ -253,9 +264,26 @@ service cloud.firestore {
                     && isValidString(request.resource.data.content, 5000);
 
       allow update: if isSignedIn()
-                    && (isCoach()
-                        || resource.data.authorId == request.auth.uid
-                        || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes', 'commentCount']));
+                    && (
+                      isCoach()
+                      || resource.data.authorId == request.auth.uid
+                      // Like-toggle for non-author non-coach: only the
+                      // `likes` array may change, no duplicates, set
+                      // diff must equal exactly the caller's own uid
+                      // (add or remove). commentCount is server-only —
+                      // maintained by the onCommentCreated/Deleted
+                      // triggers (functions/src/maintainCommentCount.ts).
+                      || (
+                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes'])
+                        && request.resource.data.likes.size() == request.resource.data.likes.toSet().size()
+                        && (
+                          request.resource.data.likes.toSet()
+                            == resource.data.likes.toSet().union([request.auth.uid].toSet())
+                          || request.resource.data.likes.toSet()
+                            == resource.data.likes.toSet().difference([request.auth.uid].toSet())
+                        )
+                      )
+                    );
 
       allow delete: if isSignedIn()
                     && (isCoach() || resource.data.authorId == request.auth.uid);
@@ -334,6 +362,23 @@ service cloud.firestore {
 
     // ─── settings/{docId} ─────────────────────────────────────
     match /settings/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && isCoach();
+    }
+
+    // ─── userDiets/{uid} ──────────────────────────────────────
+    // Active diet plan assignment. Owner self-assigns via DietWizard;
+    // coach assigns via AssignDietPicker.
+    match /userDiets/{uid} {
+      allow read: if isSignedIn() && (isOwner(uid) || isCoach());
+      allow create, update: if isSignedIn() && (isOwner(uid) || isCoach());
+      allow delete: if isSignedIn() && (isOwner(uid) || isCoach());
+    }
+
+    // ─── dietCovers/{dietId} ──────────────────────────────────
+    // Coach-uploaded cover-image overlays for the static diet catalog.
+    // Read by useDietCovers (any signed-in user). Coach-only writes.
+    match /dietCovers/{dietId} {
       allow read: if isSignedIn();
       allow write: if isSignedIn() && isCoach();
     }

@@ -29,6 +29,8 @@ export const setUserDisabled = onCall(
     async (request) => {
         const callerUid = request.auth?.uid;
         if (!callerUid) throw new HttpsError('unauthenticated', 'Sign in required.');
+        const callerClaims = (await getAuth().getUser(callerUid)).customClaims as { role?: string } | undefined;
+        const callerClaimRole = callerClaims?.role ?? null;
         if (!(await callerIsCoach(callerUid))) {
             throw new HttpsError('permission-denied', 'Only coaches can disable users.');
         }
@@ -46,6 +48,13 @@ export const setUserDisabled = onCall(
         }
         if (targetUid === callerUid) {
             throw new HttpsError('failed-precondition', 'You cannot disable yourself.');
+        }
+
+        // Coaches cannot disable another coach or an admin.
+        const targetSnap = await getFirestore().doc(`users/${targetUid}`).get();
+        const targetRole = (targetSnap.data()?.role as string | undefined) ?? null;
+        if ((targetRole === 'coach' || targetRole === 'admin') && callerClaimRole !== 'admin') {
+            throw new HttpsError('permission-denied', `Only admins can disable a ${targetRole}.`);
         }
 
         // 1. Auth layer (the real revocation)

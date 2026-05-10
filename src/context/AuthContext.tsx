@@ -127,30 +127,45 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const clearAuthError = () => setAuthError(null);
 
-  // ── Idle timeout check (runs once before any auth subscription wires up) ──
+  // ── Idle timeout: check on mount, on visibility change, and on a 60s
+  //    interval so a long-foregrounded tab still gets signed out at 30 min.
+  //    Real interactivity (pointer / key / scroll) bumps the active stamp.
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(LAST_ACTIVE_KEY);
-      if (stored) {
+    const checkIdle = () => {
+      try {
+        const stored = localStorage.getItem(LAST_ACTIVE_KEY);
+        if (!stored) return;
         const last = parseInt(stored, 10);
-        if (!Number.isNaN(last) && Date.now() - last > IDLE_TIMEOUT_MS) {
-          // User has been idle longer than the timeout. Force a sign-out
-          // before any other auth logic runs.
+        if (Number.isNaN(last)) return;
+        if (Date.now() - last > IDLE_TIMEOUT_MS) {
           localStorage.removeItem(LAST_ACTIVE_KEY);
-          firebaseSignOut(auth).catch(() => {
-            /* ignore — best effort */
-          });
+          firebaseSignOut(auth).catch(() => { /* best effort */ });
         }
+      } catch {
+        // ignore — private mode / quota
       }
-    } catch {
-      // ignore — private mode / quota
-    }
-    // Eagerly mark the session as active so we don't immediately re-trigger.
+    };
+
+    checkIdle();
     touchLastActive();
+
+    const onActivity = () => touchLastActive();
+    window.addEventListener('pointerdown', onActivity, { passive: true });
+    window.addEventListener('keydown', onActivity, { passive: true });
+    window.addEventListener('scroll', onActivity, { passive: true });
 
     const onBeforeUnload = () => touchLastActive();
     window.addEventListener('beforeunload', onBeforeUnload);
-    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+
+    const interval = window.setInterval(checkIdle, 60 * 1000);
+
+    return () => {
+      window.removeEventListener('pointerdown', onActivity);
+      window.removeEventListener('keydown', onActivity);
+      window.removeEventListener('scroll', onActivity);
+      window.removeEventListener('beforeunload', onBeforeUnload);
+      window.clearInterval(interval);
+    };
   }, []);
 
   // ── Main auth subscription ────────────────────────────────────────────────
@@ -249,6 +264,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           touchLastActive();
 
           if (!snap.exists()) {
+            // Doc deleted (deleteUser cascade) or never existed. Hard
+            // sign-out so the cached Auth token can't be reused for any
+            // PWA shell still alive in another tab/device.
+            setAuthError('Your account no longer exists. Please contact your coach.');
+            firebaseSignOut(auth).catch(() => { /* ignore */ });
             setUser(null);
             setFreshUserDocLoaded(true);
             setLoading(false);
@@ -389,7 +409,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // ── Sign in ────────────────────────────────────────────────────────────────
   const signIn = async (email: string, password: string): Promise<{ error?: string }> => {
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      await signInWithEmailAndPassword(auth, email.toLowerCase().trim(), password);
       touchLastActive();
       // Stamp the sign-in time so the visibility handler can skip its
       // force-refresh during the grace window — see #3 fix.
@@ -403,7 +423,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // ── Password reset ────────────────────────────────────────────────────────
   const sendPasswordReset = async (email: string): Promise<{ error?: string }> => {
     try {
-      await sendPasswordResetEmail(auth, email);
+      await sendPasswordResetEmail(auth, email.toLowerCase().trim());
       return {};
     } catch (error: unknown) {
       return { error: getFirebaseErrorMessage((error as { code?: string })?.code ?? '') };
@@ -431,8 +451,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     role: Role
   ): Promise<{ uid?: string; error?: string }> => {
     try {
+      const safeEmail = email.toLowerCase().trim();
       // Create the Auth user on the secondary app (coach stays signed in on main app)
-      const credential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
+      const credential = await createUserWithEmailAndPassword(secondaryAuth, safeEmail, password);
       const newUid = credential.user.uid;
 
       // Set display name on the new user
@@ -444,7 +465,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // Write the user profile to Firestore (main db — no auth needed, coach writes it)
       await setDoc(doc(db, 'users', newUid), {
         displayName: name,
-        email,
+        email: safeEmail,
         role, // 'client' or 'community'
         createdAt: serverTimestamp(),
         macros: role === 'client' ? DEFAULT_TARGETS : null,

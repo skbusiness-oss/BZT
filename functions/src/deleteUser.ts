@@ -291,6 +291,8 @@ export const deleteUser = onCall(
     async (request) => {
         const callerUid = request.auth?.uid;
         if (!callerUid) throw new HttpsError('unauthenticated', 'Sign in required.');
+        const callerClaims = (await getAuth().getUser(callerUid)).customClaims as { role?: string } | undefined;
+        const callerClaimRole = callerClaims?.role ?? null;
         if (!(await callerIsCoach(callerUid))) {
             throw new HttpsError('permission-denied', 'Only coaches can delete users.');
         }
@@ -310,6 +312,14 @@ export const deleteUser = onCall(
         // demographics needed to build the anonymized record.
         const userSnap = await db.doc(`users/${targetUid}`).get();
         const userData = userSnap.data() ?? {};
+
+        // Coaches can only delete clients/community. Deleting another coach
+        // or an admin requires admin — prevents one compromised coach
+        // account from wiping out the rest of the team.
+        const targetRole = (userData.role as string | undefined) ?? null;
+        if ((targetRole === 'coach' || targetRole === 'admin') && callerClaimRole !== 'admin') {
+            throw new HttpsError('permission-denied', `Only admins can delete a ${targetRole}.`);
+        }
         let stripeCustomerId: string | null = (userData.stripeCustomerId as string | null) ?? null;
 
         // Find the matching client doc by userId field (clientId !== uid).
