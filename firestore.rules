@@ -12,12 +12,17 @@ service cloud.firestore {
     }
 
     function isCoach() {
-      // Custom Auth claim is the single source of truth. The Firestore
-      // fallback was removed — combined with the (now-locked) self-create
-      // rule below, it allowed direct-SDK self-promotion to admin. All
-      // real coaches/admins have had `setUserRole` called and a refresh-
-      // token revoke, so their next sign-in carries the claim.
-      return request.auth != null && request.auth.token.role in ['coach', 'admin'];
+      // Prefer the custom Auth claim (set by `setUserRole` Cloud Function) —
+      // matches Storage rules, no Firestore read. Falls back to the
+      // Firestore role for accounts whose claim hasn't been bootstrapped
+      // yet. The fallback is SAFE here because the self-create rule on
+      // users/{uid} (below) restricts owner-write to role == 'community'
+      // — so a Firestore role of 'coach'/'admin' can only have been
+      // written by an existing coach via the setUserRole Cloud Function.
+      return request.auth != null && (
+        request.auth.token.role in ['coach', 'admin']
+        || role() in ['coach', 'admin']
+      );
     }
 
     function isSignedIn() {
@@ -364,15 +369,6 @@ service cloud.firestore {
     match /settings/{docId} {
       allow read: if isSignedIn();
       allow write: if isSignedIn() && isCoach();
-    }
-
-    // ─── userDiets/{uid} ──────────────────────────────────────
-    // Active diet plan assignment. Owner self-assigns via DietWizard;
-    // coach assigns via AssignDietPicker.
-    match /userDiets/{uid} {
-      allow read: if isSignedIn() && (isOwner(uid) || isCoach());
-      allow create, update: if isSignedIn() && (isOwner(uid) || isCoach());
-      allow delete: if isSignedIn() && (isOwner(uid) || isCoach());
     }
 
     // ─── dietCovers/{dietId} ──────────────────────────────────
