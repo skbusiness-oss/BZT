@@ -61,10 +61,37 @@ export const ActiveProgramCard = () => {
     };
     const colors = colorMap[goalContext.color] ?? colorMap.orange;
 
+    // Goal-themed cover photo for the card. Falls back to the rest-day
+    // cover when today is a rest day, or to the generic workout-hero
+    // when the goal isn't recognized.
+    const coverByGoal: Record<string, string> = {
+        fat_loss:    '/workout-covers/goal-fat-loss.jpg',
+        muscle_gain: '/workout-covers/goal-muscle-gain.jpg',
+        strength:    '/workout-covers/goal-strength.jpg',
+        recomp:      '/workout-covers/goal-recomp.jpg',
+        maintenance: '/workout-covers/goal-maintenance.jpg',
+        endurance:   '/workout-covers/goal-endurance.jpg',
+    };
+    const coverUrl = isRestDay
+        ? '/workout-covers/goal-rest.jpg'
+        : (coverByGoal[activeProgram.goal] ?? '/workout-hero.jpg');
+
     return (
-        <div dir={isRTL ? 'rtl' : 'ltr'} className={`clay-card overflow-hidden ${colors.border} border animate-in fade-in duration-500`}>
+        <div dir={isRTL ? 'rtl' : 'ltr'} className={`clay-card relative overflow-hidden ${colors.border} border animate-in fade-in duration-500`}>
+            {/* Goal-themed cover photo backdrop — sits behind everything at low
+                opacity so card content stays the focus. The dark overlay
+                ensures text legibility regardless of cover brightness. */}
+            <div
+                className="absolute inset-0 pointer-events-none"
+                style={{
+                    backgroundImage: `linear-gradient(180deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.78) 60%, rgba(0,0,0,0.92) 100%), url(${coverUrl})`,
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center',
+                }}
+            />
+
             {/* Header */}
-            <div className="p-4 pb-3">
+            <div className="relative p-4 pb-3">
                 <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3">
                         <div className={clsx('w-11 h-11 rounded-xl flex items-center justify-center', colors.bg)}>
@@ -103,7 +130,7 @@ export const ActiveProgramCard = () => {
             </div>
 
             {/* Mini rotation (10 dots) */}
-            <div className="px-4 pb-3">
+            <div className="relative px-4 pb-3">
                 <div className="flex items-center gap-1">
                     {activeProgram.rotation.map(day => {
                         const isDone = activeProgram.completedDays.includes(day.dayNumber);
@@ -137,7 +164,7 @@ export const ActiveProgramCard = () => {
             </div>
 
             {/* Today's action */}
-            <div className="px-4 pb-4">
+            <div className="relative px-4 pb-4">
                 <button
                     onClick={() => navigate(`/workouts/day/${todaysDayNumber}`)}
                     className={clsx(
@@ -170,7 +197,7 @@ export const ActiveProgramCard = () => {
 
             {/* Delete confirmation */}
             {showDeleteConfirm && (
-                <div className="px-4 pb-4 animate-in fade-in duration-200">
+                <div className="relative px-4 pb-4 animate-in fade-in duration-200">
                     <div className="bg-red-500/10 border border-red-400/20 rounded-xl p-4">
                         <div className="flex items-start gap-3">
                             <AlertTriangle className="text-red-400 shrink-0 mt-0.5" size={18} />

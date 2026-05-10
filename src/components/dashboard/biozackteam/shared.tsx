@@ -575,20 +575,60 @@ export function CommunityActivityCard({ posts, onNavigate }: {
     if (posts.length === 0) return null;
 
     return (
-        <Card>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
-                <div>
-                    <Eyebrow>{tx('communityEyebrow')}</Eyebrow>
-                    <h2 style={{ fontFamily: t.display, fontSize: 22, fontWeight: 400, color: t.onSurface, margin: '8px 0 0', letterSpacing: '-0.02em' }}>
-                        {tx('whatsHappening')}
-                    </h2>
+        <div
+            style={{
+                position: 'relative', borderRadius: 20, overflow: 'hidden',
+                border: `1px solid ${t.outline}`, boxShadow: '0 8px 40px 0 rgba(0,0,0,0.25)',
+            }}
+        >
+            {/* Header band — coaching-journey photo (people-themed) drives the
+                community card visual identity. Sits above the post list at
+                144px height so it reads as a hero strip without crowding
+                the content. */}
+            <div
+                style={{
+                    position: 'relative', height: 144, overflow: 'hidden',
+                }}
+            >
+                <div style={{
+                    position: 'absolute', inset: 0,
+                    backgroundImage: 'url(/dashboard-covers/coaching-journey.jpg)',
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center',
+                }} />
+                <div style={{
+                    position: 'absolute', inset: 0,
+                    background: 'linear-gradient(180deg, rgba(0,0,0,0.20) 0%, rgba(0,0,0,0.55) 60%, rgba(0,0,0,0.85) 100%)',
+                }} />
+                <div style={{
+                    position: 'absolute', inset: 0, padding: 24,
+                    display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12,
+                }}>
+                    <div>
+                        <span style={{
+                            fontFamily: t.body, fontSize: 11, fontWeight: 600,
+                            letterSpacing: '0.16em', textTransform: 'uppercase',
+                            color: '#e6c364', display: 'block', marginBottom: 6,
+                        }}>{tx('communityEyebrow')}</span>
+                        <h2 style={{
+                            fontFamily: t.display, fontSize: 22, fontWeight: 600,
+                            color: '#fff', margin: 0, letterSpacing: '-0.02em',
+                            textShadow: '0 2px 12px rgba(0,0,0,0.5)',
+                        }}>{tx('whatsHappening')}</h2>
+                    </div>
+                    <button onClick={() => onNavigate('/community')} style={{
+                        padding: '8px 16px', borderRadius: 999,
+                        border: '1px solid rgba(255,255,255,0.30)',
+                        background: 'rgba(255,255,255,0.10)', backdropFilter: 'blur(8px)',
+                        color: '#fff', fontFamily: t.body, fontSize: 11, fontWeight: 600,
+                        textTransform: 'uppercase', letterSpacing: '0.1em', cursor: 'pointer',
+                        whiteSpace: 'nowrap', flexShrink: 0,
+                    }}>{tx('seeAllCta')}</button>
                 </div>
-                <button onClick={() => onNavigate('/community')} style={{
-                    padding: '8px 16px', borderRadius: 999, border: `1px solid ${t.outline}`, background: 'transparent',
-                    color: t.onSurfaceVariant, fontFamily: t.body, fontSize: 11, fontWeight: 600,
-                    textTransform: 'uppercase', letterSpacing: '0.1em', cursor: 'pointer',
-                }}>{tx('seeAllCta')}</button>
             </div>
+            <div style={{
+                background: t.surfaceContainer, padding: '1.5rem 2rem 2rem',
+            }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {posts.map(post => {
                     // Tombstone substitution — deleteUser writes empty
@@ -641,7 +681,8 @@ export function CommunityActivityCard({ posts, onNavigate }: {
                     );
                 })}
             </div>
-        </Card>
+            </div>
+        </div>
     );
 }
 

@@ -58,13 +58,22 @@ export const RestDayCard = ({ day, onAcknowledge, isCompleted }: RestDayCardProp
 
     return (
         <div dir={isRTL ? 'rtl' : 'ltr'} className="space-y-6">
-            {/* Header banner */}
-            <div className={`rounded-2xl p-6 border ${
+            {/* Header banner — rest-day cover photo with dark overlay so the
+                educational content stays readable. */}
+            <div className={`relative rounded-2xl p-6 border overflow-hidden ${
                 isActive
                     ? 'bg-emerald-500/5 border-emerald-400/20'
                     : 'bg-indigo-500/5 border-indigo-400/20'
             }`}>
-                <div className="flex items-center gap-3 mb-3">
+                <div
+                    className="absolute inset-0 pointer-events-none opacity-30"
+                    style={{
+                        backgroundImage: `linear-gradient(180deg, rgba(0,0,0,0.45), rgba(0,0,0,0.85)), url(/workout-covers/goal-rest.jpg)`,
+                        backgroundSize: 'cover',
+                        backgroundPosition: 'center',
+                    }}
+                />
+                <div className="relative flex items-center gap-3 mb-3">
                     <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
                         isActive ? 'bg-emerald-500/15' : 'bg-indigo-500/15'
                     }`}>
@@ -89,7 +98,7 @@ export const RestDayCard = ({ day, onAcknowledge, isCompleted }: RestDayCardProp
                     </div>
                 </div>
 
-                <p className="text-on-surface text-sm leading-relaxed">
+                <p className="relative text-on-surface text-sm leading-relaxed">
                     {isAr
                         ? (isActive
                             ? 'التعافي النشط يحسّن تدفق الدم ويسرّع الشفاء. حركة خفيفة فقط — لا تمارين ثقيلة.'
