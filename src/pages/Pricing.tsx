@@ -15,7 +15,7 @@
  *
  * Bilingual (EN/AR). Uses `useLanguage()` for both copy + dir attribute.
  */
-import { Sparkles, Check, Clock, Flame, Zap } from 'lucide-react';
+import { Sparkles, Check, Clock, Flame, Zap, Languages } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 
@@ -48,14 +48,30 @@ function openCheckout(url: string) {
 
 export const Pricing = () => {
     const { user } = useAuth();
-    const { t, lang, isRTL } = useLanguage();
+    const { t, lang, isRTL, setLang } = useLanguage();
     const isLoggedIn = !!user;
 
     return (
         <div
             dir={isRTL ? 'rtl' : 'ltr'}
-            className="animate-in fade-in duration-500 pb-24 max-w-7xl mx-auto px-4 md:px-0"
+            className="animate-in fade-in duration-500 pb-24 max-w-7xl mx-auto px-4 md:px-0 relative"
         >
+
+            {/* ── Big language toggle — prominent in the top corner so any
+                visitor (Arabic-default) can flip to English instantly.
+                The button label is always the OTHER language so the
+                action is unambiguous: 'English' when on AR,
+                'العربية' when on EN. */}
+            <div className="flex justify-end pt-5 mb-4">
+                <button
+                    onClick={() => setLang(lang === 'ar' ? 'en' : 'ar')}
+                    className="inline-flex items-center gap-3 px-7 py-3.5 rounded-full bg-gradient-to-r from-primary/20 to-primary-container/15 hover:from-primary/30 hover:to-primary-container/25 border-2 border-primary/50 hover:border-primary text-on-surface font-label text-[14px] font-extrabold uppercase tracking-[0.18em] shadow-lg shadow-primary/10 transition-all active:scale-[0.97]"
+                    aria-label={lang === 'ar' ? 'Switch to English' : 'التبديل إلى العربية'}
+                >
+                    <Languages size={18} className="text-primary" />
+                    {lang === 'ar' ? 'Switch to English' : 'التبديل إلى العربية'}
+                </button>
+            </div>
 
             {/* ── Hero ────────────────────────────────────────────── */}
             <section className="text-center mb-14 mt-4">

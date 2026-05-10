@@ -27,8 +27,10 @@ const LanguageContext = createContext<LanguageContextType | undefined>(undefined
 
 export const LanguageProvider = ({ children }: { children: ReactNode }) => {
     const [lang, setLangState] = useState<Language>(() => {
+        // Arabic is the default for new visitors. Returning users keep
+        // whatever they last picked (English or Arabic).
         const saved = localStorage.getItem('biozack-lang');
-        return (saved === 'ar' ? 'ar' : 'en') as Language;
+        return (saved === 'en' ? 'en' : 'ar') as Language;
     });
 
     const setLang = (newLang: Language) => {
