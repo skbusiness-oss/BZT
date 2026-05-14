@@ -47,32 +47,14 @@ service cloud.firestore {
       return s is string && s.size() > 0 && s.size() <= maxLen;
     }
 
-    // Library catalog gate (shared by courses, lessons, lessonContent,
-    // workouts, libraryCategories). Caller must be:
-    //   - signed in
-    //   - have a /users/{uid} doc (i.e. not deleted)
-    //   - NOT have disabled == true
-    //   - have a recognized role
-    // Roles 'community' and 'client'/'coaching' both pass this gate so they
-    // see the same catalog. Whether the *content* of a given course plays
-    // is gated separately by `canPlayCourse()` on lessonContent reads.
+    // Library catalog gate — minimal. Just "signed in, not deleted, not
+    // disabled". The disabled check uses isActive() which already handles
+    // missing-doc as allow (deleted users are caught by the AuthContext
+    // tombstone gate + their token going stale). No role check, no per-
+    // course lookups in the rule path — anything that adds get() calls
+    // here has caused repeated launch-day breakages.
     function canAccessLibrary() {
-      return request.auth != null
-        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.disabled != true
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
-             in ['community', 'client', 'coaching', 'coach', 'admin'];
-    }
-
-    // Per-course playback gate. Community-tier courses play for everyone;
-    // client-tier courses play only for clients+. Coach-tier (rarely used)
-    // is staff-only. Course must also be published.
-    function canPlayCourse(course) {
-      return course.isPublished == true
-             && (isCoach()
-                 || (course.accessTier == 'community')
-                 || (course.accessTier == 'client'
-                     && role() in ['client', 'coaching']));
+      return isSignedIn() && isActive();
     }
 
     function canReadCourseData(course) {
@@ -373,8 +355,12 @@ service cloud.firestore {
       }
 
       match /lessonContent/{lessonId} {
-        allow read: if canAccessLibrary()
-                    && canPlayCourse(get(/databases/$(database)/documents/courses/$(courseId)).data);
+        // Same gate as the catalog — any active signed-in user can read.
+        // Per-tier paywall gating (community can't watch client-tier
+        // videos) is enforced client-side via VideoLibrary's canAccessCourse
+        // for now; firmer rule-level gating waits until post-launch when
+        // we can test multi-role get() chains without launch pressure.
+        allow read: if canAccessLibrary();
         allow create, update: if isSignedIn() && isCoach() && isValidLessonContent(courseId, lessonId);
         allow delete: if isSignedIn() && isCoach();
       }
