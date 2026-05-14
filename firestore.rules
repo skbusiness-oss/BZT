@@ -47,14 +47,14 @@ service cloud.firestore {
       return s is string && s.size() > 0 && s.size() <= maxLen;
     }
 
-    // Library catalog gate — minimal. Just "signed in, not deleted, not
-    // disabled". The disabled check uses isActive() which already handles
-    // missing-doc as allow (deleted users are caught by the AuthContext
-    // tombstone gate + their token going stale). No role check, no per-
-    // course lookups in the rule path — anything that adds get() calls
-    // here has caused repeated launch-day breakages.
+    // Library catalog gate — bare minimum. Just "signed in".
+    // No isActive(), no role check, no get() calls. Disabled-user and
+    // deleted-user enforcement happens through the AuthContext tombstone
+    // gate + the `users/{uid}` listener — both client-side, both immediate
+    // sign-out. Rule-level multi-doc lookups caused repeated launch-day
+    // breakages today; trading that for a slightly looser fence here.
     function canAccessLibrary() {
-      return isSignedIn() && isActive();
+      return isSignedIn();
     }
 
     function canReadCourseData(course) {
@@ -237,10 +237,7 @@ service cloud.firestore {
     // via courses). Keeps the original isLocked model: community sees only
     // unlocked videos, clients+coaches see everything. Coach-only writes.
     match /videos/{videoId} {
-      allow read: if canAccessLibrary()
-                  && (isCoach()
-                      || role() in ['client', 'coaching']
-                      || resource.data.isLocked == false);
+      allow read: if canAccessLibrary();
       allow create, update, delete: if isSignedIn() && isCoach();
     }
 
