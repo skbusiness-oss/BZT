@@ -19,6 +19,23 @@ if (dsn) {
         replaysOnErrorSampleRate: 0.5,
         // Don't ship PII. Sentry can auto-attach IPs and emails; opt out.
         sendDefaultPii: false,
+        // Tag every event with the deployed bundle hash so we can correlate
+        // a Sentry alert to "which release was this". Vite gives us the
+        // bundle hash via import.meta.env at build time, but it's not
+        // exposed by default — we use the build mode + a timestamp env
+        // var that Firebase Hosting populates via __FIREBASE_DEFAULTS__.
+        // For now, just tag with mode.
+        release: `biozack@${import.meta.env.MODE}`,
+    });
+
+    // Global unhandled-promise-rejection catch. Without this, an awaited
+    // Firebase call inside an async useEffect that throws becomes a
+    // silent failure in the browser — Sentry's automatic instrumentation
+    // catches most but not all. This guarantees coverage.
+    window.addEventListener('unhandledrejection', (event) => {
+        Sentry.captureException(event.reason ?? new Error('Unhandled promise rejection (no reason given)'), {
+            tags: { source: 'unhandledrejection' },
+        });
     });
 }
 
