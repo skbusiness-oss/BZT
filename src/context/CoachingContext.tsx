@@ -20,6 +20,7 @@ const callSetUserRole = httpsCallable<
 >(functions, 'setUserRole');
 import { Client, Week, MacroTarget } from '../types';
 import { validateImageFile } from '../lib/validation';
+import { reportError } from '../lib/reportError';
 import { DEFAULT_TARGETS } from '../lib/constants';
 import type { QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 
@@ -122,7 +123,7 @@ export const CoachingProvider = ({ children }: { children: ReactNode }) => {
         } catch (e) {
           // Non-fatal: client doc was updated even if claim write fails. The
           // coach can retry by toggling accessLevel back and forth.
-          console.error('Failed to sync user role claim with accessLevel:', e);
+          reportError('CoachingContext.syncRoleClaim', e);
         }
       }
     }
@@ -248,7 +249,7 @@ export const CoachingProvider = ({ children }: { children: ReactNode }) => {
           updatedAt: serverTimestamp(),
         });
       } catch (e) {
-        console.error('Failed to disable user account:', e);
+        reportError('CoachingContext.disableUser', e);
       }
 
       // Audit log — who deleted whom, and when
@@ -264,7 +265,7 @@ export const CoachingProvider = ({ children }: { children: ReactNode }) => {
           deletedAt: serverTimestamp(),
         });
       } catch (e) {
-        console.error('Failed to write deletion audit log:', e);
+        reportError('CoachingContext.writeDeletionLog', e);
       }
       // Clear any active program assignment
       try {
@@ -288,7 +289,7 @@ export const CoachingProvider = ({ children }: { children: ReactNode }) => {
         timestamp: serverTimestamp(),
       });
     } catch (e) {
-      console.error('Failed to write audit log entry:', e);
+      reportError('CoachingContext.writeAuditLog', e);
     }
   };
 

@@ -8,6 +8,7 @@ import {
 } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { db, storage } from '../lib/firebase';
+import { reportError } from '../lib/reportError';
 import { awardXp, XP_SOURCE } from '../lib/activityScore';
 import { useAuth } from './AuthContext';
 import {
@@ -135,7 +136,7 @@ export const AcademyProvider = ({ children }: { children: ReactNode }) => {
             // (§1.7.1)
             err => {
                 // eslint-disable-next-line no-console
-                console.error('[AcademyContext] courses listener failed:', err);
+                reportError('AcademyContext.courses', err);
                 checkReady();
             }
         ));
@@ -150,7 +151,7 @@ export const AcademyProvider = ({ children }: { children: ReactNode }) => {
             },
             err => {
                 // eslint-disable-next-line no-console
-                console.error('[AcademyContext] libraryCategories listener failed:', err);
+                reportError('AcademyContext.libraryCategories', err);
                 checkReady();
             }
         ));
@@ -183,7 +184,7 @@ export const AcademyProvider = ({ children }: { children: ReactNode }) => {
             },
             err => {
                 // eslint-disable-next-line no-console
-                console.error('[AcademyContext] userLessonProgress listener failed:', err);
+                reportError('AcademyContext.userLessonProgress', err);
                 checkReady();
             }
         ));
@@ -281,7 +282,7 @@ export const AcademyProvider = ({ children }: { children: ReactNode }) => {
                 },
                 error => {
                     if (firstSnapshot) reject(error);
-                    else console.error('Lesson listener failed:', error);
+                    else reportError('AcademyContext.lessons', error);
                 }
             );
             lessonUnsubsRef.current[courseId] = unsub;
@@ -321,7 +322,7 @@ export const AcademyProvider = ({ children }: { children: ReactNode }) => {
                 },
                 error => {
                     if (firstSnapshot) reject(error);
-                    else console.error('Lesson content listener failed:', error);
+                    else reportError('AcademyContext.lessonContent', error);
                 }
             );
             lessonContentUnsubsRef.current[key] = unsub;

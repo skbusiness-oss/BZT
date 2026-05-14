@@ -10,6 +10,7 @@ import {
 import { db, storage } from '../lib/firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useAuth } from './AuthContext';
+import { reportError } from '../lib/reportError';
 import { LibraryTag, Video, Workout } from '../types';
 import { ALL_TRAINING_PROGRAMS } from '../data';
 import type { QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
@@ -94,7 +95,7 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
       },
       (err) => {
         // eslint-disable-next-line no-console
-        console.error('[MediaContext] videos listener failed:', err);
+        reportError('MediaContext.videos', err);
         checkReady();
       }
     ));
@@ -107,7 +108,7 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
       },
       (err) => {
         // eslint-disable-next-line no-console
-        console.error('[MediaContext] libraryTags listener failed:', err);
+        reportError('MediaContext.libraryTags', err);
         checkReady();
       }
     ));
@@ -120,7 +121,7 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
       },
       (err) => {
         // eslint-disable-next-line no-console
-        console.error('[MediaContext] settings/videoCategories listener failed:', err);
+        reportError('MediaContext.videoCategories', err);
         checkReady();
       }
     ));
@@ -133,7 +134,7 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
       },
       (err) => {
         // eslint-disable-next-line no-console
-        console.error('[MediaContext] settings/workoutCategories listener failed:', err);
+        reportError('MediaContext.workoutCategories', err);
         checkReady();
       }
     ));
@@ -146,7 +147,7 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
       },
       (err) => {
         // eslint-disable-next-line no-console
-        console.error('[MediaContext] workouts listener failed:', err);
+        reportError('MediaContext.workouts', err);
         checkReady();
       }
     ));
