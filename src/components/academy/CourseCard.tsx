@@ -61,18 +61,26 @@ export const CourseCard = ({
     // Coaches in manage mode keep full access via the "Lessons" button.
     const isLockedTeaser = !!course.isLocked && !isManaging;
     const interactable = canAccess && !isManaging && !isLockedTeaser;
+    // For locked cards (community user on a client-tier course), forwarding
+    // the click to the parent lets it route to /pricing instead of opening
+    // the course. The parent's onSelect knows the access state too via the
+    // canAccess flag it just passed.
+    const handleClick = () => {
+        if (isManaging) return;
+        onSelect();
+    };
 
     return (
         <div className={clsx(
             'glass-card rounded-2xl overflow-hidden flex flex-col group transition-all duration-500',
-            interactable ? 'hover:-translate-y-2 cursor-pointer' : '',
+            (interactable || (!canAccess && !isManaging)) ? 'hover:-translate-y-2 cursor-pointer' : '',
             !canAccess && 'opacity-70',
             !course.isPublished && isManaging && 'border border-dashed border-outline-variant/40',
         )}>
             {/* Thumbnail */}
             <div
                 className="relative h-48 overflow-hidden"
-                onClick={() => interactable ? onSelect() : undefined}
+                onClick={handleClick}
             >
                 {course.coverImageUrl ? (
                     <img
@@ -158,7 +166,7 @@ export const CourseCard = ({
                         'text-xl font-headline font-extrabold mb-2 leading-tight transition-colors',
                         interactable && 'group-hover:text-primary',
                     )}
-                    onClick={() => interactable ? onSelect() : undefined}
+                    onClick={handleClick}
                 >
                     {course.title}
                 </h3>

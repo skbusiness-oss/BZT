@@ -19,7 +19,8 @@
       "PowerShell(gcloud --version 2>&1)",
       "Bash(firebase functions:log --only deleteUser -n 100)",
       "Bash(curl -sI https://biozackteam-3d593.web.app)",
-      "Bash(xargs -I{} stat -c \"%y %s %n\" {})"
+      "Bash(xargs -I{} stat -c \"%y %s %n\" {})",
+      "Bash(git check-ignore *)"
     ],
     "additionalDirectories": [
       "C:\\Users\\MED\\Downloads"

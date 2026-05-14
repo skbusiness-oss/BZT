@@ -47,6 +47,34 @@ service cloud.firestore {
       return s is string && s.size() > 0 && s.size() <= maxLen;
     }
 
+    // Library catalog gate (shared by courses, lessons, lessonContent,
+    // workouts, libraryCategories). Caller must be:
+    //   - signed in
+    //   - have a /users/{uid} doc (i.e. not deleted)
+    //   - NOT have disabled == true
+    //   - have a recognized role
+    // Roles 'community' and 'client'/'coaching' both pass this gate so they
+    // see the same catalog. Whether the *content* of a given course plays
+    // is gated separately by `canPlayCourse()` on lessonContent reads.
+    function canAccessLibrary() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.disabled != true
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
+             in ['community', 'client', 'coaching', 'coach', 'admin'];
+    }
+
+    // Per-course playback gate. Community-tier courses play for everyone;
+    // client-tier courses play only for clients+. Coach-tier (rarely used)
+    // is staff-only. Course must also be published.
+    function canPlayCourse(course) {
+      return course.isPublished == true
+             && (isCoach()
+                 || (course.accessTier == 'community')
+                 || (course.accessTier == 'client'
+                     && role() in ['client', 'coaching']));
+    }
+
     function canReadCourseData(course) {
       return course.isPublished == true
              && (course.accessTier == 'community'
@@ -223,16 +251,22 @@ service cloud.firestore {
     }
 
     // ─── videos/{videoId} ─────────────────────────────────────
-    // LAUNCH-DAY: read open. Tighten post-launch.
+    // Legacy flat-video collection (being phased out — new content uploads
+    // via courses). Keeps the original isLocked model: community sees only
+    // unlocked videos, clients+coaches see everything. Coach-only writes.
     match /videos/{videoId} {
-      allow read: if true;
+      allow read: if canAccessLibrary()
+                  && (isCoach()
+                      || role() in ['client', 'coaching']
+                      || resource.data.isLocked == false);
       allow create, update, delete: if isSignedIn() && isCoach();
     }
 
     // ─── workouts/{workoutId} ─────────────────────────────────
-    // LAUNCH-DAY: read open. Tighten post-launch.
+    // Shared catalog: all signed-in active users see every workout. Writes
+    // coach-only.
     match /workouts/{workoutId} {
-      allow read: if true;
+      allow read: if canAccessLibrary();
       allow write: if isSignedIn() && isCoach();
     }
 
@@ -314,27 +348,33 @@ service cloud.firestore {
     }
 
     // ─── libraryCategories/{categoryId} ───────────────────────
-    // LAUNCH-DAY: read open. Tighten post-launch.
     match /libraryCategories/{categoryId} {
-      allow read: if true;
+      allow read: if canAccessLibrary();
       allow create, update, delete: if isSignedIn() && isCoach();
     }
 
     // ─── courses/{courseId} ───────────────────────────────────
-    // LAUNCH-DAY: read open. Writes still coach-only. Tighten post-launch.
+    // Shared catalog model: course + lesson METADATA (title, cover image,
+    // description, lesson count, duration) visible to every active
+    // signed-in user — community + client both browse the same library.
+    // lessonContent (videoUrl, embed, PDFs) is gated by accessTier:
+    //   - community-tier courses → everyone plays
+    //   - client-tier courses    → community sees the card with a lock
+    //                              badge; only clients+ can play
     match /courses/{courseId} {
-      allow read: if true;
+      allow read: if canAccessLibrary();
       allow create, update, delete: if isSignedIn() && isCoach();
 
       match /lessons/{lessonId} {
-        allow read: if true;
+        allow read: if canAccessLibrary();
         allow create: if isSignedIn() && isCoach() && isValidLessonMetadata();
         allow update: if isSignedIn() && isCoach() && isValidLessonMetadata();
         allow delete: if isSignedIn() && isCoach();
       }
 
       match /lessonContent/{lessonId} {
-        allow read: if true;
+        allow read: if canAccessLibrary()
+                    && canPlayCourse(get(/databases/$(database)/documents/courses/$(courseId)).data);
         allow create, update: if isSignedIn() && isCoach() && isValidLessonContent(courseId, lessonId);
         allow delete: if isSignedIn() && isCoach();
       }

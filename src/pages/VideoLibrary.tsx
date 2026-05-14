@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
     Lock, Search, Plus, X,
     Link2, CheckCircle2, AlertCircle, Edit2, Trash2, FileText,
@@ -29,6 +30,7 @@ type LessonFormData = Omit<Lesson, 'id' | 'createdAt' | 'updatedAt' | 'createdBy
 export const VideoLibrary = () => {
     const { user } = useAuth();
     const { t } = useLanguage();
+    const navigate = useNavigate();
     const {
         videos, categories, addVideo, updateVideo, removeVideo,
         addCategory, uploadVideoPdf,
@@ -125,6 +127,9 @@ export const VideoLibrary = () => {
     }, [academyCourses, loadLessons]);
 
     // ── Access control ────────────────────────────────────────────────────────
+    // Mirrors `canPlayCourse()` in firestore.rules. Community sees the card
+    // but the rules block lessonContent reads; the UI shows the lock badge
+    // and "Upgrade to unlock" CTA via CourseCard's existing canAccess prop.
     const canAccessCourse = (course: Course) => {
         if (isCoach) return true;
         if (!course.isPublished) return false;
@@ -141,6 +146,17 @@ export const VideoLibrary = () => {
         if ((lesson.order ?? 1) <= 1) return true;
         if (!lesson.prerequisiteLessonId) return false;
         return lessonProgress[`${user?.id}_${course.id}_${lesson.prerequisiteLessonId}`]?.status === 'completed';
+    };
+
+    // Card click router: paid roles + coaches open the course detail;
+    // community users on a locked card route to /pricing so the lock is
+    // a conversion surface, not a dead end.
+    const handleCourseSelect = (course: Course) => {
+        if (canAccessCourse(course)) {
+            setActiveCourseId(course.id);
+        } else {
+            navigate('/pricing');
+        }
     };
 
     // ── Course CRUD handlers ──────────────────────────────────────────────────
@@ -480,7 +496,7 @@ export const VideoLibrary = () => {
                                             progress={userProgress[course.id]}
                                             lessonCount={course.lessonCount ?? lessons[course.id]?.length ?? 0}
                                             canAccess={canAccessCourse(course)}
-                                            onSelect={() => setActiveCourseId(course.id)}
+                                            onSelect={() => handleCourseSelect(course)}
                                         />
                                     ))}
                                 </div>
@@ -506,7 +522,7 @@ export const VideoLibrary = () => {
                                             progress={userProgress[course.id]}
                                             lessonCount={course.lessonCount ?? lessons[course.id]?.length ?? 0}
                                             canAccess={canAccessCourse(course)}
-                                            onSelect={() => setActiveCourseId(course.id)}
+                                            onSelect={() => handleCourseSelect(course)}
                                         />
                                     ))}
                                 </div>
@@ -548,7 +564,7 @@ export const VideoLibrary = () => {
                                     progress={userProgress[course.id]}
                                     lessonCount={course.lessonCount ?? lessons[course.id]?.length ?? 0}
                                     canAccess={canAccessCourse(course)}
-                                    onSelect={() => setActiveCourseId(course.id)}
+                                    onSelect={() => handleCourseSelect(course)}
                                 />
                             ))}
                         </div>
@@ -597,7 +613,7 @@ export const VideoLibrary = () => {
                                     progress={userProgress[course.id]}
                                     lessonCount={course.lessonCount ?? lessons[course.id]?.length ?? 0}
                                     canAccess={canAccessCourse(course)}
-                                    onSelect={() => setActiveCourseId(course.id)}
+                                    onSelect={() => handleCourseSelect(course)}
                                 />
                             ))}
                         </div>
@@ -639,7 +655,7 @@ export const VideoLibrary = () => {
                                     isFirst={idx === 0}
                                     isLast={idx === courses.length - 1}
                                     canAccess
-                                    onSelect={() => setActiveCourseId(course.id)}
+                                    onSelect={() => handleCourseSelect(course)}
                                     onMoveUp={() => moveCourse(course.id, 'up')}
                                     onMoveDown={() => moveCourse(course.id, 'down')}
                                     onEdit={() => openEditCourse(course)}

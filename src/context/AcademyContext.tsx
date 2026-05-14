@@ -110,12 +110,15 @@ export const AcademyProvider = ({ children }: { children: ReactNode }) => {
         const total = 3;
         const checkReady = () => { if (++ready >= total) setLoading(false); };
 
-        // Courses — coaches see all, others see only published
+        // Courses — shared-catalog model: coaches see all (incl. drafts),
+        // every other active signed-in user sees the same published
+        // catalog (community + client tiers). Whether the LESSON CONTENT
+        // plays is gated by Firestore rules on lessonContent reads via
+        // canPlayCourse() — community gets the card but can't open the
+        // video for client-tier courses.
         const coursesQ = isCoach
             ? collection(db, 'courses')
-            : user.role === 'client'
-                ? query(collection(db, 'courses'), where('isPublished', '==', true), where('accessTier', 'in', ['community', 'client']))
-                : query(collection(db, 'courses'), where('isPublished', '==', true), where('accessTier', '==', 'community'));
+            : query(collection(db, 'courses'), where('isPublished', '==', true));
 
         unsubs.push(onSnapshot(
             coursesQ,
@@ -627,6 +630,10 @@ export const AcademyProvider = ({ children }: { children: ReactNode }) => {
     const canAccessCourse = (course: Course) => {
         if (isCoach) return true;
         if (!course.isPublished) return false;
+        // Community-tier: anyone signed-in plays. Client-tier: paid 'client'
+        // role only. Mirrors `canPlayCourse()` in firestore.rules. The $149
+        // "coaching" Stripe tier maps to role:'client' in this schema —
+        // there's no separate 'coaching' role.
         if (course.accessTier === 'community') return true;
         if (course.accessTier === 'client') return user?.role === 'client';
         return false;
