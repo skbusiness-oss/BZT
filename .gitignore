@@ -19,3 +19,9 @@ Thumbs.db
 # Logs
 *.log
 npm-debug.log*
+
+# Claude Code embedded worktrees (used by AI sessions; not source code)
+.claude/worktrees/
+
+# Firebase CLI build cache
+.firebase/
