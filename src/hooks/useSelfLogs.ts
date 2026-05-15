@@ -22,14 +22,14 @@ export interface BodyMeasurements {
     neck?: number;
 }
 
-export interface DailyMetrics {
+interface DailyMetrics {
     strength?: number;       // 1-10
     hunger?: number;         // 1-10
     energy?: number;         // 1-10
     cardioCalories?: number; // 0-2000
 }
 
-export interface SelfLog {
+interface SelfLog {
     id: string;          // normally date/weekStart (YYYY-MM-DD)
     date: string;        // YYYY-MM-DD
     weight?: number;     // kg

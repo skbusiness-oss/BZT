@@ -16,21 +16,6 @@ export function validateText(
   return null; // valid
 }
 
-export function validateEmail(value: unknown): string | null {
-  if (typeof value !== 'string' || !value.trim()) return 'Email is required.';
-  // Basic RFC-compliant check (same bar that Firebase Auth enforces)
-  const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!re.test(value.trim())) return 'Enter a valid email address.';
-  return null;
-}
-
-export function validatePassword(value: unknown): string | null {
-  if (typeof value !== 'string') return 'Password is required.';
-  if (value.length < 6) return 'Password must be at least 6 characters.';
-  if (value.length > 128) return 'Password is too long.';
-  return null;
-}
-
 // ── File uploads ──────────────────────────────────────────────────────────────
 
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif'];
@@ -42,16 +27,6 @@ export function validateImageFile(file: File): string | null {
   }
   if (file.size > MAX_IMAGE_BYTES) {
     return `Image must be under 10 MB (got ${(file.size / 1024 / 1024).toFixed(1)} MB).`;
-  }
-  return null;
-}
-
-const MAX_PDF_BYTES = 50 * 1024 * 1024; // 50 MB — mirrors storage.rules
-
-export function validatePdfFile(file: File): string | null {
-  if (file.type !== 'application/pdf') return 'Only PDF files are allowed.';
-  if (file.size > MAX_PDF_BYTES) {
-    return `PDF must be under 50 MB (got ${(file.size / 1024 / 1024).toFixed(1)} MB).`;
   }
   return null;
 }

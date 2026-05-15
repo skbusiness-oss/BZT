@@ -60,7 +60,6 @@ function persistNameCache() {
 
 const nameCache = loadNameCache();
 const searchCache = new Map<string, ExerciseResult[]>();
-const muscleCache = new Map<string, ExerciseResult[]>();
 const inflight = new Map<string, Promise<ExerciseDetail | null>>();
 
 // ─── Internal fetch helper ────────────────────────────────
@@ -192,30 +191,3 @@ export async function searchExercises(query: string): Promise<ExerciseResult[]> 
     }
 }
 
-/**
- * Get exercises that target a specific muscle group.
- * Returns up to 25 results. Cached per muscle name for the session.
- */
-export async function getExercisesByMuscle(muscle: string): Promise<ExerciseResult[]> {
-    const key = muscle.trim().toLowerCase();
-    if (!key) return [];
-    if (muscleCache.has(key)) return muscleCache.get(key)!;
-
-    try {
-        const res = await apiFetch<{
-            success: boolean;
-            data: ExerciseResult[];
-        }>('/exercises/muscles', { targetMuscles: key, limit: '25' });
-
-        if (!res.success || !res.data) {
-            muscleCache.set(key, []);
-            return [];
-        }
-
-        muscleCache.set(key, res.data);
-        return res.data;
-    } catch (err) {
-        console.error('[exerciseService] getExercisesByMuscle failed:', err);
-        return [];
-    }
-}

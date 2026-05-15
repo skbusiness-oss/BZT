@@ -436,18 +436,6 @@ export interface Workout {
 // --- Training Programs ---
 export type MuscleGroup = 'chest' | 'back' | 'quads' | 'hamstrings' | 'shoulders' | 'arms' | 'glutes' | 'calves' | 'core' | 'full_body';
 
-export interface WorkoutSession {
-    label: string;
-    workoutId: string;
-    primaryMuscles: MuscleGroup[];
-    secondaryMuscles: MuscleGroup[];
-    cnsLoad: 1 | 2 | 3 | 4 | 5;
-    isFullBody: boolean;
-    hasHeavyCompounds: boolean;
-    isSquatDay: boolean;
-    isDeadliftDay: boolean;
-}
-
 export interface ProgramDay {
     dayNumber: number;
     type: 'workout' | 'rest';
@@ -545,9 +533,3 @@ export interface ExerciseDetail {
     equipmentAr: string;
 }
 
-export interface ProgramAssignmentResult {
-    program: TrainingProgram;
-    recommendedSplits: string[];
-    difficulty: Difficulty;
-    goal: WorkoutGoal;
-}
