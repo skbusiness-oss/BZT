@@ -221,40 +221,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return;
       }
 
-      // We do NOT auto-create users/{uid} on sign-in anymore for arbitrary
-      // accounts. The previous behavior — silently creating a
-      // `defaultProfile` whenever the doc was missing — was an
-      // account-resurrection vector: a user whose Firestore doc was wiped
-      // but whose Auth record survived would get a brand-new `community`
-      // profile on next sign-in, bypassing any out-of-band deletion that
-      // didn't write a tombstone. Account creation now happens exactly
-      // once per user, in coach-driven flows (AddClientModal) or via the
-      // platform-owner bootstrap below.
-      //
-      // Platform-owner bootstrap: the founder's email is allowed to
-      // self-create an admin doc on first sign-in. This is the ONLY
-      // exception — every other path requires an explicitly-created doc.
-      try {
-        if (firebaseUser.email === 'souktanimohamed@gmail.com') {
-          const initialSnap = await getDoc(doc(db, 'users', firebaseUser.uid));
-          if (!initialSnap.exists()) {
-            await setDoc(doc(db, 'users', firebaseUser.uid), {
-              displayName:
-                firebaseUser.displayName ||
-                firebaseUser.email?.split('@')[0] ||
-                'Admin',
-              email: firebaseUser.email,
-              role: 'admin' satisfies Role,
-              createdAt: serverTimestamp(),
-              macros: null,
-              stripeCustomerId: null,
-            });
-          }
-        }
-      } catch (err) {
-        // eslint-disable-next-line no-console
-        console.warn('[AuthContext] Platform-owner bootstrap skipped:', err);
-      }
+      // We do NOT auto-create users/{uid} on sign-in for arbitrary
+      // accounts. Silent default-profile creation was an account-
+      // resurrection vector (wiped doc + surviving Auth record →
+      // fresh community profile on next sign-in). All account
+      // creation now happens via the AddClientModal coach flow or
+      // via a one-shot bootstrap Cloud Function (see prior
+      // rescueAccounts/bootstrapRoles patterns in commit history).
+      // The previous client-side platform-owner-email bootstrap was
+      // removed: hardcoded gates in the bundle are brittle, and the
+      // admin doc already exists in production. Future admin recovery
+      // is a Cloud Function call, not a client write.
 
       // Now subscribe in real-time to users/{uid}. This catches role changes,
       // disabled flag flips, and tosAcceptedAt updates without a reload.
