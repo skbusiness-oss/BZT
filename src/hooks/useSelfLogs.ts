@@ -72,7 +72,15 @@ export function useSelfLogs(targetUserId?: string) {
         const unsub = onSnapshot(q, (snap) => {
             setLogs(snap.docs.map(d => ({ id: d.id, ...(d.data() as Omit<SelfLog, 'id'>) })));
             setLoading(false);
-        }, () => setLoading(false));
+        }, (err) => {
+            // Previously this callback was silent. A failing query (rules,
+            // index, network) would leave `logs` empty and the chart would
+            // render its empty state with no explanation. Surfacing the
+            // error tells us exactly which gate is closed.
+            // eslint-disable-next-line no-console
+            console.error('[useSelfLogs] listener failed:', (err as { code?: string })?.code ?? '(no code)', err);
+            setLoading(false);
+        });
         return unsub;
     }, [uid]);
 

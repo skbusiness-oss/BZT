@@ -97,12 +97,27 @@ export function useWeeklyCheckIns(targetUserId?: string) {
             setWeighIns(snap.docs.map(d => ({ date: d.id, ...(d.data() as Omit<WeighInEntry, 'date'>) })));
             gotWeighIns = true;
             markReady();
-        }, () => { gotWeighIns = true; markReady(); });
+        }, (err) => {
+            // Previously silent. A failing query left `weighIns` empty and
+            // the chart fell into its empty state with no console
+            // explanation. Now we surface the Firestore error code so a
+            // rules/index/network failure is immediately visible.
+            // eslint-disable-next-line no-console
+            console.error('[useWeeklyCheckIns] weighIns listener failed:', (err as { code?: string })?.code ?? '(no code)', err);
+            gotWeighIns = true;
+            markReady();
+        });
         const unsubM = onSnapshot(mQ, (snap) => {
             setMetrics(snap.docs.map(d => ({ date: d.id, ...(d.data() as Omit<MetricsEntry, 'date'>) })));
             gotMetrics = true;
             markReady();
-        }, () => { gotMetrics = true; markReady(); });
+        }, (err) => {
+            // Same as above — surface the error instead of silently empty.
+            // eslint-disable-next-line no-console
+            console.error('[useWeeklyCheckIns] metrics listener failed:', (err as { code?: string })?.code ?? '(no code)', err);
+            gotMetrics = true;
+            markReady();
+        });
         return () => { unsubW(); unsubM(); };
     }, [uid]);
 
