@@ -20,7 +20,8 @@
       "Bash(firebase functions:log --only deleteUser -n 100)",
       "Bash(curl -sI https://biozackteam-3d593.web.app)",
       "Bash(xargs -I{} stat -c \"%y %s %n\" {})",
-      "Bash(git check-ignore *)"
+      "Bash(git check-ignore *)",
+      "Bash(node -e ' *)"
     ],
     "additionalDirectories": [
       "C:\\Users\\MED\\Downloads"

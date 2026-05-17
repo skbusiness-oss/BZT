@@ -28,6 +28,10 @@ export interface User {
     age?: number;
     heightCm?: number;
     goal?: string;
+    /** Fixed at onboarding. Never overwritten by weekly check-ins.
+     *  Anchors the chart's "Start" reference line and progress %. */
+    startWeightKg?: number;
+    /** Overwritten on every weekly check-in — the LATEST weigh-in. */
     currentWeightKg?: number;
     targetWeightKg?: number;
     communityProfileStartedAt?: string;

@@ -162,9 +162,10 @@ service cloud.firestore {
                            'activityScore', 'streak', 'lastActiveAt',
                          ]);
 
-      // ── selfLogs subcollection ──────────────────────────────
-      // Community/client self-tracked weight + body measurements.
-      // Owner: full read/write. Coach/admin: read-only (view-as).
+      // ── selfLogs subcollection (LEGACY) ─────────────────────
+      // Old combined collection for weight + measurements + metrics. New
+      // writes go to /weighIns and /metrics below. Kept here so historical
+      // entries still render in charts; not used for new submissions.
       match /selfLogs/{logId} {
         allow read: if isSignedIn() && isActive() && (isOwner(uid) || isCoach());
         allow create: if isSignedIn() && isOwner(uid)
@@ -178,6 +179,43 @@ service cloud.firestore {
                                    ['date', 'weight', 'measurements', 'metrics', 'notes',
                                     'period', 'weekStart', 'weekIndex', 'locked',
                                     'createdAt', 'updatedAt']);
+        allow delete: if isSignedIn() && isOwner(uid) && resource.data.locked != true;
+      }
+
+      // ── weighIns subcollection ──────────────────────────────
+      // Weekly weigh-ins. One doc per submission, keyed by the YYYY-MM-DD
+      // date. `locked: true` is set on create — Firestore then blocks
+      // updates/deletes (server-side guarantee that a submitted week stays
+      // submitted). Cadence: 7-day rolling window enforced client-side; the
+      // rule below ensures the lock can never be flipped back to false.
+      match /weighIns/{date} {
+        allow read: if isSignedIn() && isActive() && (isOwner(uid) || isCoach());
+        allow create: if isSignedIn() && isOwner(uid)
+                              && request.resource.data.keys().hasOnly(
+                                   ['weight', 'weekStart', 'locked', 'createdAt']);
+        allow update: if isSignedIn() && isOwner(uid)
+                              && resource.data.locked != true
+                              && request.resource.data.keys().hasOnly(
+                                   ['weight', 'weekStart', 'locked', 'createdAt']);
+        allow delete: if isSignedIn() && isOwner(uid) && resource.data.locked != true;
+      }
+
+      // ── metrics subcollection ───────────────────────────────
+      // Subjective + cardio metrics submitted alongside the weigh-in.
+      // Always written in the same client batch as /weighIns so the two
+      // stay in lockstep. Same lock semantics — `locked: true` is set on
+      // create, the rule blocks subsequent edits.
+      match /metrics/{date} {
+        allow read: if isSignedIn() && isActive() && (isOwner(uid) || isCoach());
+        allow create: if isSignedIn() && isOwner(uid)
+                              && request.resource.data.keys().hasOnly(
+                                   ['strength', 'hunger', 'energy', 'cardioCalories',
+                                    'notes', 'weekStart', 'locked', 'createdAt']);
+        allow update: if isSignedIn() && isOwner(uid)
+                              && resource.data.locked != true
+                              && request.resource.data.keys().hasOnly(
+                                   ['strength', 'hunger', 'energy', 'cardioCalories',
+                                    'notes', 'weekStart', 'locked', 'createdAt']);
         allow delete: if isSignedIn() && isOwner(uid) && resource.data.locked != true;
       }
     }

@@ -145,10 +145,20 @@ export const CommunityBaselineForm = ({ onClose, initial }: Props) => {
         setError(null);
         try {
             // 1. Baseline + dietProfile on the user doc.
+            //
+            // `startWeightKg` is written ONCE on the initial baseline submit
+            // and never re-set on subsequent edits — it's the immovable
+            // anchor that drives the ProgressChart's "Start" reference line.
+            // `currentWeightKg` mirrors the same value at onboarding but is
+            // overwritten by every weekly check-in afterwards.
+            const startWeightUpdate = isInitial || !user.startWeightKg
+                ? { startWeightKg: Number(currentWeightKg) }
+                : {};
             await updateDoc(doc(db, 'users', user.id), {
                 age: Number(age),
                 heightCm: Number(heightCm),
                 goal,
+                ...startWeightUpdate,
                 currentWeightKg: Number(currentWeightKg),
                 targetWeightKg: Number(targetWeightKg),
                 dietProfile: {

@@ -5,8 +5,7 @@
 
 import { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import { User, Role } from '../types';
-import { auth, db, functions } from '../lib/firebase';
-import { httpsCallable } from 'firebase/functions';
+import { auth, db } from '../lib/firebase';
 import {
   signInWithEmailAndPassword,
   signOut as firebaseSignOut,
@@ -188,14 +187,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return;
       }
 
-      // Tombstone gate (public-launch hardening): if `deletionLogs/{uid}`
-      // exists for this uid the account was previously deleted by a coach.
-      // We MUST fail-closed: sign them out and refuse to proceed. The
-      // earlier version swallowed all errors here, including
-      // permission-denied — which silently let deleted accounts re-sign-in
-      // any time the rules read failed. Now we treat permission-denied /
-      // unavailable as a *gate failure* (refuse sign-in) and only allow
-      // the flow to continue if we got a definitive "no tombstone".
+      // Tombstone gate: explicit positive check only. If a deletionLogs/{uid}
+      // doc EXISTS, this account was deleted by a coach — refuse sign-in.
+      // Any OTHER outcome (no doc, permission-denied during token-propagation
+      // race, transient network error) is treated as "no tombstone present"
+      // and we proceed. The user-doc onSnapshot listener below is the real
+      // disabled/deleted defense — if the users/{uid} doc is gone or has
+      // disabled:true, that listener catches it and signs out cleanly.
+      //
+      // The previous fail-closed implementation caused a login-loop: first
+      // sign-in attempt would race the auth token propagation, getDoc would
+      // throw permission-denied, the catch block force-signed-out the user,
+      // and they had to re-enter credentials. Second attempt worked because
+      // the token had fully propagated by then. Reported via Sentry as
+      // permission-denied on /login.
       try {
         const tombstone = await getDoc(doc(db, 'deletionLogs', firebaseUser.uid));
         if (tombstone.exists()) {
@@ -207,18 +212,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           return;
         }
       } catch (err) {
-        // Fail-closed. Anything other than a confirmed "no tombstone" is
-        // treated as a sign-in refusal — better to lock out a real user
-        // for a few seconds during a network hiccup than to let a
-        // tombstoned account back in.
+        // Fail-OPEN on read error. Log it (Sentry will pick up via
+        // window.unhandledrejection if it bubbles), continue with sign-in,
+        // and let the users/{uid} listener do the actual access check.
         // eslint-disable-next-line no-console
-        console.warn('[AuthContext] Tombstone check failed — refusing sign-in:', err);
-        setAuthError('Could not verify account status. Please try again.');
-        await firebaseSignOut(auth).catch(() => { /* ignore */ });
-        setUser(null);
-        setFreshUserDocLoaded(true);
-        setLoading(false);
-        return;
+        console.warn('[AuthContext] Tombstone check skipped (read error, falling through to users-doc listener):', err);
       }
 
       // We do NOT auto-create users/{uid} on sign-in for arbitrary
@@ -241,9 +239,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           touchLastActive();
 
           if (!snap.exists()) {
-            // Doc deleted (deleteUser cascade) or never existed. Hard
-            // sign-out so the cached Auth token can't be reused for any
-            // PWA shell still alive in another tab/device.
+            // Two cases where `!snap.exists()` fires:
+            //   1. Initial snapshot from local cache before the server
+            //      response arrives. metadata.fromCache === true. The doc
+            //      MAY exist on the server; we just don't know yet. Do
+            //      NOTHING and wait for the next snapshot.
+            //   2. Server-confirmed "doc doesn't exist" (was deleted by
+            //      deleteUser cascade, or never existed). metadata.
+            //      fromCache === false. Hard sign-out.
+            //
+            // The previous version skipped this distinction and fail-
+            // closed on every !exists snapshot, which caused a login-
+            // loop on FIRST sign-in: cache is empty → first snapshot
+            // says !exists → user signed out → kicked back to /login.
+            // Second attempt worked because cache had warmed up from
+            // the first attempt. Reported via Sentry as permission-
+            // denied / repeated /login hits.
+            if (snap.metadata.fromCache) {
+              // Don't decide yet — keep waiting for server confirmation.
+              return;
+            }
             setAuthError('Your account no longer exists. Please contact your coach.');
             firebaseSignOut(auth).catch(() => { /* ignore */ });
             setUser(null);
@@ -282,6 +297,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             age: typeof data.age === 'number' ? data.age : undefined,
             heightCm: typeof data.heightCm === 'number' ? data.heightCm : undefined,
             goal: typeof data.goal === 'string' ? data.goal : undefined,
+            startWeightKg: typeof data.startWeightKg === 'number' ? data.startWeightKg : undefined,
             currentWeightKg: typeof data.currentWeightKg === 'number' ? data.currentWeightKg : undefined,
             targetWeightKg: typeof data.targetWeightKg === 'number' ? data.targetWeightKg : undefined,
             communityProfileStartedAt: tsToIso(data.communityProfileStartedAt) ?? (typeof data.communityProfileStartedAt === 'string' ? data.communityProfileStartedAt : undefined),
@@ -291,30 +307,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           setFreshUserDocLoaded(true);
           setLoading(false);
 
-          // One-time custom-claim bootstrap. Storage rules + Firestore
-          // `isCoach()` prefer `request.auth.token.role`. Coaches/admins from
-          // before the claim system landed need their claim set once. We do
-          // it automatically on sign-in: if the Firestore role is coach/admin
-          // but the token has no `role` claim, call `setUserRole` on
-          // themselves (the Cloud Function falls back to Firestore-role for
-          // the caller-is-coach check). After success, force a token refresh.
-          (async () => {
-            try {
-              if (resolvedRole !== 'coach' && resolvedRole !== 'admin') return;
-              const tokenResult = await firebaseUser.getIdTokenResult();
-              const tokenRole = (tokenResult.claims as { role?: string }).role;
-              if (tokenRole === resolvedRole) return;
-              const callSetUserRole = httpsCallable<
-                { targetUid: string; role: Role },
-                { ok: boolean }
-              >(functions, 'setUserRole');
-              await callSetUserRole({ targetUid: firebaseUser.uid, role: resolvedRole });
-              await firebaseUser.getIdToken(true);
-            } catch (err) {
-              // eslint-disable-next-line no-console
-              console.warn('[AuthContext] Role-claim bootstrap failed (non-fatal):', err);
-            }
-          })();
+          // Custom-claim bootstrap REMOVED — it caused a login-loop.
+          // Previous behavior: if the user's id-token didn't carry a `role`
+          // claim matching their Firestore role, this called setUserRole
+          // on themselves. setUserRole calls revokeRefreshTokens server-
+          // side → the current token died → onAuthStateChanged fired with
+          // null → user got kicked back to /login. On any sign-in where
+          // claim drift was present, the loop was infinite.
+          //
+          // Claims are now an exclusively server-side responsibility.
+          // To set/repair a user's claim, an admin runs the bootstrap or
+          // rescueAccounts Cloud Function once. The user signs in fresh
+          // afterward and gets the new claim in their token.
+          //
+          // The Firestore rules `isCoach()` still falls back to the
+          // Firestore role doc when the claim is missing, so coach
+          // access does not break in the meantime — it just doesn't
+          // use the (faster, no-Firestore-read) claim path.
         },
         () => {
           // Permission/network error — clear state so we don't render stale UI.

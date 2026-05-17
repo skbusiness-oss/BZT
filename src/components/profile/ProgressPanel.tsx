@@ -1,11 +1,15 @@
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import {
-    LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+    ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+    ReferenceLine, Legend,
 } from 'recharts';
+import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../../lib/firebase';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { useSelfLogs, BodyMeasurements as Meas } from '../../hooks/useSelfLogs';
+import { useWeeklyCheckIns } from '../../hooks/useWeeklyCheckIns';
 import { levelFromScore, levelProgress } from '../../lib/activityScore';
 import { CheckInCompare } from '../checkin/CheckInCompare';
 import type { Week } from '../../types';
@@ -33,12 +37,6 @@ const t = {
 };
 const goldGradient = `linear-gradient(135deg, ${t.primary} 0%, ${t.primaryContainer} 100%)`;
 const todayISO = () => new Date().toISOString().slice(0, 10);
-const weekStartISO = () => {
-    const d = new Date();
-    const day = (d.getDay() + 6) % 7; // Monday = 0
-    d.setDate(d.getDate() - day);
-    return d.toISOString().slice(0, 10);
-};
 
 function Card({ children, variant = 'default', style = {} }: {
     children: React.ReactNode; variant?: 'default' | 'glass' | 'bright'; style?: React.CSSProperties;
@@ -219,40 +217,98 @@ function StatusCarousel({ slides }: {
     );
 }
 
-function WeightChart({ data, startWeight, goalWeight }: {
-    data: { label: string; weight: number }[]; startWeight: number; goalWeight: number;
+// ─── ProgressChart ──────────────────────────────────────────────────────
+// Combined weekly chart: weight + subjective metrics on a single ComposedChart
+// with two Y-axes (left = weight kg, reversed; right = 1–10 metrics).
+// Weight rides as a filled area, each metric is a thin line. Cardio is
+// stored as calories (0–2000) but plotted on the same 1–10 axis after
+// `/ 10` scaling so the legend label notes that division explicitly.
+function ProgressChart({ data, startWeight, goalWeight, lastSubmittedDate, nextAvailableAt }: {
+    /** One row per date. Missing values are null so Recharts breaks the
+     *  line instead of drawing a fake zero. */
+    data: {
+        label: string;
+        weight: number | null;
+        strength: number | null;
+        energy: number | null;
+        hunger: number | null;
+        cardio: number | null; // already scaled (cardioCalories ÷ 10)
+    }[];
+    startWeight: number;
+    goalWeight: number;
+    lastSubmittedDate?: string | null;
+    nextAvailableAt?: string | null;
 }) {
+    const todayKey = new Date().toISOString().slice(0, 10);
+    const isLocked = !!nextAvailableAt && nextAvailableAt > todayKey;
+    const fmtDate = (iso?: string | null) =>
+        iso ? new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
     const [range, setRange] = useState<'1M' | '3M' | '6M' | '1Y'>('6M');
     const ranges: ('1M' | '3M' | '6M' | '1Y')[] = ['1M', '3M', '6M', '1Y'];
     const filtered = useMemo(() => {
         const counts: Record<string, number> = { '1M': 30, '3M': 90, '6M': 180, '1Y': 365 };
         return data.slice(-counts[range]);
     }, [data, range]);
-    const current = filtered.length ? filtered[filtered.length - 1].weight : startWeight;
-    const pct = (goalWeight > 0 && goalWeight !== startWeight)
+    // "Current" = the most recent week with a weight reading. Fall back to
+    // start so the stat block never reads "--" once they've onboarded.
+    const lastWeightRow = [...filtered].reverse().find(r => typeof r.weight === 'number');
+    const current = lastWeightRow?.weight ?? startWeight;
+    const pct = (goalWeight > 0 && goalWeight !== startWeight && typeof current === 'number')
         ? Math.round(((startWeight - current) / (startWeight - goalWeight)) * 100)
         : 0;
+    const series = [
+        { key: 'strength', label: 'Strength', color: t.cyan },
+        { key: 'energy',   label: 'Energy',   color: t.gold },
+        { key: 'hunger',   label: 'Hunger',   color: t.coral },
+        { key: 'cardio',   label: 'Cardio (cal ÷ 10)', color: t.violet },
+    ];
     return (
         <Card variant="glass">
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16, marginBottom: 28 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16, marginBottom: 16 }}>
                 <div>
-                    <Eyebrow>Weight Progress</Eyebrow>
+                    <Eyebrow>Weekly progress</Eyebrow>
                     <h2 style={{ fontFamily: t.display, fontSize: 24, fontWeight: 400, color: t.onSurface, margin: '8px 0 0', letterSpacing: '-0.02em' }}>
-                        The descent, charted.
+                        Weight + signals, one chart.
                     </h2>
                 </div>
                 <div style={{ display: 'flex', gap: 6 }}>
                     {ranges.map(r => <Chip key={r} active={range === r} onClick={() => setRange(r)}>{r}</Chip>)}
                 </div>
             </div>
+            {/* Cadence pill — same shape as before, just now lives above the
+                single unified chart. */}
+            {(isLocked || lastSubmittedDate) && (
+                <div style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    marginBottom: 20, padding: '10px 14px',
+                    borderRadius: 999,
+                    background: isLocked ? `${t.primary}15` : t.surfaceContainerLow,
+                    border: `1px solid ${isLocked ? `${t.primary}55` : t.outline}`,
+                    fontFamily: t.body, fontSize: 12,
+                }}>
+                    <span style={{
+                        display: 'inline-block', width: 6, height: 6, borderRadius: '50%',
+                        background: isLocked ? t.primary : t.onSurfaceMuted,
+                    }} />
+                    {isLocked ? (
+                        <span style={{ color: t.onSurface }}>
+                            Locked · Last logged <strong>{fmtDate(lastSubmittedDate)}</strong> · Next available <strong style={{ color: t.primary }}>{fmtDate(nextAvailableAt)}</strong>
+                        </span>
+                    ) : (
+                        <span style={{ color: t.onSurfaceVariant }}>
+                            Last check-in <strong style={{ color: t.onSurface }}>{fmtDate(lastSubmittedDate)}</strong> · You can log this week
+                        </span>
+                    )}
+                </div>
+            )}
             {filtered.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: 40, color: t.onSurfaceMuted, fontFamily: t.body, fontSize: 13 }}>
-                    Log a weight to see the chart.
+                    Log this week's check-in to see the chart.
                 </div>
             ) : (
-                <div style={{ width: '100%', height: 240 }}>
+                <div style={{ width: '100%', height: 300 }}>
                     <ResponsiveContainer>
-                        <AreaChart data={filtered} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                        <ComposedChart data={filtered} margin={{ top: 10, right: 16, left: -10, bottom: 0 }}>
                             <defs>
                                 <linearGradient id="bzWeightStrokeP" x1="0" y1="0" x2="1" y2="0">
                                     <stop offset="0%" stopColor={t.primary} />
@@ -265,81 +321,104 @@ function WeightChart({ data, startWeight, goalWeight }: {
                             </defs>
                             <CartesianGrid stroke={t.outlineVariant} vertical={false} strokeDasharray="2 6" />
                             <XAxis dataKey="label" stroke={t.onSurfaceMuted} tick={{ fontFamily: t.body, fontSize: 11, fill: t.onSurfaceVariant }} tickLine={false} axisLine={false} />
-                            <YAxis reversed domain={['dataMin - 1', 'dataMax + 1']} stroke={t.onSurfaceMuted} tick={{ fontFamily: t.body, fontSize: 11, fill: t.onSurfaceVariant }} tickLine={false} axisLine={false} width={40} />
-                            <Tooltip contentStyle={{ background: t.surfaceBright, border: `1px solid ${t.outline}`, borderRadius: 10, fontFamily: t.body, fontSize: 13, color: t.onSurface }} itemStyle={{ color: t.primary }} labelStyle={{ color: t.onSurfaceVariant, fontSize: 11 }} />
-                            <Area type="monotone" dataKey="weight" stroke="url(#bzWeightStrokeP)" strokeWidth={2.5} fill="url(#bzWeightFillP)" dot={{ r: 4, fill: t.primary, stroke: t.surface, strokeWidth: 2 }} activeDot={{ r: 7, fill: t.primary, stroke: t.surface, strokeWidth: 3 }} />
-                        </AreaChart>
-                    </ResponsiveContainer>
-                </div>
-            )}
-            <div style={{
-                display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16,
-                marginTop: 24, padding: '20px 24px', background: t.surfaceContainerLow, borderRadius: 14,
-            }}>
-                <StatBlock label="Start" value={`${startWeight || '--'} kg`} />
-                <StatBlock label="Goal" value={`${goalWeight || '--'} kg`} />
-                <StatBlock label="Progress" value={`${pct}%`} gold />
-            </div>
-        </Card>
-    );
-}
-
-function MetricsChart({ data }: { data: { date: string; strength: number; energy: number; hunger: number; cardio: number }[] }) {
-    const [range, setRange] = useState<'1W' | '2W' | '1M'>('2W');
-    const ranges: ('1W' | '2W' | '1M')[] = ['1W', '2W', '1M'];
-    const filtered = useMemo(() => {
-        const counts: Record<string, number> = { '1W': 7, '2W': 14, '1M': 30 };
-        return data.slice(-counts[range]);
-    }, [data, range]);
-    const series = [
-        { key: 'strength', label: 'Strength', color: t.cyan },
-        { key: 'energy', label: 'Energy', color: t.gold },
-        { key: 'hunger', label: 'Hunger', color: t.coral },
-        { key: 'cardio', label: 'Cardio (cal ÷ 10)', color: t.violet },
-    ];
-    return (
-        <Card variant="glass">
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16, marginBottom: 28 }}>
-                <div>
-                    <Eyebrow>Daily Metrics</Eyebrow>
-                    <h2 style={{ fontFamily: t.display, fontSize: 24, fontWeight: 400, color: t.onSurface, margin: '8px 0 0', letterSpacing: '-0.02em' }}>
-                        Signal from your body.
-                    </h2>
-                </div>
-                <div style={{ display: 'flex', gap: 6 }}>
-                    {ranges.map(r => <Chip key={r} active={range === r} onClick={() => setRange(r)}>{r}</Chip>)}
-                </div>
-            </div>
-            {filtered.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: 40, color: t.onSurfaceMuted, fontFamily: t.body, fontSize: 13 }}>
-                    Save a check-in to see metrics.
-                </div>
-            ) : (
-                <div style={{ width: '100%', height: 220 }}>
-                    <ResponsiveContainer>
-                        <LineChart data={filtered} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-                            <CartesianGrid stroke={t.outlineVariant} vertical={false} strokeDasharray="2 6" />
-                            <XAxis dataKey="date" stroke={t.onSurfaceMuted} tick={{ fontFamily: t.body, fontSize: 10, fill: t.onSurfaceVariant }} tickLine={false} axisLine={false} />
-                            <YAxis domain={[0, 10]} stroke={t.onSurfaceMuted} tick={{ fontFamily: t.body, fontSize: 11, fill: t.onSurfaceVariant }} tickLine={false} axisLine={false} width={30} />
-                            <Tooltip contentStyle={{ background: t.surfaceBright, border: `1px solid ${t.outline}`, borderRadius: 10, fontFamily: t.body, fontSize: 13 }} itemStyle={{ color: t.onSurface }} labelStyle={{ color: t.onSurfaceVariant, fontSize: 11 }} />
+                            {/* Left axis = weight (kg), reversed so lower weights
+                                are visually higher on the chart (matches the
+                                psychology of "going down" toward a goal). */}
+                            <YAxis
+                                yAxisId="weight"
+                                reversed
+                                domain={['dataMin - 1', 'dataMax + 1']}
+                                stroke={t.onSurfaceMuted}
+                                tick={{ fontFamily: t.body, fontSize: 11, fill: t.onSurfaceVariant }}
+                                tickLine={false} axisLine={false} width={40}
+                            />
+                            {/* Right axis = 1–10 metric scale (strength/energy/
+                                hunger + cardio÷10). */}
+                            <YAxis
+                                yAxisId="metrics"
+                                orientation="right"
+                                domain={[0, 10]}
+                                stroke={t.onSurfaceMuted}
+                                tick={{ fontFamily: t.body, fontSize: 11, fill: t.onSurfaceVariant }}
+                                tickLine={false} axisLine={false} width={30}
+                            />
+                            <Tooltip
+                                contentStyle={{ background: t.surfaceBright, border: `1px solid ${t.outline}`, borderRadius: 10, fontFamily: t.body, fontSize: 13, color: t.onSurface }}
+                                labelStyle={{ color: t.onSurfaceVariant, fontSize: 11 }}
+                            />
+                            <Legend
+                                wrapperStyle={{ fontFamily: t.body, fontSize: 11, color: t.onSurfaceVariant, paddingTop: 8 }}
+                                iconType="circle"
+                            />
+                            {/* Start + Goal reference lines on the weight axis. */}
+                            {startWeight > 0 && (
+                                <ReferenceLine
+                                    yAxisId="weight"
+                                    y={startWeight}
+                                    stroke={t.onSurfaceMuted}
+                                    strokeDasharray="3 6" strokeWidth={1.5}
+                                    label={{ value: `Start ${startWeight}kg`, position: 'insideTopLeft', fontSize: 10, fontFamily: t.body, fill: t.onSurfaceVariant, fontWeight: 600 }}
+                                />
+                            )}
+                            {goalWeight > 0 && (
+                                <ReferenceLine
+                                    yAxisId="weight"
+                                    y={goalWeight}
+                                    stroke={t.primary}
+                                    strokeDasharray="3 6" strokeWidth={1.5}
+                                    label={{ value: `Goal ${goalWeight}kg`, position: 'insideBottomLeft', fontSize: 10, fontFamily: t.body, fill: t.primary, fontWeight: 700 }}
+                                />
+                            )}
+                            <Area
+                                yAxisId="weight"
+                                type="monotone"
+                                dataKey="weight"
+                                name="Weight (kg)"
+                                stroke="url(#bzWeightStrokeP)"
+                                strokeWidth={2.5}
+                                fill="url(#bzWeightFillP)"
+                                connectNulls
+                                dot={{ r: 4, fill: t.primary, stroke: t.surface, strokeWidth: 2 }}
+                                activeDot={{ r: 7, fill: t.primary, stroke: t.surface, strokeWidth: 3 }}
+                            />
                             {series.map(s => (
-                                <Line key={s.key} type="monotone" dataKey={s.key} name={s.label} stroke={s.color} strokeWidth={2} dot={false} activeDot={{ r: 5, strokeWidth: 0 }} />
+                                <Line
+                                    key={s.key}
+                                    yAxisId="metrics"
+                                    type="monotone"
+                                    dataKey={s.key}
+                                    name={s.label}
+                                    stroke={s.color}
+                                    strokeWidth={2}
+                                    dot={false}
+                                    connectNulls
+                                    activeDot={{ r: 5, strokeWidth: 0 }}
+                                />
                             ))}
-                        </LineChart>
+                        </ComposedChart>
                     </ResponsiveContainer>
                 </div>
             )}
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 20 }}>
-                {series.map(s => (
-                    <div key={s.key} style={{
-                        display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px',
-                        borderRadius: 999, background: t.surfaceContainerHighest,
-                    }}>
-                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: s.color }} />
-                        <span style={{ fontFamily: t.body, fontSize: 12, color: t.onSurface, letterSpacing: '0.01em' }}>{s.label}</span>
-                    </div>
-                ))}
+            {/* Stats: Start · Current · Goal · Progress. Drawn from the same
+                merged data the chart consumes, so they always agree. */}
+            <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(2, 1fr)',
+                gap: 12,
+                marginTop: 24, padding: '20px 24px', background: t.surfaceContainerLow, borderRadius: 14,
+            }} className="weight-stat-grid">
+                <StatBlock label="Start"    value={`${startWeight || '--'} kg`} />
+                <StatBlock label="Current"  value={`${current || '--'} kg`} gold />
+                <StatBlock label="Goal"     value={`${goalWeight || '--'} kg`} />
+                <StatBlock label="Progress" value={`${pct}%`} />
             </div>
+            <style>{`
+                @media (min-width: 640px) {
+                    .weight-stat-grid {
+                        grid-template-columns: repeat(4, 1fr) !important;
+                    }
+                }
+            `}</style>
         </Card>
     );
 }
@@ -381,7 +460,7 @@ function ProgressSlider({ label, value, onChange, max = 10, disabled }: {
 // delete on resource.data.locked == true). Next entry opens 7 full days
 // after the last submission (rolling window — NOT Monday-reset).
 //
-// Sliders feed `metrics` on the SelfLog so the MetricsChart below renders
+// Sliders feed the `metrics` payload that ProgressChart below renders
 // a trend over time. Founder direction: keep these on the WEEKLY card for
 // community — not a separate daily flow.
 //
@@ -413,6 +492,31 @@ function WeeklyCheckIn({ existingLog, isWindowLocked, lastSubmittedDate, nextAva
     );
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    // Sync internal form state with the existingLog prop whenever the parent
+    // delivers a new log (after a successful submit, the parent's snapshot
+    // listener fires → logs update → existingLog points at the freshly-
+    // submitted entry). Without this effect the form keeps displaying the
+    // typed-but-not-yet-committed values; the locked overlay shows correctly,
+    // but the numeric fields would still read as the user typed them rather
+    // than as Firestore stored them. Effect intentionally re-runs ONLY when
+    // the doc identity changes (date), not on every metric tweak — that
+    // would clobber the user's in-progress edits.
+    useEffect(() => {
+        if (!existingLog) return;
+        setWeight(existingLog.weight?.toString() ?? '');
+        setNotes(existingLog.notes ?? '');
+        setStrength(existingLog.metrics?.strength ?? 7);
+        setHunger(existingLog.metrics?.hunger ?? 4);
+        setEnergy(existingLog.metrics?.energy ?? 8);
+        setCardioCalories(existingLog.metrics?.cardioCalories?.toString() ?? '');
+    }, [
+        // Re-sync only when the doc identity / lock-state flips, not on
+        // every keystroke-driven metrics object change.
+        existingLog?.locked,
+        existingLog?.weight,
+    ]);
     const isLocked = existingLog?.locked === true || isWindowLocked === true;
     const cardioNum = cardioCalories === '' ? 0 : Number(cardioCalories);
     const cardioValid = Number.isFinite(cardioNum) && cardioNum >= 0 && cardioNum <= 2000;
@@ -421,6 +525,7 @@ function WeeklyCheckIn({ existingLog, isWindowLocked, lastSubmittedDate, nextAva
     const handleSave = async () => {
         if (!valid || isLocked) return;
         setSaving(true);
+        setError(null);
         try {
             await onSave({
                 weight: Number(weight),
@@ -429,10 +534,31 @@ function WeeklyCheckIn({ existingLog, isWindowLocked, lastSubmittedDate, nextAva
             });
             setSaved(true);
             setTimeout(() => setSaved(false), 2000);
+        } catch (err) {
+            // Surface the raw Firestore error so we can triage what
+            // actually failed. The "already locked" mask was hiding the
+            // real cause when the bug wasn't the locked-doc rule.
+            const code = (err as { code?: string })?.code ?? '(no code)';
+            const raw = err instanceof Error ? err.message : 'Failed to save. Try again.';
+            setError(`[${code}] ${raw}`);
+            // eslint-disable-next-line no-console
+            console.error('[WeeklyCheckIn] save failed:', code, err);
         } finally {
             setSaving(false);
         }
     };
+
+    // Human-readable hint for why the button is disabled. The submit button
+    // could be unclickable for three different reasons; previously the user
+    // had no way to know which one applied.
+    const disabledHint = (() => {
+        if (isLocked) return null; // The "This week is logged" header already explains.
+        if (weight === '') return 'Enter your current weight to submit.';
+        const w = Number(weight);
+        if (!Number.isFinite(w) || w <= 20 || w >= 350) return 'Weight must be between 20 and 350 kg.';
+        if (!cardioValid) return 'Cardio calories must be between 0 and 2000.';
+        return null;
+    })();
 
     // Friendly date format for "Last submitted" / "Next available" strings.
     const fmt = (iso: string) => {
@@ -481,7 +607,7 @@ function WeeklyCheckIn({ existingLog, isWindowLocked, lastSubmittedDate, nextAva
             </div>
 
             {/* Subjective sliders + cardio — feed `metrics` on the log so the
-                MetricsChart below renders a trend across submitted weeks. */}
+                ProgressChart below renders a trend across submitted weeks. */}
             <div style={{ marginBottom: 16 }}>
                 <ProgressSlider label="Strength" value={strength} onChange={setStrength} disabled={isLocked} />
                 <ProgressSlider label="Hunger"   value={hunger}   onChange={setHunger}   disabled={isLocked} />
@@ -526,6 +652,28 @@ function WeeklyCheckIn({ existingLog, isWindowLocked, lastSubmittedDate, nextAva
                     }}
                 />
             </div>
+            {/* Inline hints — explain why the button is unclickable, and
+                surface backend errors so failures are never silent. */}
+            {disabledHint && !isLocked && (
+                <div style={{
+                    fontFamily: t.body, fontSize: 12, color: t.onSurfaceVariant,
+                    marginBottom: 12, padding: '8px 12px',
+                    background: t.surfaceContainerLow, borderRadius: 10,
+                    border: `1px solid ${t.outlineVariant}`,
+                }}>
+                    {disabledHint}
+                </div>
+            )}
+            {error && (
+                <div role="alert" style={{
+                    fontFamily: t.body, fontSize: 12, color: t.coral,
+                    marginBottom: 12, padding: '8px 12px',
+                    background: `${t.coral}12`, borderRadius: 10,
+                    border: `1px solid ${t.coral}55`,
+                }}>
+                    {error}
+                </div>
+            )}
             <button
                 onClick={handleSave}
                 disabled={saving || !valid || isLocked}
@@ -738,34 +886,100 @@ export const ProgressPanel = () => {
     const { user } = useAuth();
     const { clients, getClientWeeks } = useData();
     const { logs, addLog } = useSelfLogs();
+    const { weighIns, metrics: metricDocs, submit: submitWeeklyCheckIn } = useWeeklyCheckIns();
     const { t: t_ } = useLanguage(); // `t_` because `t` is already the BZT token map above
 
     const sortedByDate = useMemo(() => [...logs].sort((a, b) => a.date.localeCompare(b.date)), [logs]);
 
+    // ProgressChart consumes a single merged dataset — one row per date,
+    // each row has weight + every metric. Missing fields are `null` so
+    // Recharts breaks the line cleanly instead of plotting a zero.
+    // Sources, in priority order: new `weighIns` / `metrics` collections
+    // (canonical), then legacy `selfLogs` entries (historical fallback).
+    const progressHistory = useMemo(() => {
+        type Row = {
+            label: string;
+            weight: number | null;
+            strength: number | null;
+            energy: number | null;
+            hunger: number | null;
+            cardio: number | null;
+        };
+        const byDate = new Map<string, Row>();
+        const ensure = (date: string): Row => {
+            const existing = byDate.get(date);
+            if (existing) return existing;
+            const row: Row = {
+                label: date.slice(5),
+                weight: null, strength: null, energy: null, hunger: null, cardio: null,
+            };
+            byDate.set(date, row);
+            return row;
+        };
+        // Legacy selfLogs — lowest priority, fills in dates that pre-date
+        // the new collections.
+        for (const l of sortedByDate) {
+            if (typeof l.weight === 'number') ensure(l.date).weight = l.weight;
+            const m = l.metrics;
+            if (m) {
+                const row = ensure(l.date);
+                if (typeof m.strength === 'number') row.strength = m.strength;
+                if (typeof m.energy === 'number') row.energy = m.energy;
+                if (typeof m.hunger === 'number') row.hunger = m.hunger;
+                if (typeof m.cardioCalories === 'number') row.cardio = Math.round(m.cardioCalories / 10);
+            }
+        }
+        // weighIns — canonical for weight, overwrites legacy on conflict.
+        for (const w of weighIns) {
+            if (typeof w.weight === 'number') ensure(w.date).weight = w.weight;
+        }
+        // metrics — canonical for the 1–10 metrics + cardio.
+        for (const m of metricDocs) {
+            const row = ensure(m.date);
+            if (typeof m.strength === 'number') row.strength = m.strength;
+            if (typeof m.energy === 'number') row.energy = m.energy;
+            if (typeof m.hunger === 'number') row.hunger = m.hunger;
+            if (typeof m.cardioCalories === 'number') row.cardio = Math.round(m.cardioCalories / 10);
+        }
+        return Array.from(byDate.entries())
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([, row]) => row);
+    }, [sortedByDate, weighIns, metricDocs]);
+
+    // Weight-only view still needed for chart "Start" inference + dashboard
+    // backwards compatibility. Derive from progressHistory so there's one
+    // source of truth.
     const weightHistory = useMemo(
-        () => sortedByDate
-            .filter(l => typeof l.weight === 'number')
-            .map(l => ({ label: l.date.slice(5), weight: l.weight as number })),
-        [sortedByDate]
+        () => progressHistory
+            .filter(r => typeof r.weight === 'number')
+            .map(r => ({ label: r.label, weight: r.weight as number })),
+        [progressHistory]
     );
 
-    const metricsHistory = useMemo(
-        () => sortedByDate
-            .filter(l => l.metrics && (l.metrics.strength || l.metrics.energy || l.metrics.hunger || l.metrics.cardioCalories))
-            .map(l => ({
-                date: l.date.slice(5),
-                strength: l.metrics?.strength ?? 0,
-                energy: l.metrics?.energy ?? 0,
-                hunger: l.metrics?.hunger ?? 0,
-                cardio: Math.round((l.metrics?.cardioCalories ?? 0) / 10),
-            })),
-        [sortedByDate]
-    );
-
-    // Real values: prefer the user's own baseline + target.
-    // Falls back to first weekly log for start, and "no goal" for target if unset.
-    const startWeight = user?.currentWeightKg ?? weightHistory[0]?.weight ?? 0;
+    // Start weight is FIXED: read `users/{uid}.startWeightKg` (set once at
+    // baseline-form submit, never overwritten). For older accounts that
+    // pre-date this field, fall back to the first logged weight, then to
+    // the onboarding `currentWeightKg` value. The one-shot migration below
+    // will heal these on next render.
+    const startWeight = user?.startWeightKg ?? weightHistory[0]?.weight ?? user?.currentWeightKg ?? 0;
     const goalWeight = user?.targetWeightKg ?? 0;
+
+    // One-shot migration: existing accounts have `currentWeightKg` (the
+    // onboarding number) but no `startWeightKg`. Copy it once so subsequent
+    // check-ins can safely overwrite `currentWeightKg` without losing the
+    // anchor. Idempotent: re-runs are no-ops because the condition fails.
+    useEffect(() => {
+        if (!user?.id) return;
+        if (user.startWeightKg !== undefined) return;
+        if (typeof user.currentWeightKg !== 'number') return;
+        updateDoc(doc(db, 'users', user.id), {
+            startWeightKg: user.currentWeightKg,
+            updatedAt: serverTimestamp(),
+        }).catch((err) => {
+            // eslint-disable-next-line no-console
+            console.warn('[ProgressPanel] startWeightKg migration failed:', err);
+        });
+    }, [user?.id, user?.startWeightKg, user?.currentWeightKg]);
 
     const latestMeas = useMemo(() => [...sortedByDate].reverse().find(l => l.measurements)?.measurements, [sortedByDate]);
     const baselineMeas = useMemo(() => sortedByDate.find(l => l.measurements)?.measurements, [sortedByDate]);
@@ -809,12 +1023,32 @@ export const ProgressPanel = () => {
     // we just don't render the form.
     const isCommunity = user?.role === 'community';
     const todayKey = todayISO();
-    const weeklyLogs = useMemo(
-        () => sortedByDate.filter(l => l.period === 'weekly').sort((a, b) => b.date.localeCompare(a.date)),
+
+    // Lock window is driven by the new `weighIns` collection first
+    // (canonical), then by any locked legacy `selfLogs` row as a safety net
+    // for accounts mid-migration. Server-side: Firestore rules on both
+    // `weighIns` and `selfLogs` block update/delete when `locked == true`,
+    // so this is purely UX — the form mirrors what the rule will accept.
+    const sortedWeighIns = useMemo(
+        () => [...weighIns].sort((a, b) => b.date.localeCompare(a.date)),
+        [weighIns]
+    );
+    const legacyWeeklyLogs = useMemo(
+        () => sortedByDate
+            .filter(l => l.period === 'weekly' || l.locked === true)
+            .sort((a, b) => b.date.localeCompare(a.date)),
         [sortedByDate]
     );
-    const lastWeeklyLog = weeklyLogs[0];
-    const lastSubmittedDate = lastWeeklyLog?.date ?? null;
+    const lastWeighIn = sortedWeighIns[0];
+    const lastLegacyWeekly = legacyWeeklyLogs[0];
+    // Most recent submission across both collections.
+    const lastSubmittedDate = (() => {
+        const a = lastWeighIn?.date;
+        const b = lastLegacyWeekly?.date;
+        if (!a) return b ?? null;
+        if (!b) return a;
+        return a > b ? a : b;
+    })();
 
     // Next available = lastSubmittedDate + 7 days. If no prior log, available now.
     const nextAvailableAt = useMemo(() => {
@@ -824,24 +1058,36 @@ export const ProgressPanel = () => {
         return d.toISOString().slice(0, 10);
     }, [lastSubmittedDate]);
 
-    const isWeeklyLocked = !!nextAvailableAt && nextAvailableAt > todayKey;
-    const todaysWeeklyLog = lastWeeklyLog && lastWeeklyLog.date === todayKey ? lastWeeklyLog : undefined;
+    // Today's docs across both collections. If either is locked, the form
+    // must be locked too — otherwise the user could click submit and hit
+    // the server's `locked != true` rule rejection.
+    const todaysWeighIn = useMemo(
+        () => sortedWeighIns.find(w => w.date === todayKey),
+        [sortedWeighIns, todayKey]
+    );
+    const todaysLegacy = useMemo(
+        () => sortedByDate.find(l => l.date === todayKey),
+        [sortedByDate, todayKey]
+    );
+    const isWeeklyLocked = (!!nextAvailableAt && nextAvailableAt > todayKey)
+        || todaysWeighIn?.locked === true
+        || todaysLegacy?.locked === true;
 
     const handleWeeklyCheckIn = async (p: {
         weight: number; notes: string;
         metrics: { strength: number; hunger: number; energy: number; cardioCalories: number };
     }) => {
-        // Persist with today's date as the doc id. Each weekly entry is its own
-        // document — no overwrite of prior weeks. `weekStart` is kept for charts
-        // that group by week boundary. `metrics` powers the MetricsChart trend.
-        await addLog({
-            date: todayKey,
+        // Atomic batch write — weighIn + metrics + selfLogs sidecar +
+        // user.currentWeightKg mirror, all in one transaction. See
+        // `useWeeklyCheckIns.submit()` for the full sequence and the
+        // rationale behind each doc.
+        await submitWeeklyCheckIn({
             weight: p.weight,
+            strength: p.metrics.strength,
+            hunger: p.metrics.hunger,
+            energy: p.metrics.energy,
+            cardioCalories: p.metrics.cardioCalories,
             notes: p.notes || undefined,
-            metrics: p.metrics,
-            period: 'weekly',
-            weekStart: weekStartISO(),
-            locked: true,
         });
     };
 
@@ -893,28 +1139,50 @@ export const ProgressPanel = () => {
                     display: 'grid', gap: 24,
                     gridTemplateColumns: isCommunity ? 'minmax(0, 1fr) minmax(0, 1fr)' : '1fr',
                 }}>
-                    {isCommunity && (
-                        <WeeklyCheckIn
-                            existingLog={todaysWeeklyLog ? {
-                                weight: todaysWeeklyLog.weight,
-                                notes: todaysWeeklyLog.notes,
-                                locked: todaysWeeklyLog.locked,
-                                metrics: todaysWeeklyLog.metrics,
-                            } : undefined}
-                            isWindowLocked={isWeeklyLocked}
-                            lastSubmittedDate={lastSubmittedDate}
-                            nextAvailableAt={nextAvailableAt}
-                            onSave={handleWeeklyCheckIn}
-                        />
-                    )}
+                    {isCommunity && (() => {
+                        // Build today's existingLog by merging the two new
+                        // collections + the legacy selfLogs row. The form
+                        // uses this to pre-populate fields and to render the
+                        // locked overlay. None of the three are guaranteed
+                        // to exist — handle each independently.
+                        const todaysMetric = metricDocs.find(m => m.date === todayKey);
+                        const existingLog = (todaysWeighIn || todaysMetric || todaysLegacy) ? {
+                            weight: todaysWeighIn?.weight ?? todaysLegacy?.weight,
+                            notes: todaysMetric?.notes ?? todaysLegacy?.notes,
+                            locked: (todaysWeighIn?.locked ?? todaysMetric?.locked ?? todaysLegacy?.locked) === true,
+                            metrics: todaysMetric
+                                ? {
+                                    strength: todaysMetric.strength,
+                                    hunger: todaysMetric.hunger,
+                                    energy: todaysMetric.energy,
+                                    cardioCalories: todaysMetric.cardioCalories,
+                                }
+                                : todaysLegacy?.metrics,
+                        } : undefined;
+                        return (
+                            <WeeklyCheckIn
+                                existingLog={existingLog}
+                                isWindowLocked={isWeeklyLocked}
+                                lastSubmittedDate={lastSubmittedDate}
+                                nextAvailableAt={nextAvailableAt}
+                                onSave={handleWeeklyCheckIn}
+                            />
+                        );
+                    })()}
                     <BodyMeasurementsCard current={latestMeas} baseline={baselineMeas} onUpdate={handleMeasUpdate} />
                 </div>
 
-                {/* Weight chart */}
-                <WeightChart data={weightHistory} startWeight={startWeight} goalWeight={goalWeight} />
-
-                {/* Metrics chart */}
-                {metricsHistory.length > 0 && <MetricsChart data={metricsHistory} />}
+                {/* Single unified chart — weight (left axis) + the four
+                    weekly metric lines (right axis 1–10) in one ComposedChart.
+                    The previous design split these into two cards; founder
+                    direction is to track everything in one view. */}
+                <ProgressChart
+                    data={progressHistory}
+                    startWeight={startWeight}
+                    goalWeight={goalWeight}
+                    lastSubmittedDate={lastSubmittedDate}
+                    nextAvailableAt={nextAvailableAt}
+                />
 
                 {/* Photos (coaching clients only) */}
                 <PhotoGallery photos={weekPhotos} />

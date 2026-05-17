@@ -178,8 +178,14 @@ export const CommunityBioZackTeam = () => {
         [sortedByDate]
     );
 
-    // Use the user's real baseline + target when set; fall back to first/last log.
-    const startWeight = user?.currentWeightKg ?? weightHistory[0]?.weight ?? 0;
+    // `users/{uid}.startWeightKg` is the immovable anchor (set once at
+    // onboarding, never re-written). `users/{uid}.currentWeightKg` is
+    // mirrored on every weekly check-in via `useWeeklyCheckIns.submit()`,
+    // so it tracks the most recent weigh-in. Both legacy/historical
+    // accounts (no `startWeightKg` yet) fall back to the first logged
+    // weight, then the onboarding value — the one-shot migration in
+    // ProgressPanel will heal these on next mount.
+    const startWeight = user?.startWeightKg ?? weightHistory[0]?.weight ?? user?.currentWeightKg ?? 0;
     const currentWeight = weightHistory[weightHistory.length - 1]?.weight ?? user?.currentWeightKg ?? 0;
     const goalWeight = user?.targetWeightKg ?? 0;
 
