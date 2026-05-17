@@ -96,15 +96,25 @@ export const CheckIn = () => {
 
     const handleSubmit = async () => {
         if (!client) return;
-        // Photos required: front, side, back must all be uploaded before submitting.
+        // Photos are recommended but not blocking — a client who forgot
+        // to take photos this week can still submit metrics + macros and
+        // upload photos in a follow-up. Previously this was a hard gate
+        // and was reported as "I can't submit". The coach still sees a
+        // visible "no photos this week" cue in CoachReview because the
+        // photos field is just absent on the doc.
         const missing: string[] = [];
         if (!photos.front) missing.push(t('front') ?? 'front');
         if (!photos.side) missing.push(t('side') ?? 'side');
         if (!photos.back) missing.push(t('back') ?? 'back');
         if (missing.length > 0) {
             const list = missing.join(', ');
-            showToast('error', `${t('photosRequired') ?? 'Photos required:'} ${list}`);
-            return;
+            // Soft warning toast — leaves it on screen 5s so they have a
+            // chance to add photos before tapping submit again, but does
+            // not block the submission they're confirming.
+            const ok = window.confirm(
+                `${t('photosMissingWarn') ?? 'No photos uploaded for'}: ${list}.\n\n${t('photosMissingPrompt') ?? 'Submit anyway?'}`
+            );
+            if (!ok) return;
         }
         try {
             await updateWeek(weekData.id, {

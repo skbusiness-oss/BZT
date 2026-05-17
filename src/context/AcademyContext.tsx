@@ -677,29 +677,54 @@ export const AcademyProvider = ({ children }: { children: ReactNode }) => {
     };
 
     const markLessonComplete = async (courseId: string, lessonId: string) => {
-        if (!user) return;
+        if (!user) throw new Error('Sign in required.');
 
         const course = courses.find(c => c.id === courseId);
         const courseLessons = lessonsRef.current[courseId] ?? [];
         const lesson = courseLessons.find(l => l.id === lessonId && !l.archived);
-        if (!course || !lesson || !canAccessLesson(course, lesson)) return;
+        if (!course) throw new Error('Course not found.');
+        if (!lesson) throw new Error('Lesson not found.');
+
+        // Previous client-side gate (`canAccessLesson`) silently returned
+        // without writing, so users got "button does nothing" with zero
+        // feedback. The Firestore rule (canReadLessonContentId) still
+        // enforces the sequential-access chain server-side — if the user
+        // hasn't completed the prerequisite, the write below throws
+        // permission-denied and the caller surfaces it as a clear toast.
+        // This lets coaches/admin (who bypass the rule) always succeed,
+        // and gives non-coach users a real error message instead of a
+        // mystery non-response.
 
         const id = progressDocId(courseId, lessonId);
         const existing = lessonProgressRef.current[id];
         const wasAlreadyComplete = existing?.status === 'completed';
-        await setDoc(doc(db, 'userLessonProgress', id), {
-            id,
-            userId: user.id,
-            courseId,
-            lessonId,
-            status: 'completed',
-            startedAt: existing?.startedAt ?? serverTimestamp(),
-            completedAt: existing?.completedAt ?? serverTimestamp(),
-            updatedAt: serverTimestamp(),
-        }, { merge: true });
+        try {
+            await setDoc(doc(db, 'userLessonProgress', id), {
+                id,
+                userId: user.id,
+                courseId,
+                lessonId,
+                status: 'completed',
+                startedAt: existing?.startedAt ?? serverTimestamp(),
+                completedAt: existing?.completedAt ?? serverTimestamp(),
+                updatedAt: serverTimestamp(),
+            }, { merge: true });
+        } catch (err) {
+            const code = (err as { code?: string })?.code;
+            if (code === 'permission-denied') {
+                throw new Error('Complete the previous required lesson first.');
+            }
+            throw err;
+        }
         // Idempotent — one LESSON_COMPLETE award per lesson per user.
+        // Fire-and-forget so a transient awardXp failure doesn't make the
+        // user think the lesson didn't mark complete (it did — XP just
+        // didn't credit, and the retry path is the next lesson click).
         if (!wasAlreadyComplete) {
-            await awardXp(user.id, XP_SOURCE.LESSON_COMPLETE, `${courseId}/${lessonId}`);
+            awardXp(user.id, XP_SOURCE.LESSON_COMPLETE, `${courseId}/${lessonId}`).catch(err => {
+                // eslint-disable-next-line no-console
+                console.warn('[markLessonComplete] awardXp failed (lesson still marked complete):', err);
+            });
         }
     };
 

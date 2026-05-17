@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { doc, deleteDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useData } from '../context/DataContext';
+import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { DailyTrackingTable } from '../components/checkin/DailyTrackingTable';
 import { ProgressCharts } from '../components/dashboard/ProgressCharts';
@@ -41,7 +42,8 @@ import { MacroTarget } from '../types';
 export const CoachReview = () => {
     const { clientId } = useParams<{ clientId: string }>();
     const navigate = useNavigate();
-    const { clients, getClientWeeks, updateWeek, updateClient, cascadeTargets, createProgram, advanceWeek, extendProgram } = useData();
+    const { clients, getClientWeeks, updateWeek, updateClient, cascadeTargets, createProgram, advanceWeek, extendProgram, sendMessage } = useData();
+    const { user } = useAuth();
     const { t, lang } = useLanguage();
 
     const client = clients.find(c => c.id === clientId);
@@ -68,6 +70,8 @@ export const CoachReview = () => {
     const [isExtending, setIsExtending] = useState(false);
     const [additionalWeeks, setAdditionalWeeks] = useState(4);
     const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
+    const [quickMsg, setQuickMsg] = useState('');
+    const [sendingMsg, setSendingMsg] = useState(false);
 
     const showToast = (type: 'success' | 'error', msg: string) => {
         setToast({ type, msg });
@@ -217,33 +221,30 @@ export const CoachReview = () => {
                     <button onClick={() => navigate('/')} className="hover:bg-surface-container-highest p-3 rounded-full text-on-surface/50 hover:text-primary transition-colors">
                         <ChevronLeft />
                     </button>
-                    <div>
+                    <div className="min-w-0">
                         <p className="text-primary font-label uppercase tracking-[0.3em] text-[10px] font-bold mb-1">{isProgramCreation ? t('programCreation') : t('coachReviewTitle')}</p>
                         <h1 className="text-3xl font-headline font-extrabold text-on-surface flex items-center gap-3 flex-wrap">
                             {client.name}
                             {!isProgramCreation && <span className="px-3 py-1 rounded-full font-label text-[10px] font-bold uppercase tracking-widest bg-surface-container-highest text-on-surface/50 border border-outline-variant/30">{t('week')} {selectedWeekNum}</span>}
                             {isProgramCreation && <span className="px-3 py-1 rounded-full font-label text-[10px] font-bold uppercase tracking-widest bg-primary/10 text-primary border border-primary/20">{t('intakeDataLabel')}</span>}
                         </h1>
+                        {/* Client email — coach quality-of-life. Lets the coach
+                            copy the address for off-platform contact (Stripe
+                            dashboard, support reply, manual outreach) without
+                            leaving the review. Long emails truncate; full
+                            address visible on hover via the title attribute. */}
+                        {client.email && (
+                            <p
+                                className="text-sm font-body text-on-surface/55 mt-1 truncate max-w-md select-all"
+                                title={client.email}
+                            >
+                                {client.email}
+                            </p>
+                        )}
                     </div>
                 </div>
 
                 <div className="flex items-center gap-3 flex-wrap">
-                    {/* Message client — opens Messages page with this client
-                        already selected via `?to=<userId>`. Visible during
-                        program-creation too because that's exactly when a
-                        coach often needs to ask the client about their
-                        intake answers. */}
-                    {client.userId && (
-                        <button
-                            onClick={() => navigate(`/messages?to=${client.userId}`)}
-                            className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-primary/10 text-primary border border-primary/30 hover:bg-primary/15 transition-colors text-sm font-headline font-bold"
-                            title={`Message ${client.name}`}
-                        >
-                            <MessageSquare size={16} />
-                            <span className="hidden sm:inline">{t('messageClient') ?? 'Message client'}</span>
-                        </button>
-                    )}
-
                     {!isProgramCreation && (
                         <div className="flex items-center gap-1 bg-surface-container-highest/50 rounded-full p-1">
                             <button
@@ -290,6 +291,69 @@ export const CoachReview = () => {
                     {t('view')} →
                 </span>
             </button>
+
+            {/* ── Inline quick-message ──
+                One textarea + Send. Fires sendMessage to the same thread
+                the client sees in /messages — no duplicate thread, no
+                navigate-away. Previously this was a button that took the
+                coach OUT of the review; the in-flow version lets them
+                send a quick "submit photos for back angle please" or
+                "great week!" without losing context. */}
+            {client.userId && user && (
+                <form
+                    onSubmit={async (e) => {
+                        e.preventDefault();
+                        const text = quickMsg.trim();
+                        if (!text || sendingMsg) return;
+                        setSendingMsg(true);
+                        try {
+                            await sendMessage(user.id, client.userId, user.name, text);
+                            setQuickMsg('');
+                            showToast('success', t('messageSent') ?? 'Message sent');
+                        } catch (err) {
+                            const msg = err instanceof Error ? err.message : 'Failed to send.';
+                            showToast('error', msg);
+                            // eslint-disable-next-line no-console
+                            console.warn('[CoachReview.quickMsg] failed:', err);
+                        } finally {
+                            setSendingMsg(false);
+                        }
+                    }}
+                    className="bg-surface-container-low ghost-border rounded-2xl p-4 md:p-5 flex flex-col sm:flex-row items-stretch sm:items-end gap-3"
+                >
+                    <div className="flex-1 min-w-0">
+                        <label className="block text-[10px] font-label font-bold uppercase tracking-widest text-on-surface/55 mb-2 flex items-center gap-1.5">
+                            <MessageSquare size={12} /> {t('messageClient') ?? 'Message client'}
+                        </label>
+                        <textarea
+                            value={quickMsg}
+                            onChange={e => setQuickMsg(e.target.value)}
+                            placeholder={t('quickMessagePlaceholder') ?? 'Send a quick note to the client…'}
+                            rows={2}
+                            maxLength={2000}
+                            className="w-full bg-surface-container-lowest border border-outline-variant/30 outline-none focus:border-primary rounded-xl px-3.5 py-2.5 text-sm font-body text-on-surface placeholder-on-surface/30 resize-none transition-colors"
+                        />
+                    </div>
+                    <div className="flex items-center gap-2 sm:flex-col sm:items-stretch">
+                        <button
+                            type="submit"
+                            disabled={!quickMsg.trim() || sendingMsg}
+                            className="px-5 py-3 rounded-xl bg-gradient-to-br from-primary to-primary-container text-on-primary font-label text-[11px] font-extrabold uppercase tracking-[0.16em] disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+                        >
+                            {sendingMsg ? <Loader2 size={14} className="animate-spin" /> : <MessageSquare size={14} />}
+                            {t('send') ?? 'Send'}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => navigate(`/messages?to=${client.userId}`)}
+                            className="px-3 py-2 rounded-xl text-[10px] font-label font-bold uppercase tracking-widest text-on-surface/55 hover:text-primary hover:bg-surface-container transition-colors"
+                            title={t('openFullThread') ?? 'Open full thread'}
+                        >
+                            {t('openThread') ?? 'Thread'} →
+                        </button>
+                    </div>
+                </form>
+            )}
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 {/* ── LEFT COLUMN - Client Data ── */}

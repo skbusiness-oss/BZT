@@ -32,7 +32,7 @@ interface Props {
     canAccessLesson: (lesson: Lesson) => boolean;
     onBack: () => void;
     onOpenLesson: (lessonId: string) => Promise<boolean>;
-    onMarkComplete: (lessonId: string) => void;
+    onMarkComplete: (lessonId: string) => Promise<void>;
     onGetResourceUrl: (resource: LessonResource) => Promise<string>;
     onAddLesson?: () => void;
     onEditLesson?: (lesson: Lesson) => void;
@@ -49,6 +49,34 @@ export const CourseDetail = ({
 }: Props) => {
     const [activeLesson, setActiveLesson] = useState<Lesson | null>(null);
     const [openingLessonId, setOpeningLessonId] = useState<string | null>(null);
+    const [marking, setMarking] = useState(false);
+    const [markError, setMarkError] = useState<string | null>(null);
+
+    // Wraps the mark-complete prop so the button gets a loading state and
+    // surfaces failures (permission-denied / network) as a user-visible
+    // banner. Previously the prop was fire-and-forget — when the rule
+    // rejected the write because the user hadn't completed the previous
+    // required lesson, the button just did nothing and read as broken.
+    const handleMarkComplete = async (lessonId: string): Promise<boolean> => {
+        if (marking) return false;
+        setMarking(true);
+        setMarkError(null);
+        try {
+            await onMarkComplete(lessonId);
+            return true;
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : 'Failed to mark complete.';
+            setMarkError(msg);
+            // eslint-disable-next-line no-console
+            console.warn('[CourseDetail.markComplete] failed:', err);
+            // Clear the banner after a few seconds so it doesn't become
+            // visual noise the next time they open a different lesson.
+            window.setTimeout(() => setMarkError(null), 5000);
+            return false;
+        } finally {
+            setMarking(false);
+        }
+    };
 
     // ── YouTube-style collapsible description for the player overlay ──
     // Collapsed by default; expands on "Show more" click. We measure the
@@ -375,24 +403,50 @@ export const CourseDetail = ({
 
                             <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mt-6">
                                 <button
-                                    onClick={() => onMarkComplete(activeLesson.id)}
+                                    onClick={() => { void handleMarkComplete(activeLesson.id); }}
+                                    disabled={marking || completedIds.has(activeLesson.id)}
                                     className={clsx(
                                         'gold-gradient text-on-primary-fixed px-8 py-3 rounded-full font-label text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 active:scale-95 transition-all',
-                                        completedIds.has(activeLesson.id) && 'opacity-60 pointer-events-none'
+                                        (marking || completedIds.has(activeLesson.id)) && 'opacity-60 pointer-events-none'
                                     )}
                                 >
                                     <CheckCircle2 size={16} />
-                                    {completedIds.has(activeLesson.id) ? 'Lesson Complete' : 'Mark as Complete'}
+                                    {marking
+                                        ? 'Saving…'
+                                        : completedIds.has(activeLesson.id)
+                                            ? 'Lesson Complete'
+                                            : 'Mark as Complete'}
                                 </button>
                                 {nextLesson && canAccessLesson(nextLesson) && (
                                     <button
-                                        onClick={() => { onMarkComplete(activeLesson.id); void openLesson(nextLesson); }}
-                                        className="px-8 py-3 rounded-full font-label text-[10px] font-bold uppercase tracking-widest text-primary border border-primary/30 hover:border-primary/60 active:scale-95 transition-all flex items-center gap-2"
+                                        onClick={async () => {
+                                            const ok = await handleMarkComplete(activeLesson.id);
+                                            // Only advance if the mark succeeded — otherwise
+                                            // the user lands on a locked lesson and the back-
+                                            // and-forth confuses them.
+                                            if (ok) void openLesson(nextLesson);
+                                        }}
+                                        disabled={marking}
+                                        className={clsx(
+                                            'px-8 py-3 rounded-full font-label text-[10px] font-bold uppercase tracking-widest text-primary border border-primary/30 hover:border-primary/60 active:scale-95 transition-all flex items-center gap-2',
+                                            marking && 'opacity-60 pointer-events-none'
+                                        )}
                                     >
                                         Next Lesson <ArrowRight size={14} />
                                     </button>
                                 )}
                             </div>
+
+                            {/* Error banner — replaces the silent failure pattern.
+                                Auto-clears after 5s (see handleMarkComplete). */}
+                            {markError && (
+                                <div
+                                    role="alert"
+                                    className="mt-4 mx-auto max-w-md px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-[13px] font-body text-center"
+                                >
+                                    {markError}
+                                </div>
+                            )}
 
                             {/* Resources */}
                             {getResources(activeLesson).length > 0 && (
