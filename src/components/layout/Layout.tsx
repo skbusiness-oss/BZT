@@ -21,11 +21,11 @@ import {
     Sun,
     Moon,
     Trophy,
+    Utensils,
+    Sparkles,
     type LucideIcon,
 } from 'lucide-react';
 import clsx from 'clsx';
-import bgDesktop from '../../assets/bg-desktop.jpg';
-import bgMobile from '../../assets/bg-mobile.jpg';
 
 /** iOS-style sidebar item: rounded-square icon tile + label, tight rows. */
 const SidebarItem = ({ to, icon: Icon, label, end = false, onClick }: { to: string, icon: LucideIcon, label: string, end?: boolean, onClick?: () => void }) => {
@@ -169,6 +169,7 @@ export const Layout = () => {
 
                         <SidebarItem to="/library" icon={PlaySquare} label={t('navVideoLibrary')} onClick={closeSidebar} />
                         <SidebarItem to="/workouts" icon={Dumbbell} label={t('navWorkouts')} onClick={closeSidebar} />
+                        <SidebarItem to="/diets" icon={Utensils} label={t('navDiets')} onClick={closeSidebar} />
 
                         {(isCoach || isClient) && (
                             <NavLink
@@ -210,6 +211,13 @@ export const Layout = () => {
                         )}
                         <SidebarItem to="/profile" icon={UserCircle} label={t('navProfile')} onClick={closeSidebar} />
                         <SidebarItem to="/settings" icon={Settings} label={t('navSettings')} onClick={closeSidebar} />
+
+                        {/* Subscribe / Upgrade — community users see this prominently. Hidden
+                            for already-paying clients and coaches. Always points at the
+                            launch-day Stripe Payment Links via /pricing. */}
+                        {user.role === 'community' && (
+                            <SidebarItem to="/pricing" icon={Sparkles} label={t('navUpgrade') ?? 'Upgrade'} onClick={closeSidebar} />
+                        )}
                     </nav>
                 </div>
 
@@ -269,34 +277,12 @@ export const Layout = () => {
 
             {/* Main Content */}
             <main className="flex-1 overflow-y-auto relative">
-                {/* Background image — only shown on dark theme. The image is dark scenic
-                    artwork that doesn't suit the light "marble" palette. */}
-                {theme === 'dark' && (
-                    <>
-                        {/* Desktop */}
-                        <div
-                            className="hidden md:block fixed inset-0 z-0"
-                            style={{
-                                backgroundImage: `url(${bgDesktop})`,
-                                backgroundSize: 'cover',
-                                backgroundPosition: 'center',
-                                backgroundRepeat: 'no-repeat',
-                            }}
-                        />
-                        {/* Mobile */}
-                        <div
-                            className="md:hidden fixed inset-0 z-0"
-                            style={{
-                                backgroundImage: `url(${bgMobile})`,
-                                backgroundSize: 'cover',
-                                backgroundPosition: 'center top',
-                                backgroundRepeat: 'no-repeat',
-                            }}
-                        />
-                        {/* Dark scrim over image */}
-                        <div className="fixed inset-0 z-[1]" style={{ background: 'rgb(var(--surface) / 0.85)' }} />
-                    </>
-                )}
+                {/* Background image was previously shown on dark theme. Removed
+                    per founder direction: keep only the theme surface color on
+                    dark, no scenic backdrop. The dist/ JPEGs (bg-desktop,
+                    bg-mobile) are still bundled because the imports remain — if
+                    we remove the imports, restore them later by editing both
+                    here and at the top of the file. */}
                 {/* Light theme: solid surface fill, no image */}
                 {theme === 'light' && (
                     <div className="fixed inset-0 z-0" style={{ background: 'rgb(var(--surface))' }} />

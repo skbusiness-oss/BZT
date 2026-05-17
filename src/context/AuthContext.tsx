@@ -5,8 +5,7 @@
 
 import { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import { User, Role } from '../types';
-import { auth, db, functions } from '../lib/firebase';
-import { httpsCallable } from 'firebase/functions';
+import { auth, db } from '../lib/firebase';
 import {
   signInWithEmailAndPassword,
   signOut as firebaseSignOut,
@@ -48,6 +47,24 @@ const secondaryAuth = getAuth(secondaryApp);
 
 const IDLE_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 const LAST_ACTIVE_KEY = 'bzt-lastActiveAt';
+/** Skip the visibility-driven token refresh for this many ms after a
+ *  fresh sign-in. iOS PWAs flip visibility transiently during autofill
+ *  / FaceID, and a force-refresh in that window has been observed to
+ *  fail with transient errors and trigger a spurious sign-out
+ *  (a.k.a. the "double-login" bug). */
+const POST_SIGNIN_GRACE_MS = 60 * 1000;
+/** Auth error codes that genuinely warrant signing the user out. Any
+ *  other failure from `getIdToken(true)` is treated as transient
+ *  (network, keychain race) and ignored. */
+const HARD_AUTH_ERROR_CODES = new Set([
+  'auth/user-token-expired',
+  'auth/user-disabled',
+  'auth/user-not-found',
+  'auth/id-token-expired',
+  'auth/id-token-revoked',
+  'auth/invalid-user-token',
+  'auth/requires-recent-login',
+]);
 
 const touchLastActive = () => {
   try {
@@ -103,33 +120,51 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [freshUserDocLoaded, setFreshUserDocLoaded] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const userDocUnsubRef = useRef<Unsubscribe | null>(null);
+  /** Wall-clock ms when the most recent successful signIn() resolved.
+   *  Used to gate the visibility-driven token refresh — see #3 fix. */
+  const signedInAtRef = useRef<number>(0);
 
   const clearAuthError = () => setAuthError(null);
 
-  // ── Idle timeout check (runs once before any auth subscription wires up) ──
+  // ── Idle timeout: check on mount, on visibility change, and on a 60s
+  //    interval so a long-foregrounded tab still gets signed out at 30 min.
+  //    Real interactivity (pointer / key / scroll) bumps the active stamp.
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(LAST_ACTIVE_KEY);
-      if (stored) {
+    const checkIdle = () => {
+      try {
+        const stored = localStorage.getItem(LAST_ACTIVE_KEY);
+        if (!stored) return;
         const last = parseInt(stored, 10);
-        if (!Number.isNaN(last) && Date.now() - last > IDLE_TIMEOUT_MS) {
-          // User has been idle longer than the timeout. Force a sign-out
-          // before any other auth logic runs.
+        if (Number.isNaN(last)) return;
+        if (Date.now() - last > IDLE_TIMEOUT_MS) {
           localStorage.removeItem(LAST_ACTIVE_KEY);
-          firebaseSignOut(auth).catch(() => {
-            /* ignore — best effort */
-          });
+          firebaseSignOut(auth).catch(() => { /* best effort */ });
         }
+      } catch {
+        // ignore — private mode / quota
       }
-    } catch {
-      // ignore — private mode / quota
-    }
-    // Eagerly mark the session as active so we don't immediately re-trigger.
+    };
+
+    checkIdle();
     touchLastActive();
+
+    const onActivity = () => touchLastActive();
+    window.addEventListener('pointerdown', onActivity, { passive: true });
+    window.addEventListener('keydown', onActivity, { passive: true });
+    window.addEventListener('scroll', onActivity, { passive: true });
 
     const onBeforeUnload = () => touchLastActive();
     window.addEventListener('beforeunload', onBeforeUnload);
-    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+
+    const interval = window.setInterval(checkIdle, 60 * 1000);
+
+    return () => {
+      window.removeEventListener('pointerdown', onActivity);
+      window.removeEventListener('keydown', onActivity);
+      window.removeEventListener('scroll', onActivity);
+      window.removeEventListener('beforeunload', onBeforeUnload);
+      window.clearInterval(interval);
+    };
   }, []);
 
   // ── Main auth subscription ────────────────────────────────────────────────
@@ -152,31 +187,49 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return;
       }
 
-      // Make sure the doc exists before subscribing. Self-registered community
-      // users may sign in with no Firestore profile yet.
+      // Tombstone gate: explicit positive check only. If a deletionLogs/{uid}
+      // doc EXISTS, this account was deleted by a coach — refuse sign-in.
+      // Any OTHER outcome (no doc, permission-denied during token-propagation
+      // race, transient network error) is treated as "no tombstone present"
+      // and we proceed. The user-doc onSnapshot listener below is the real
+      // disabled/deleted defense — if the users/{uid} doc is gone or has
+      // disabled:true, that listener catches it and signs out cleanly.
+      //
+      // The previous fail-closed implementation caused a login-loop: first
+      // sign-in attempt would race the auth token propagation, getDoc would
+      // throw permission-denied, the catch block force-signed-out the user,
+      // and they had to re-enter credentials. Second attempt worked because
+      // the token had fully propagated by then. Reported via Sentry as
+      // permission-denied on /login.
       try {
-        const initialSnap = await getDoc(doc(db, 'users', firebaseUser.uid));
-        if (!initialSnap.exists()) {
-          const isPlatformOwner = firebaseUser.email === 'souktanimohamed@gmail.com';
-          const initialRole: Role = isPlatformOwner ? 'admin' : 'community';
-
-          const defaultProfile = {
-            displayName:
-              firebaseUser.displayName ||
-              firebaseUser.email?.split('@')[0] ||
-              'User',
-            email: firebaseUser.email || '',
-            role: initialRole,
-            createdAt: serverTimestamp(),
-            macros: null,
-            stripeCustomerId: null,
-          };
-          await setDoc(doc(db, 'users', firebaseUser.uid), defaultProfile);
+        const tombstone = await getDoc(doc(db, 'deletionLogs', firebaseUser.uid));
+        if (tombstone.exists()) {
+          setAuthError('This account has been removed. Please contact your coach.');
+          await firebaseSignOut(auth).catch(() => { /* ignore */ });
+          setUser(null);
+          setFreshUserDocLoaded(true);
+          setLoading(false);
+          return;
         }
-      } catch {
-        // If we can't read/write the user doc (rules / network), still try to
-        // subscribe below; the listener will surface the real error if any.
+      } catch (err) {
+        // Fail-OPEN on read error. Log it (Sentry will pick up via
+        // window.unhandledrejection if it bubbles), continue with sign-in,
+        // and let the users/{uid} listener do the actual access check.
+        // eslint-disable-next-line no-console
+        console.warn('[AuthContext] Tombstone check skipped (read error, falling through to users-doc listener):', err);
       }
+
+      // We do NOT auto-create users/{uid} on sign-in for arbitrary
+      // accounts. Silent default-profile creation was an account-
+      // resurrection vector (wiped doc + surviving Auth record →
+      // fresh community profile on next sign-in). All account
+      // creation now happens via the AddClientModal coach flow or
+      // via a one-shot bootstrap Cloud Function (see prior
+      // rescueAccounts/bootstrapRoles patterns in commit history).
+      // The previous client-side platform-owner-email bootstrap was
+      // removed: hardcoded gates in the bundle are brittle, and the
+      // admin doc already exists in production. Future admin recovery
+      // is a Cloud Function call, not a client write.
 
       // Now subscribe in real-time to users/{uid}. This catches role changes,
       // disabled flag flips, and tosAcceptedAt updates without a reload.
@@ -186,6 +239,28 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           touchLastActive();
 
           if (!snap.exists()) {
+            // Two cases where `!snap.exists()` fires:
+            //   1. Initial snapshot from local cache before the server
+            //      response arrives. metadata.fromCache === true. The doc
+            //      MAY exist on the server; we just don't know yet. Do
+            //      NOTHING and wait for the next snapshot.
+            //   2. Server-confirmed "doc doesn't exist" (was deleted by
+            //      deleteUser cascade, or never existed). metadata.
+            //      fromCache === false. Hard sign-out.
+            //
+            // The previous version skipped this distinction and fail-
+            // closed on every !exists snapshot, which caused a login-
+            // loop on FIRST sign-in: cache is empty → first snapshot
+            // says !exists → user signed out → kicked back to /login.
+            // Second attempt worked because cache had warmed up from
+            // the first attempt. Reported via Sentry as permission-
+            // denied / repeated /login hits.
+            if (snap.metadata.fromCache) {
+              // Don't decide yet — keep waiting for server confirmation.
+              return;
+            }
+            setAuthError('Your account no longer exists. Please contact your coach.');
+            firebaseSignOut(auth).catch(() => { /* ignore */ });
             setUser(null);
             setFreshUserDocLoaded(true);
             setLoading(false);
@@ -222,6 +297,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             age: typeof data.age === 'number' ? data.age : undefined,
             heightCm: typeof data.heightCm === 'number' ? data.heightCm : undefined,
             goal: typeof data.goal === 'string' ? data.goal : undefined,
+            startWeightKg: typeof data.startWeightKg === 'number' ? data.startWeightKg : undefined,
             currentWeightKg: typeof data.currentWeightKg === 'number' ? data.currentWeightKg : undefined,
             targetWeightKg: typeof data.targetWeightKg === 'number' ? data.targetWeightKg : undefined,
             communityProfileStartedAt: tsToIso(data.communityProfileStartedAt) ?? (typeof data.communityProfileStartedAt === 'string' ? data.communityProfileStartedAt : undefined),
@@ -231,30 +307,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           setFreshUserDocLoaded(true);
           setLoading(false);
 
-          // One-time custom-claim bootstrap. Storage rules + Firestore
-          // `isCoach()` prefer `request.auth.token.role`. Coaches/admins from
-          // before the claim system landed need their claim set once. We do
-          // it automatically on sign-in: if the Firestore role is coach/admin
-          // but the token has no `role` claim, call `setUserRole` on
-          // themselves (the Cloud Function falls back to Firestore-role for
-          // the caller-is-coach check). After success, force a token refresh.
-          (async () => {
-            try {
-              if (resolvedRole !== 'coach' && resolvedRole !== 'admin') return;
-              const tokenResult = await firebaseUser.getIdTokenResult();
-              const tokenRole = (tokenResult.claims as { role?: string }).role;
-              if (tokenRole === resolvedRole) return;
-              const callSetUserRole = httpsCallable<
-                { targetUid: string; role: Role },
-                { ok: boolean }
-              >(functions, 'setUserRole');
-              await callSetUserRole({ targetUid: firebaseUser.uid, role: resolvedRole });
-              await firebaseUser.getIdToken(true);
-            } catch (err) {
-              // eslint-disable-next-line no-console
-              console.warn('[AuthContext] Role-claim bootstrap failed (non-fatal):', err);
-            }
-          })();
+          // Custom-claim bootstrap REMOVED — it caused a login-loop.
+          // Previous behavior: if the user's id-token didn't carry a `role`
+          // claim matching their Firestore role, this called setUserRole
+          // on themselves. setUserRole calls revokeRefreshTokens server-
+          // side → the current token died → onAuthStateChanged fired with
+          // null → user got kicked back to /login. On any sign-in where
+          // claim drift was present, the loop was infinite.
+          //
+          // Claims are now an exclusively server-side responsibility.
+          // To set/repair a user's claim, an admin runs the bootstrap or
+          // rescueAccounts Cloud Function once. The user signs in fresh
+          // afterward and gets the new claim in their token.
+          //
+          // The Firestore rules `isCoach()` still falls back to the
+          // Firestore role doc when the claim is missing, so coach
+          // access does not break in the meantime — it just doesn't
+          // use the (faster, no-Firestore-read) claim path.
         },
         () => {
           // Permission/network error — clear state so we don't render stale UI.
@@ -270,7 +339,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
   }, []);
 
-  // ── visibilitychange: force token refresh + idle-stamp on foreground ─────
+  // ── visibilitychange: silent token refresh + idle-stamp on foreground ────
+  // History notes:
+  //   - We used to flip `freshUserDocLoaded → false` here so AppRoutes would
+  //     re-show its loading spinner until the user-doc snapshot fired again.
+  //     Removed: the live `onSnapshot` to `users/{uid}` already delivers
+  //     role/disabled changes mid-session; the gated re-render only created
+  //     a spurious spinner flash on every app return.
+  //   - We used to sign the user out on ANY token-refresh failure. Removed:
+  //     iOS Safari fires visibility transiently during autofill/FaceID
+  //     immediately after sign-in, and the force-refresh in that window can
+  //     fail with transient network/keychain errors — which then signed the
+  //     user back out and produced the "double-login" symptom.
+  //
+  // Current behavior:
+  //   1. Stamp last-active so the idle-timeout doesn't fire spuriously.
+  //   2. Skip force-refresh if we're inside the post-sign-in grace window.
+  //   3. Otherwise, force-refresh in the background — silent. The UI is
+  //      NOT gated on this; the snapshot listener handles state changes.
+  //   4. Only sign out if the refresh fails with a code that genuinely
+  //      indicates the credential was revoked / expired (set above).
   useEffect(() => {
     const onVisibilityChange = async () => {
       if (document.visibilityState !== 'visible') return;
@@ -281,22 +369,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const current = auth.currentUser;
       if (!current) return;
 
-      // Mark that we need to wait for a fresh user-doc snapshot before we
-      // trust any cached UI for protected routes.
-      setFreshUserDocLoaded(false);
+      // Skip the force-refresh entirely in the post-sign-in grace window.
+      // The token we just got is fresh; refreshing it again can transiently
+      // fail on iOS PWA and trigger a sign-out loop.
+      if (Date.now() - signedInAtRef.current < POST_SIGNIN_GRACE_MS) return;
 
       try {
         await current.getIdToken(/* forceRefresh */ true);
-      } catch {
-        // Token refresh failed — most likely the user was disabled or deleted
-        // while the PWA was backgrounded. Sign them out hard.
-        try {
-          await firebaseSignOut(auth);
-        } catch {
-          /* ignore */
+      } catch (err: unknown) {
+        const code = (err as { code?: string })?.code ?? '';
+        // Only sign out on real revocation / expiry. Transient errors
+        // (network, keychain race) get swallowed — the next snapshot or
+        // the next user action will surface any actual problem.
+        if (HARD_AUTH_ERROR_CODES.has(code)) {
+          try { await firebaseSignOut(auth); } catch { /* ignore */ }
+          setUser(null);
         }
-        setUser(null);
-        setFreshUserDocLoaded(false);
       }
     };
 
@@ -307,8 +395,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // ── Sign in ────────────────────────────────────────────────────────────────
   const signIn = async (email: string, password: string): Promise<{ error?: string }> => {
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      await signInWithEmailAndPassword(auth, email.toLowerCase().trim(), password);
       touchLastActive();
+      // Stamp the sign-in time so the visibility handler can skip its
+      // force-refresh during the grace window — see #3 fix.
+      signedInAtRef.current = Date.now();
       return {};
     } catch (error: unknown) {
       return { error: getFirebaseErrorMessage((error as { code?: string })?.code ?? '') };
@@ -318,7 +409,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // ── Password reset ────────────────────────────────────────────────────────
   const sendPasswordReset = async (email: string): Promise<{ error?: string }> => {
     try {
-      await sendPasswordResetEmail(auth, email);
+      await sendPasswordResetEmail(auth, email.toLowerCase().trim());
       return {};
     } catch (error: unknown) {
       return { error: getFirebaseErrorMessage((error as { code?: string })?.code ?? '') };
@@ -346,8 +437,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     role: Role
   ): Promise<{ uid?: string; error?: string }> => {
     try {
+      const safeEmail = email.toLowerCase().trim();
       // Create the Auth user on the secondary app (coach stays signed in on main app)
-      const credential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
+      const credential = await createUserWithEmailAndPassword(secondaryAuth, safeEmail, password);
       const newUid = credential.user.uid;
 
       // Set display name on the new user
@@ -359,7 +451,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // Write the user profile to Firestore (main db — no auth needed, coach writes it)
       await setDoc(doc(db, 'users', newUid), {
         displayName: name,
-        email,
+        email: safeEmail,
         role, // 'client' or 'community'
         createdAt: serverTimestamp(),
         macros: role === 'client' ? DEFAULT_TARGETS : null,

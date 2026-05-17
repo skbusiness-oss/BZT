@@ -10,3 +10,4 @@ export { awardXp } from './awardXp';
 export { setUserRole } from './setUserRole';
 export { setUserDisabled } from './setUserDisabled';
 export { deleteUser } from './deleteUser';
+export { onCommentCreated, onCommentDeleted } from './maintainCommentCount';

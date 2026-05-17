@@ -26,13 +26,12 @@ export const Community = () => {
 
             {/* Editorial header */}
             <header className="text-center">
-                <span className="font-label text-[10px] font-bold uppercase tracking-widest text-primary block mb-3">Members Lounge</span>
+                <span className="font-label text-[10px] font-bold uppercase tracking-widest text-primary block mb-3">{t('membersLoungeEyebrow')}</span>
                 <h1 className="font-headline font-extrabold text-5xl md:text-6xl text-on-surface mb-4 tracking-tighter">
-                    Join the <span className="text-primary-container">Community</span>
+                    {t('joinTheCommunityHeader')} <span className="text-primary-container">{t('communityWord')}</span>
                 </h1>
                 <p className="text-on-surface/70 font-body leading-relaxed max-w-md mx-auto">
-                    Connect with fellow members, share your progress, ask questions,
-                    and get support — all on Discord.
+                    {t('communityIntroBlurb')}
                 </p>
             </header>
 
@@ -41,18 +40,18 @@ export const Community = () => {
                 <div className="grid grid-cols-3 gap-4 text-sm">
                     <div className="bg-surface-container-lowest rounded-xl p-5 flex flex-col items-center gap-3 ghost-border">
                         <Users size={24} className="text-primary" />
-                        <span className="text-on-surface font-headline font-bold text-sm">Members</span>
-                        <span className="text-on-surface/50 text-[10px] font-label uppercase tracking-widest">Active community</span>
+                        <span className="text-on-surface font-headline font-bold text-sm">{t('membersWord')}</span>
+                        <span className="text-on-surface/50 text-[10px] font-label uppercase tracking-widest">{t('activeCommunityLabel')}</span>
                     </div>
                     <div className="bg-surface-container-lowest rounded-xl p-5 flex flex-col items-center gap-3 ghost-border">
                         <MessageCircle size={24} className="text-primary" />
-                        <span className="text-on-surface font-headline font-bold text-sm">Channels</span>
-                        <span className="text-on-surface/50 text-[10px] font-label uppercase tracking-widest">Tips, wins, Q&amp;A</span>
+                        <span className="text-on-surface font-headline font-bold text-sm">{t('channelsWord')}</span>
+                        <span className="text-on-surface/50 text-[10px] font-label uppercase tracking-widest">{t('channelsBlurb')}</span>
                     </div>
                     <div className="bg-surface-container-lowest rounded-xl p-5 flex flex-col items-center gap-3 ghost-border">
                         <Zap size={24} className="text-primary" />
-                        <span className="text-on-surface font-headline font-bold text-sm">Live</span>
-                        <span className="text-on-surface/50 text-[10px] font-label uppercase tracking-widest">Coach events</span>
+                        <span className="text-on-surface font-headline font-bold text-sm">{t('liveWord')}</span>
+                        <span className="text-on-surface/50 text-[10px] font-label uppercase tracking-widest">{t('coachEventsLabel')}</span>
                     </div>
                 </div>
 

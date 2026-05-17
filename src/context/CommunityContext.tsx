@@ -120,13 +120,11 @@ export const CommunityProvider = ({ children }: { children: ReactNode }) => {
       content: content.trim(),
       timestamp: serverTimestamp(),
     });
-    const post = posts.find((p) => p.id === postId);
-    if (post) {
-      await updateDoc(doc(db, 'posts', postId), {
-        commentCount: (post.commentCount ?? post.comments?.length ?? 0) + 1,
-      });
-    }
-    // Reload comments for this post
+    // commentCount is maintained server-side by the onCommentCreated trigger
+    // (functions/src/maintainCommentCount.ts) — clients can no longer write
+    // it (the firestore.rules posts.update rule rejects non-author writes
+    // outside of the precise like-toggle path). The post's onSnapshot picks
+    // up the new count within ~1s.
     await loadComments(postId);
     // Idempotent — one COMMENT award per comment id.
     await awardXp(authorId, XP_SOURCE.COMMENT, `${postId}/${commentRef.id}`);

@@ -13,11 +13,12 @@ const callDeleteUser = httpsCallable<
 >(functions, 'deleteUser');
 import {
     Search, ChevronRight, CheckCircle2, AlertCircle, Plus, X, Trash2, UserCog,
-    Shield, Users, Award, AlertTriangle, Eye, Ban,
+    Shield, Users, Award, AlertTriangle, Eye, Ban, Apple,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { Category, Client, FitnessLevel } from '../types';
 import { AddClientModal } from '../components/shared/AddClientModal';
+import { AssignDietPicker } from '../components/diets/AssignDietPicker';
 
 const CLIENT_CATEGORIES: { value: Category; color: string }[] = [
     { value: 'cutting', color: 'orange' },
@@ -48,6 +49,8 @@ export const Clients = () => {
     const [showAddModal, setShowAddModal] = useState(false);
     const [showRoleModal, setShowRoleModal] = useState(false);
     const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+    /** Either a coaching Client or a community member — both have userId. */
+    const [dietTarget, setDietTarget] = useState<{ userId: string; name: string } | null>(null);
     const [confirmDelete, setConfirmDelete] = useState<Client | null>(null);
     const [confirmDeleteMember, setConfirmDeleteMember] = useState<CommunityMember | null>(null);
     const [deleting, setDeleting] = useState(false);
@@ -151,7 +154,7 @@ export const Clients = () => {
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8">
                 <div>
-                    <span className="font-label text-[10px] font-bold uppercase tracking-widest text-primary block mb-2">Management</span>
+                    <span className="font-label text-[10px] font-bold uppercase tracking-widest text-primary block mb-2">{t('managementEyebrow') ?? 'Management'}</span>
                     <h1 className="font-headline font-extrabold text-5xl md:text-6xl text-on-surface tracking-tighter">
                         {t('clientsTitle')}<span className="text-primary-container">.</span>
                     </h1>
@@ -306,6 +309,13 @@ export const Clients = () => {
 
                                         <div className="flex gap-2">
                                             <button
+                                                onClick={() => setDietTarget({ userId: client.userId, name: client.name })}
+                                                className="p-3 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface transition-colors border border-outline-variant/30"
+                                                title={t('assignDiet') ?? 'Assign diet'}
+                                            >
+                                                <Apple size={18} />
+                                            </button>
+                                            <button
                                                 onClick={() => { setSelectedClient(client); setShowRoleModal(true); }}
                                                 className="p-3 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface transition-colors border border-outline-variant/30"
                                                 title={t('manageClient') ?? 'Manage'}
@@ -371,6 +381,13 @@ export const Clients = () => {
                             </div>
                             <div className="flex gap-2">
                                 <button
+                                    onClick={() => setDietTarget({ userId: member.id, name: member.displayName ?? member.email })}
+                                    className="p-3 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface transition-colors border border-outline-variant/30"
+                                    title={t('assignDiet') ?? 'Assign diet'}
+                                >
+                                    <Apple size={18} />
+                                </button>
+                                <button
                                     onClick={() => setConfirmDeleteMember(member)}
                                     className="p-3 rounded-xl bg-surface-container hover:bg-red-500/10 hover:text-red-400 text-on-surface/50 transition-colors border border-outline-variant/30"
                                     title={t('removeMember') ?? 'Remove'}
@@ -391,6 +408,13 @@ export const Clients = () => {
             )}
 
             {/* ─── MODALS ───────────────────────────────────────────────── */}
+            {dietTarget && (
+                <AssignDietPicker
+                    clientUserId={dietTarget.userId}
+                    clientName={dietTarget.name}
+                    onClose={() => setDietTarget(null)}
+                />
+            )}
             {showAddModal && <AddClientModal onClose={() => setShowAddModal(false)} showProgramLength />}
 
             {/* Manage Client Modal (existing) */}

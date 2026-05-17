@@ -20,14 +20,25 @@ export const CoachDashboard = () => {
     const [dashSearch, setDashSearch] = useState('');
     const [levelFilter, setLevelFilter] = useState<'all' | FitnessLevel>('all');
 
-    const totalClients = clients.length;
-    const pendingReviews = clients.filter(c => c.needsReview).length;
-    const cuttingClients = clients.filter(c => c.category === 'cutting').length;
-    const bulkingClients = clients.filter(c => c.category === 'bulking').length;
-    const proClients = clients.filter(c => c.category === 'pro').length;
-    const healthClients = clients.filter(c => c.category === 'health').length;
+    // Active *coaching* clients only — excludes:
+    //   - community-tier rows that live in the clients collection (accessLevel === 'community')
+    //   - rows orphaned without a userId (legacy or half-created records)
+    // Hard-deletes via the `deleteUser` Cloud Function already cascade the
+    // clients doc, so we don't need a `deleted` flag filter. If counts drift
+    // again, it usually means a coach deleted via the legacy `removeClient`
+    // path which we should be removing entirely (Codex #3).
+    const coachingClients = clients.filter(c =>
+        (c.accessLevel ?? 'client') === 'client' && !!c.userId
+    );
 
-    const filteredClients = clients.filter(c => {
+    const totalClients = coachingClients.length;
+    const pendingReviews = coachingClients.filter(c => c.needsReview).length;
+    const cuttingClients = coachingClients.filter(c => c.category === 'cutting').length;
+    const bulkingClients = coachingClients.filter(c => c.category === 'bulking').length;
+    const proClients = coachingClients.filter(c => c.category === 'pro').length;
+    const healthClients = coachingClients.filter(c => c.category === 'health').length;
+
+    const filteredClients = coachingClients.filter(c => {
         const matchesSearch = c.name.toLowerCase().includes(dashSearch.toLowerCase()) ||
             c.email.toLowerCase().includes(dashSearch.toLowerCase());
         const matchesLevel = levelFilter === 'all' || c.fitnessLevel === levelFilter;
@@ -47,7 +58,7 @@ export const CoachDashboard = () => {
             {/* Editorial header */}
             <header className="flex flex-col md:flex-row md:items-end justify-between gap-6">
                 <div>
-                    <span className="font-label text-[10px] font-bold uppercase tracking-widest text-primary block mb-2">Coach Console</span>
+                    <span className="font-label text-[10px] font-bold uppercase tracking-widest text-primary block mb-2">{t('coachConsoleEyebrow')}</span>
                     <h1 className="font-headline font-extrabold text-5xl md:text-6xl text-on-surface tracking-tighter">
                         {t('coachDashTitle')}<span className="text-primary-container">.</span>
                     </h1>
@@ -109,7 +120,7 @@ export const CoachDashboard = () => {
                     </div>
 
                     <div className="grid gap-3">
-                        {clients.filter(c => c.needsReview).map(client => (
+                        {coachingClients.filter(c => c.needsReview).map(client => (
                             <div key={client.id} className="bg-surface-container-low p-5 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 border border-primary/20 hover:border-primary/40 transition-colors">
                                 <div className="flex items-center gap-4">
                                     <div className="w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center font-headline font-bold text-lg border border-primary/20 shrink-0">

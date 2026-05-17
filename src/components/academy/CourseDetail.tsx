@@ -5,8 +5,20 @@ import {
 } from 'lucide-react';
 import { Course, Lesson, LessonContent, LessonResource, LibraryCategory, UserCourseProgress, UserLessonProgress } from '../../types';
 import VideoPlayer from '../VideoPlayer';
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { buildEmbedUrl } from '../../lib/videoUtils';
+
+/**
+ * Render a duration in minutes with at most one decimal place. Vimeo's
+ * oEmbed returns durations like 13.333… (= 13:20); we want "13.3 min",
+ * not "13.333333 min" or a hard-rounded "13 min". Integer durations stay
+ * as integers ("12 min", not "12.0 min").
+ */
+function formatMinutes(min: number | null | undefined): string {
+    if (typeof min !== 'number' || !Number.isFinite(min)) return '0';
+    const rounded = Math.round(min * 10) / 10;
+    return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+}
 
 interface Props {
     course: Course;
@@ -37,6 +49,38 @@ export const CourseDetail = ({
 }: Props) => {
     const [activeLesson, setActiveLesson] = useState<Lesson | null>(null);
     const [openingLessonId, setOpeningLessonId] = useState<string | null>(null);
+
+    // ── YouTube-style collapsible description for the player overlay ──
+    // Collapsed by default; expands on "Show more" click. We measure the
+    // paragraph's natural height once per lesson change to decide whether
+    // the toggle is needed at all (short descriptions don't get a chip).
+    const [descExpanded, setDescExpanded] = useState(false);
+    const [descNeedsToggle, setDescNeedsToggle] = useState(false);
+    const descRef = useRef<HTMLParagraphElement | null>(null);
+
+    useEffect(() => {
+        // New lesson opened — collapse the description and re-measure.
+        setDescExpanded(false);
+        setDescNeedsToggle(false);
+        if (!activeLesson?.description) return;
+        // Wait one frame so the line-clamp class applies before we ask
+        // for scrollHeight vs clientHeight. +2px tolerance for sub-pixel
+        // line-height rounding across browsers.
+        const raf = requestAnimationFrame(() => {
+            const el = descRef.current;
+            if (!el) return;
+            setDescNeedsToggle(el.scrollHeight > el.clientHeight + 2);
+        });
+        return () => cancelAnimationFrame(raf);
+    }, [activeLesson?.id, activeLesson?.description]);
+
+    // Defense-in-depth guard: if a non-managing user somehow lands on a
+    // locked course's detail page (URL hack, stale state, etc.), bounce
+    // them straight back to the grid. The CourseCard click handler is the
+    // primary gate; this is the safety net.
+    useEffect(() => {
+        if (!isManaging && course.isLocked) onBack();
+    }, [isManaging, course.isLocked, onBack]);
 
     const completedIds = new Set(progress?.completedLessonIds ?? []);
     const completedCount = lessons.filter(l => completedIds.has(l.id)).length;
@@ -134,7 +178,7 @@ export const CourseDetail = ({
                                     <Clock size={18} className="text-primary mb-2" />
                                     <p className="text-[10px] uppercase tracking-widest text-on-surface-variant">~Time</p>
                                     <p className="font-headline font-bold text-on-surface">
-                                        {lessons.reduce((t, l) => t + (l.durationMinutes ?? 12), 0)} min
+                                        {formatMinutes(lessons.reduce((t, l) => t + (l.durationMinutes ?? 12), 0))} min
                                     </p>
                                 </div>
                             </div>
@@ -224,7 +268,7 @@ export const CourseDetail = ({
                                                 {openingLessonId === lesson.id && <span className="text-[10px] font-label font-bold uppercase tracking-widest text-primary">Opening...</span>}
                                                 {lesson.durationMinutes && (
                                                     <span className="text-[10px] font-label font-bold uppercase tracking-widest text-on-surface-variant flex items-center gap-1">
-                                                        <Clock size={10} />{lesson.durationMinutes} min
+                                                        <Clock size={10} />{formatMinutes(lesson.durationMinutes)} min
                                                     </span>
                                                 )}
                                             </div>
@@ -292,8 +336,41 @@ export const CourseDetail = ({
                         </div>
                         <div className="mt-6 text-center max-w-3xl mx-auto">
                             <h2 className="text-2xl font-headline font-extrabold text-on-surface mb-2 tracking-tight">{activeLesson.title}</h2>
+                            {/* Description — YouTube-style collapsible card.
+                                Collapsed shows 2 lines + "Show more"; expanded
+                                shows the full text + "Show less". The whole
+                                card is clickable when collapsed so a tap on
+                                a phone expands without aiming for a small
+                                button. The paragraph preserves whitespace
+                                (multi-line descriptions render correctly). */}
                             {activeLesson.description && (
-                                <p className="text-on-surface/60 font-body leading-relaxed text-sm">{activeLesson.description}</p>
+                                <div
+                                    onClick={() => !descExpanded && descNeedsToggle && setDescExpanded(true)}
+                                    className={clsx(
+                                        'mt-3 text-left bg-surface-container-low border border-outline-variant/30 rounded-xl px-4 py-3 transition-colors',
+                                        !descExpanded && descNeedsToggle && 'cursor-pointer hover:bg-surface-container',
+                                    )}
+                                >
+                                    <p
+                                        ref={descRef}
+                                        className={clsx(
+                                            'text-on-surface/70 font-body leading-relaxed text-sm',
+                                            !descExpanded && 'line-clamp-2',
+                                        )}
+                                        style={{ whiteSpace: 'pre-wrap' }}
+                                    >
+                                        {activeLesson.description}
+                                    </p>
+                                    {descNeedsToggle && (
+                                        <button
+                                            type="button"
+                                            onClick={e => { e.stopPropagation(); setDescExpanded(v => !v); }}
+                                            className="mt-2 inline-flex items-center gap-1.5 text-[10px] font-label font-bold uppercase tracking-widest text-primary hover:text-primary-container transition-colors"
+                                        >
+                                            {descExpanded ? <>Show less <ChevronUp size={12} /></> : <>Show more <ChevronDown size={12} /></>}
+                                        </button>
+                                    )}
+                                </div>
                             )}
 
                             <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mt-6">

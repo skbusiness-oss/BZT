@@ -10,6 +10,7 @@ import {
 import { db, storage } from '../lib/firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useAuth } from './AuthContext';
+import { reportError } from '../lib/reportError';
 import { LibraryTag, Video, Workout } from '../types';
 import { ALL_TRAINING_PROGRAMS } from '../data';
 import type { QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
@@ -65,6 +66,12 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     if (!user) { setLoading(false); return; }
+
+    // Reset loading on user change (§1.7.2). Same fix as AcademyContext —
+    // logout→login cycles otherwise carry the previous session's loading
+    // value into the new session.
+    setLoading(true);
+
     const unsubs: (() => void)[] = [];
     let listenersReady = 0;
     const totalListeners = 5;
@@ -74,31 +81,76 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
       ? query(collection(db, 'videos'))
       : query(collection(db, 'videos'), where('isLocked', '==', false));
 
-    unsubs.push(onSnapshot(videosQuery, (snap) => {
-      const parsed = snap.docs.map((d) => docToObj<Video>(d));
-      setVideos(parsed.sort((a, b) => a.title.localeCompare(b.title)));
-      checkReady();
-    }));
+    // Every onSnapshot below now has an explicit error callback (§1.7.1).
+    // Without it, a query failure (permission-denied, missing index, network)
+    // would silently never call `checkReady`, leaving `loading` stuck at
+    // `true` forever and the UI rendering a perpetual loading state with
+    // no error visible to the user.
+    unsubs.push(onSnapshot(
+      videosQuery,
+      (snap) => {
+        const parsed = snap.docs.map((d) => docToObj<Video>(d));
+        setVideos(parsed.sort((a, b) => a.title.localeCompare(b.title)));
+        checkReady();
+      },
+      (err) => {
+        // eslint-disable-next-line no-console
+        reportError('MediaContext.videos', err);
+        checkReady();
+      }
+    ));
 
-    unsubs.push(onSnapshot(collection(db, 'libraryTags'), (snap) => {
-      setLibraryTags(snap.docs.map((d) => docToObj<LibraryTag>(d)));
-      checkReady();
-    }));
+    unsubs.push(onSnapshot(
+      collection(db, 'libraryTags'),
+      (snap) => {
+        setLibraryTags(snap.docs.map((d) => docToObj<LibraryTag>(d)));
+        checkReady();
+      },
+      (err) => {
+        // eslint-disable-next-line no-console
+        reportError('MediaContext.libraryTags', err);
+        checkReady();
+      }
+    ));
 
-    unsubs.push(onSnapshot(doc(db, 'settings', 'videoCategories'), (snap) => {
-      if (snap.exists()) setSettingsCategories(snap.data().categories ?? INITIAL_VIDEO_CATEGORIES);
-      checkReady();
-    }));
+    unsubs.push(onSnapshot(
+      doc(db, 'settings', 'videoCategories'),
+      (snap) => {
+        if (snap.exists()) setSettingsCategories(snap.data().categories ?? INITIAL_VIDEO_CATEGORIES);
+        checkReady();
+      },
+      (err) => {
+        // eslint-disable-next-line no-console
+        reportError('MediaContext.videoCategories', err);
+        checkReady();
+      }
+    ));
 
-    unsubs.push(onSnapshot(doc(db, 'settings', 'workoutCategories'), (snap) => {
-      if (snap.exists()) setWorkoutCategories(snap.data().categories ?? INITIAL_WORKOUT_CATEGORIES);
-      checkReady();
-    }));
+    unsubs.push(onSnapshot(
+      doc(db, 'settings', 'workoutCategories'),
+      (snap) => {
+        if (snap.exists()) setWorkoutCategories(snap.data().categories ?? INITIAL_WORKOUT_CATEGORIES);
+        checkReady();
+      },
+      (err) => {
+        // eslint-disable-next-line no-console
+        reportError('MediaContext.workoutCategories', err);
+        checkReady();
+      }
+    ));
 
-    unsubs.push(onSnapshot(collection(db, 'workouts'), (snap) => {
-      setCustomWorkouts(snap.docs.map((d) => docToObj<Workout>(d)));
-      checkReady();
-    }));
+    unsubs.push(onSnapshot(
+      collection(db, 'workouts'),
+      (snap) => {
+        setCustomWorkouts(snap.docs.map((d) => docToObj<Workout>(d)));
+        checkReady();
+      },
+      (err) => {
+        // eslint-disable-next-line no-console
+        reportError('MediaContext.workouts', err);
+        checkReady();
+      }
+    ));
 
     return () => unsubs.forEach((u) => u());
   }, [user?.id, isCoach]);

@@ -4,10 +4,11 @@ import {
 import {
     collection, doc, addDoc, setDoc, updateDoc,
     onSnapshot, query, where, writeBatch, serverTimestamp,
-    orderBy, deleteField,
+    orderBy, deleteField, getDocs,
 } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { db, storage } from '../lib/firebase';
+import { reportError } from '../lib/reportError';
 import { awardXp, XP_SOURCE } from '../lib/activityScore';
 import { useAuth } from './AuthContext';
 import {
@@ -47,6 +48,12 @@ export interface AcademyContextType {
     updateCourse: (courseId: string, updates: Partial<Course>) => Promise<void>;
     archiveCourse: (courseId: string) => Promise<void>;
     moveCourse: (courseId: string, direction: 'up' | 'down') => Promise<void>;
+    /** Deep-copy a course: clones the course doc + every lesson + every
+     *  lessonContent into a brand-new course id. Default title is the
+     *  source title with " (copy)" appended; pass `opts.title` to override.
+     *  The duplicate starts unpublished so it doesn't surface to clients
+     *  while the coach is still editing. Returns the new course id. */
+    duplicateCourse: (courseId: string, opts?: { title?: string }) => Promise<string>;
 
     // Lesson CRUD
     loadLessons: (courseId: string, force?: boolean) => Promise<void>;
@@ -92,30 +99,62 @@ export const AcademyProvider = ({ children }: { children: ReactNode }) => {
 
     useEffect(() => {
         if (!user) { setLoading(false); return; }
+
+        // Reset loading on user change (§1.7.2). Without this, a logout→login
+        // cycle starts the new session with whatever loading value the prior
+        // session left behind, briefly flashing the empty-state UI before
+        // the new user's data lands.
+        setLoading(true);
+
         const unsubs: (() => void)[] = [];
         let ready = 0;
         const total = 3;
         const checkReady = () => { if (++ready >= total) setLoading(false); };
 
-        // Courses — coaches see all, others see only published
+        // Courses — shared-catalog model: coaches see all (incl. drafts),
+        // every other active signed-in user sees the same published
+        // catalog (community + client tiers). Whether the LESSON CONTENT
+        // plays is gated by Firestore rules on lessonContent reads via
+        // canPlayCourse() — community gets the card but can't open the
+        // video for client-tier courses.
         const coursesQ = isCoach
             ? collection(db, 'courses')
-            : user.role === 'client'
-                ? query(collection(db, 'courses'), where('isPublished', '==', true), where('accessTier', 'in', ['community', 'client']))
-                : query(collection(db, 'courses'), where('isPublished', '==', true), where('accessTier', '==', 'community'));
+            : query(collection(db, 'courses'), where('isPublished', '==', true));
 
-        unsubs.push(onSnapshot(coursesQ, snap => {
-            const all = snap.docs.map(d => docToObj<Course>(d));
-            setCourses(all.filter(c => !c.archived).sort((a, b) => a.order - b.order));
-            checkReady();
-        }));
+        unsubs.push(onSnapshot(
+            coursesQ,
+            snap => {
+                const all = snap.docs.map(d => docToObj<Course>(d));
+                setCourses(all.filter(c => !c.archived).sort((a, b) => a.order - b.order));
+                checkReady();
+            },
+            // Without this, a permission-denied / failed-precondition / network
+            // error makes the success callback never fire. `setCourses` would
+            // never be called → `checkReady` never called → `loading` stuck at
+            // `true` → empty-state UI gated on `!loading` never shows. Result
+            // is a perpetually-blank Academy section with no explanation.
+            // (§1.7.1)
+            err => {
+                // eslint-disable-next-line no-console
+                reportError('AcademyContext.courses', err);
+                checkReady();
+            }
+        ));
 
         // Library categories
-        unsubs.push(onSnapshot(collection(db, 'libraryCategories'), snap => {
-            const all = snap.docs.map(d => docToObj<LibraryCategory>(d));
-            setLibraryCategories(all.filter(c => !c.archived).sort((a, b) => a.name.localeCompare(b.name)));
-            checkReady();
-        }));
+        unsubs.push(onSnapshot(
+            collection(db, 'libraryCategories'),
+            snap => {
+                const all = snap.docs.map(d => docToObj<LibraryCategory>(d));
+                setLibraryCategories(all.filter(c => !c.archived).sort((a, b) => a.name.localeCompare(b.name)));
+                checkReady();
+            },
+            err => {
+                // eslint-disable-next-line no-console
+                reportError('AcademyContext.libraryCategories', err);
+                checkReady();
+            }
+        ));
 
         // User's own lesson progress. Course progress is derived locally.
         unsubs.push(onSnapshot(
@@ -141,6 +180,11 @@ export const AcademyProvider = ({ children }: { children: ReactNode }) => {
                 });
                 setLessonProgress(lessonMap);
                 setUserProgress(courseMap);
+                checkReady();
+            },
+            err => {
+                // eslint-disable-next-line no-console
+                reportError('AcademyContext.userLessonProgress', err);
                 checkReady();
             }
         ));
@@ -238,7 +282,7 @@ export const AcademyProvider = ({ children }: { children: ReactNode }) => {
                 },
                 error => {
                     if (firstSnapshot) reject(error);
-                    else console.error('Lesson listener failed:', error);
+                    else reportError('AcademyContext.lessons', error);
                 }
             );
             lessonUnsubsRef.current[courseId] = unsub;
@@ -278,7 +322,7 @@ export const AcademyProvider = ({ children }: { children: ReactNode }) => {
                 },
                 error => {
                     if (firstSnapshot) reject(error);
-                    else console.error('Lesson content listener failed:', error);
+                    else reportError('AcademyContext.lessonContent', error);
                 }
             );
             lessonContentUnsubsRef.current[key] = unsub;
@@ -410,6 +454,142 @@ export const AcademyProvider = ({ children }: { children: ReactNode }) => {
         await batch.commit();
     };
 
+    /** Deep-copy a course (lessons + lessonContent) into a new course id.
+     *  Lesson IDs are *not* preserved — Firestore generates new ids for the
+     *  lesson docs and we mirror them onto the new lessonContent docs so
+     *  the (lessonId === lessonContentId) invariant the rest of the
+     *  Academy code relies on is upheld.
+     *
+     *  The duplicate is unpublished (`isPublished: false`) regardless of
+     *  the source's state. Reasoning: the coach almost always wants to
+     *  rename / re-thumbnail / change level before exposing it, and an
+     *  accidentally-published duplicate would confuse clients. */
+    const duplicateCourse = async (courseId: string, opts?: { title?: string }): Promise<string> => {
+        const source = courses.find(c => c.id === courseId);
+        if (!source) throw new Error('Source course not found.');
+
+        // Read source subcollections in parallel — lessons + lessonContent
+        // are siblings under courses/{id}/.
+        const [lessonsSnap, contentSnap] = await Promise.all([
+            getDocs(collection(db, 'courses', courseId, 'lessons')),
+            getDocs(collection(db, 'courses', courseId, 'lessonContent')),
+        ]);
+
+        // Map source-lesson-id → its content data so we can match them when
+        // we recreate under fresh ids.
+        const contentByLessonId: Record<string, DocumentData> = {};
+        contentSnap.docs.forEach(d => { contentByLessonId[d.id] = d.data(); });
+
+        // 1. Create the new course doc with the duplicated metadata. Order
+        //    placed at the end of the current list so it doesn't disrupt
+        //    existing sequences. Counters get recomputed below from the
+        //    actual lesson copy result.
+        const maxOrder = Math.max(0, ...courses.map(c => c.order ?? 0));
+        const newCourseRef = await addDoc(collection(db, 'courses'), {
+            ...stripUndefined({
+                title:           opts?.title ?? `${source.title} (copy)`,
+                description:     source.description,
+                level:           source.level,
+                courseType:      source.courseType,
+                categoryIds:     source.categoryIds,
+                accessTier:      source.accessTier,
+                order:           maxOrder + 1,
+                isRequired:      source.isRequired,
+                coverImageUrl:   source.coverImageUrl ?? '',
+            }),
+            isPublished:           false, // always start as draft
+            archived:              false,
+            lessonCount:           0,
+            requiredLessonCount:   0,
+            totalDurationMinutes:  0,
+            createdBy:             user?.id ?? '',
+            createdAt:             serverTimestamp(),
+            updatedAt:             serverTimestamp(),
+        });
+        const newCourseId = newCourseRef.id;
+
+        // 2. Recreate each lesson — sorted by source order so the new
+        //    lesson docs land in the same sequence visually. The new
+        //    Firestore-generated lesson id becomes the matching
+        //    lessonContent doc id.
+        const sortedLessons = lessonsSnap.docs.sort((a, b) => {
+            const ao = (a.data().order as number | undefined) ?? 0;
+            const bo = (b.data().order as number | undefined) ?? 0;
+            return ao - bo;
+        });
+
+        let lessonCount = 0;
+        let requiredLessonCount = 0;
+        let totalDurationMinutes = 0;
+
+        for (const lessonDoc of sortedLessons) {
+            const lessonData = lessonDoc.data() as Record<string, unknown>;
+            // Skip archived lessons — the duplicate should be a clean copy
+            // of the active material, not someone's deleted drafts.
+            if (lessonData.archived === true) continue;
+
+            // Strip prerequisite — old lesson ids no longer apply, and the
+            // coach will re-link prereqs after editing the duplicate.
+            const cleanedLessonData = { ...lessonData };
+            delete cleanedLessonData.prerequisiteLessonId;
+            delete cleanedLessonData.id;
+            delete cleanedLessonData.createdAt;
+            delete cleanedLessonData.updatedAt;
+            delete cleanedLessonData.createdBy;
+
+            const newLessonRef = await addDoc(
+                collection(db, 'courses', newCourseId, 'lessons'),
+                {
+                    ...cleanedLessonData,
+                    archived: false,
+                    createdBy: user?.id ?? '',
+                    createdAt: serverTimestamp(),
+                    updatedAt: serverTimestamp(),
+                },
+            );
+
+            // Mirror the matching lessonContent (videoUrl + platform +
+            // resources) under the new lesson's id.
+            const sourceContent = contentByLessonId[lessonDoc.id];
+            if (sourceContent) {
+                const cleanedContent = { ...sourceContent } as Record<string, unknown>;
+                delete cleanedContent.id;
+                delete cleanedContent.lessonId;
+                delete cleanedContent.courseId;
+                delete cleanedContent.createdAt;
+                delete cleanedContent.updatedAt;
+                await setDoc(
+                    doc(db, 'courses', newCourseId, 'lessonContent', newLessonRef.id),
+                    {
+                        ...cleanedContent,
+                        id: newLessonRef.id,
+                        lessonId: newLessonRef.id,
+                        courseId: newCourseId,
+                        updatedAt: serverTimestamp(),
+                    },
+                );
+            }
+
+            // Tally counters as we go so we don't need a second pass.
+            lessonCount++;
+            if (lessonData.isRequired) requiredLessonCount++;
+            const dur = lessonData.durationMinutes;
+            if (typeof dur === 'number') totalDurationMinutes += dur;
+        }
+
+        // 3. Sync the counters onto the new course doc. Mirrors what
+        //    `syncLessonDerivedData` does after every lesson edit, but in
+        //    one shot.
+        await updateDoc(doc(db, 'courses', newCourseId), {
+            lessonCount,
+            requiredLessonCount,
+            totalDurationMinutes,
+            updatedAt: serverTimestamp(),
+        });
+
+        return newCourseId;
+    };
+
     // ── Categories ────────────────────────────────────────────────────────────
 
     const createCategory = async (name: string, icon?: string) => {
@@ -451,6 +631,10 @@ export const AcademyProvider = ({ children }: { children: ReactNode }) => {
     const canAccessCourse = (course: Course) => {
         if (isCoach) return true;
         if (!course.isPublished) return false;
+        // Community-tier: anyone signed-in plays. Client-tier: paid 'client'
+        // role only. Mirrors `canPlayCourse()` in firestore.rules. The $149
+        // "coaching" Stripe tier maps to role:'client' in this schema —
+        // there's no separate 'coaching' role.
         if (course.accessTier === 'community') return true;
         if (course.accessTier === 'client') return user?.role === 'client';
         return false;
@@ -522,7 +706,7 @@ export const AcademyProvider = ({ children }: { children: ReactNode }) => {
     return (
         <AcademyContext.Provider value={{
             courses, libraryCategories, lessons, lessonContent, lessonProgress, userProgress, loading,
-            createCourse, updateCourse, archiveCourse, moveCourse,
+            createCourse, updateCourse, archiveCourse, moveCourse, duplicateCourse,
             loadLessons, loadLessonContent, createLesson, updateLesson, archiveLesson, moveLesson,
             uploadLessonResource, getLessonResourceUrl,
             createCategory, updateCategory, archiveCategory,

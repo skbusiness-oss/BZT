@@ -57,27 +57,53 @@ export const ProgramCard = ({ program, isRecommended, isSelected, onClick, compa
     // Estimate average duration (rough: ~55 min per session)
     const avgDuration = Math.round(55 * workoutDays / workoutDays);
 
+    // Goal-themed cover photo. The card is small so we use it as a low-
+    // opacity backdrop rather than a hero strip, keeping the dense info
+    // layout legible while still tying the card visually to the goal.
+    const goalCovers: Record<string, string> = {
+        fat_loss:    '/workout-covers/goal-fat-loss.jpg',
+        muscle_gain: '/workout-covers/goal-muscle-gain.jpg',
+        strength:    '/workout-covers/goal-strength.jpg',
+        recomp:      '/workout-covers/goal-recomp.jpg',
+        maintenance: '/workout-covers/goal-maintenance.jpg',
+        endurance:   '/workout-covers/goal-endurance.jpg',
+    };
+    const cover = goalCovers[program.goal];
+
     return (
         <div
             dir={isRTL ? 'rtl' : 'ltr'}
             onClick={onClick}
             className={clsx(
-                'relative rounded-2xl border p-4 transition-all',
+                'relative rounded-2xl border p-4 transition-all overflow-hidden',
                 onClick && 'cursor-pointer',
                 isSelected
                     ? 'bg-orange-500/15 border-orange-400 ring-2 ring-orange-400 shadow-lg shadow-orange-400/10'
                     : 'bg-white/[0.04] border-white/[0.06] hover:bg-white/[0.07] hover:border-white/[0.1]',
             )}
         >
+            {/* Goal-themed backdrop — low opacity so it tints the card
+                without overwhelming the content. */}
+            {cover && (
+                <div
+                    className="absolute inset-0 pointer-events-none opacity-25"
+                    style={{
+                        backgroundImage: `linear-gradient(180deg, rgba(0,0,0,0.55), rgba(0,0,0,0.85)), url(${cover})`,
+                        backgroundSize: 'cover',
+                        backgroundPosition: 'center',
+                    }}
+                />
+            )}
+
             {/* Recommended badge */}
             {isRecommended && (
-                <div className="absolute -top-2.5 start-4 flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-gradient-to-r from-primary to-primary-container text-on-primary text-[10px] font-bold uppercase tracking-wider">
+                <div className="absolute z-10 -top-2.5 start-4 flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-gradient-to-r from-primary to-primary-container text-on-primary text-[10px] font-bold uppercase tracking-wider">
                     <Star size={10} />
                     {isAr ? 'موصى' : 'Recommended'}
                 </div>
             )}
 
-            <div className="flex items-start gap-3">
+            <div className="relative flex items-start gap-3">
                 {/* Goal icon */}
                 <div className={clsx('w-11 h-11 rounded-xl flex items-center justify-center shrink-0', goalColors.bg)}>
                     <GoalIcon className={goalColors.text} size={20} />

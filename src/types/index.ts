@@ -28,9 +28,128 @@ export interface User {
     age?: number;
     heightCm?: number;
     goal?: string;
+    /** Fixed at onboarding. Never overwritten by weekly check-ins.
+     *  Anchors the chart's "Start" reference line and progress %. */
+    startWeightKg?: number;
+    /** Overwritten on every weekly check-in — the LATEST weigh-in. */
     currentWeightKg?: number;
     targetWeightKg?: number;
     communityProfileStartedAt?: string;
+    /** Snapshot of the user's last diet calculator run.
+     * Set by `users/{uid}` writes from the DietWizard. Read-only on the server side
+     * for analytics; the user can update freely on their own doc. */
+    dietProfile?: DietProfile;
+}
+
+// ─── Diets ────────────────────────────────────────────────────────────────
+// Mirrors the workouts pattern: static catalog in src/data/diets/*.ts, user
+// runs a calculator wizard, gets matched to a plan, assigns it. Active
+// assignment lives in `userDiets/{uid}` so it survives even if the catalog
+// changes. PDF stays as the canonical source of truth — the in-app data is
+// the index + macros.
+
+export type Sex = 'male' | 'female';
+export type ActivityLevel = 'sedentary' | 'light' | 'moderate' | 'active' | 'extra';
+export type DietGoal = 'aggressive_cut' | 'cut' | 'recomp' | 'maintain' | 'lean_bulk' | 'bulk';
+/** Coach's PDFs come in 3-meal and 4-meal variants. */
+export type MealsPerDay = 3 | 4;
+/** Tier band for browse filters. Derived from kcal — not stored. */
+export type DietBand = 'low' | 'mid' | 'high' | 'super';
+
+/** What the calculator outputs and stores on `users/{uid}.dietProfile`.
+ * Persisted so the wizard can prefill on subsequent visits and the dashboard
+ * can show the user's targets without re-running the math. */
+export interface DietProfile {
+    // Inputs
+    sex: Sex;
+    age: number;
+    weightKg: number;
+    heightCm: number;
+    activityLevel: ActivityLevel;
+    goal: DietGoal;
+    mealsPerDay: MealsPerDay;
+
+    // Computed (Mifflin-St Jeor + activity multiplier + goal adjustment)
+    bmr: number;
+    tdee: number;
+    targetCalories: number;
+    targetProtein: number;  // grams
+    targetCarbs: number;    // grams
+    targetFat: number;      // grams
+
+    /** ID of the matched plan from src/data/diets/*. Optional — null when no
+     * catalog plan matches the user's calorie tier yet (PDFs not loaded). */
+    matchedDietId?: string;
+
+    /** Server timestamps (ISO when read by the client). */
+    calculatedAt?: string;
+    updatedAt?: string;
+}
+
+/** One meal row inside a training-day or rest-day macro split.
+ * Mirrors the PDF table: each meal has carbs / protein / fat in grams,
+ * plus an "extras" line for veggies / fruit. */
+export interface DietMeal {
+    order: number;
+    /** "Meal 01", "Meal 02 (pre/post WO)", "Meal 03", "Meal 04". */
+    name: string;
+    carbs: number;
+    protein: number;
+    fat: number;
+    /** Veggies / fruit / 1 green apple etc. — verbatim from the PDF. */
+    extras?: string;
+}
+
+/** A single training-day or rest-day target with per-meal breakdown. */
+export interface DietDayMacros {
+    kcal: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+    meals: DietMeal[];
+}
+
+/** A single diet plan in the catalog. Static, defined in src/data/diets/.
+ * Plans are keyed by **calorie tier + meal count**, not by goal. The user's
+ * goal is just an input to the calculator that produces a target kcal —
+ * plans are agnostic of cut/bulk and are reused across goals. */
+export interface Diet {
+    id: string;
+    /** Display name, e.g. "1,400 kcal · 3 meals". */
+    name: string;
+    mealsPerDay: MealsPerDay;
+    /** Headline calorie target. Equals `trainingDay.kcal`. */
+    calories: number;
+    /** Headline macros — equal training-day macros. Kept flat for browse cards. */
+    macros: { protein: number; carbs: number; fat: number };
+    /** Training day: full kcal target + per-meal split. */
+    trainingDay: DietDayMacros;
+    /** Rest day: lower kcal, lower carbs, slightly higher fat. */
+    restDay: DietDayMacros;
+    /** Special label, e.g. "Carb cycling" for the flexible 2000 kcal plan. */
+    label?: string;
+    description?: string;
+    /** URL of the original PDF in Firebase Storage. */
+    pdfUrl?: string;
+    /** Optional cover image — falls back to a primary-tinted gradient. */
+    coverImageUrl?: string;
+}
+
+/** Per-user active diet assignment. Lives at `userDiets/{uid}`. */
+export interface UserDiet {
+    id: string;
+    userId: string;
+    dietId: string;
+    /** Snapshot of the matched diet at the time of assignment. Insulates the
+     * user from later catalog edits. */
+    snapshot: {
+        name: string;
+        mealsPerDay: MealsPerDay;
+        calories: number;
+        macros: { protein: number; carbs: number; fat: number };
+        pdfUrl?: string;
+    };
+    assignedAt?: string;
 }
 
 export type Category = 'cutting' | 'bulking' | 'pro' | 'health';
@@ -43,6 +162,46 @@ export interface MacroTarget {
     protein: number;
     fats: number;
     calories: number;
+}
+
+// ─── Audience profile (post-deletion ICP analytics) ──────────────────────
+//
+// Anonymized snapshot written by the deleteUser Cloud Function before any
+// PII deletion. Lives at `audienceProfiles/{anonId}` keyed by a random
+// id (NOT the original uid) so the record cannot be tied back to the
+// deleted person — that's the whole point: GDPR-style "right to be
+// forgotten" while preserving cohort-level analytics.
+//
+// Active accounts can be queried directly from `users/`. This collection
+// is the post-deletion archive only.
+export type AgeBracket = '13-17' | '18-24' | '25-34' | '35-44' | '45-54' | '55+';
+
+export interface AudienceProfile {
+    /** Random id. Self-reference for clarity in queries. NOT the user's uid. */
+    anonId: string;
+    /** Was this a coaching client or a community user. */
+    accountType: 'community' | 'client';
+    /** Lifecycle. `'deleted'` for archived records; we may add `'active'`
+     *  later if/when we mirror live demographics here. */
+    status: 'deleted';
+    // Demographics — bracketed where re-identification risk is elevated.
+    gender: 'male' | 'female' | null;
+    ageBracket: AgeBracket | null;
+    country: string | null;
+    language: 'en' | 'ar' | null;
+    /** Goal taxonomy from the user's onboarding (free-text, non-PII). */
+    goal: string | null;
+    /** Coarse engagement summary — no week-by-week granularity. */
+    engagementSummary: {
+        weeksActive: number;
+        checkInsSubmitted: number;
+        daysFromJoinToLast: number;
+    };
+    /** Truncated to first-of-month so cohort queries work without
+     *  exposing exact join time (which combined with goal+age can leak
+     *  identity in a small dataset). */
+    joinedAt: string | null;
+    deletedAt: string;
 }
 
 export interface DayEntry {
@@ -184,6 +343,10 @@ export interface Course {
     lessonCount?: number;
     requiredLessonCount?: number;
     totalDurationMinutes?: number;
+    /** Coach-only lock. When true, the course card still shows on the
+     *  browse grid (cover + title at full quality, as a teaser) but
+     *  non-coaches cannot click into it — the detail page is unreachable. */
+    isLocked?: boolean;
     createdBy: string;
     createdAt: string;
     updatedAt?: string;
@@ -276,18 +439,6 @@ export interface Workout {
 
 // --- Training Programs ---
 export type MuscleGroup = 'chest' | 'back' | 'quads' | 'hamstrings' | 'shoulders' | 'arms' | 'glutes' | 'calves' | 'core' | 'full_body';
-
-export interface WorkoutSession {
-    label: string;
-    workoutId: string;
-    primaryMuscles: MuscleGroup[];
-    secondaryMuscles: MuscleGroup[];
-    cnsLoad: 1 | 2 | 3 | 4 | 5;
-    isFullBody: boolean;
-    hasHeavyCompounds: boolean;
-    isSquatDay: boolean;
-    isDeadliftDay: boolean;
-}
 
 export interface ProgramDay {
     dayNumber: number;
@@ -386,9 +537,3 @@ export interface ExerciseDetail {
     equipmentAr: string;
 }
 
-export interface ProgramAssignmentResult {
-    program: TrainingProgram;
-    recommendedSplits: string[];
-    difficulty: Difficulty;
-    goal: WorkoutGoal;
-}

@@ -6,51 +6,154 @@ import { useSelfLogs } from '../../hooks/useSelfLogs';
 import { useActiveProgram } from '../../hooks/useActiveProgram';
 import { useAcademy } from '../../context/AcademyContext';
 import { useCommunity } from '../../context/CommunityContext';
-import { levelFromScore, levelProgress } from '../../lib/activityScore';
+import { useAssignedDiet } from '../../hooks/useAssignedDiet';
 import {
     t, goldGradient,
-    Eyebrow, MetricCard,
-    ContinueAcademyCard, TodayWorkoutCard, CommunityActivityCard, ProgressCTA, YourStandingCard,
+    WeekStatusPanel,
+    ContinueAcademyCard, TodayWorkoutCard, TodayDietCard, CommunityActivityCard, ProgressCTA,
 } from './biozackteam/shared';
 
-// ─── Header (community variant — weight delta tagline) ──────────────────
+// ─── Header (community variant — time-of-day greeting + weight progress chip) ──
+function getGreetingKey(): 'goodMorning' | 'goodAfternoon' | 'goodEvening' {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'goodMorning';
+    if (hour < 18) return 'goodAfternoon';
+    return 'goodEvening';
+}
+
+function todayDisplay(lang: string) {
+    return new Date().toLocaleDateString(lang === 'ar' ? 'ar' : undefined, {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+    });
+}
+
 function Header({ name, initials, currentWeight, startWeight, goalWeight }: {
     name: string; initials: string; currentWeight: number; startWeight: number; goalWeight: number;
 }) {
-    const { t: tx } = useLanguage();
+    const { t: tx, lang } = useLanguage();
     const delta = (startWeight - currentWeight).toFixed(1);
+    const isLosing = startWeight > 0 && goalWeight > 0 && goalWeight < startWeight;
     const pct = goalWeight !== startWeight
         ? Math.round(((startWeight - currentWeight) / (startWeight - goalWeight)) * 100)
         : 0;
+    const greeting = tx(getGreetingKey());
+    const today = todayDisplay(lang);
+
     return (
-        <div style={{
-            display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between',
-            flexWrap: 'wrap', gap: 24, marginBottom: 40, paddingLeft: 12,
-        }}>
-            <div style={{ maxWidth: 700 }}>
-                <Eyebrow>{tx('biozackTeamSelfTracked')}</Eyebrow>
-                <h1 style={{
-                    fontFamily: t.display, fontSize: 'clamp(2rem, 4vw, 3rem)',
-                    fontWeight: 300, lineHeight: 1.02, letterSpacing: '-0.03em',
-                    color: t.onSurface, margin: '12px 0 0',
-                }}>
-                    {tx('welcomeBack')},{' '}
+        <div
+            className="bzt-rise-in"
+            style={{
+                display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between',
+                flexWrap: 'wrap', gap: 24, marginBottom: 40, paddingLeft: 4,
+            }}
+        >
+            <div style={{ maxWidth: 720, minWidth: 0, flex: 1 }}>
+                {/* Eyebrow — date with thin accent line, sets the editorial tone */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+                    <span
+                        aria-hidden
+                        style={{
+                            display: 'block', width: 24, height: 1,
+                            background: `linear-gradient(90deg, ${t.primary}, transparent)`,
+                        }}
+                    />
                     <span style={{
-                        fontWeight: 600, background: goldGradient,
-                        WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
-                    }}>{name}</span>
+                        fontFamily: t.body, fontSize: 11, fontWeight: 700,
+                        letterSpacing: '0.22em', textTransform: 'uppercase',
+                        color: t.onSurfaceVariant,
+                    }}>
+                        {today}
+                    </span>
+                </div>
+
+                {/* The greeting — clean two-line block. Greeting in surface color,
+                    name as the single gradient-text element on this surface. */}
+                <h1 style={{
+                    fontFamily: t.display,
+                    fontSize: 'clamp(2.25rem, 5vw, 3.5rem)',
+                    fontWeight: 300, lineHeight: 1.02, letterSpacing: '-0.035em',
+                    color: t.onSurface, margin: 0,
+                }}>
+                    <span style={{ display: 'block', fontWeight: 300 }}>{greeting},</span>
+                    <span
+                        style={{
+                            fontWeight: 600,
+                            background: goldGradient,
+                            WebkitBackgroundClip: 'text',
+                            WebkitTextFillColor: 'transparent',
+                            backgroundClip: 'text',
+                            display: 'inline-block',
+                        }}
+                    >
+                        {name}
+                    </span>
                 </h1>
-                <p style={{ fontFamily: t.body, fontSize: 14, color: t.onSurfaceVariant, marginTop: 10, letterSpacing: '0.01em' }}>
-                    {startWeight > 0 ? `${delta} ${tx('kgUnit')} · ${pct}% ${tx('toGoalLabel')}` : tx('logFirstWeight')}
-                </p>
+
+                {/* Status — a tighter chip instead of plain text. Shows weight
+                    delta + % to goal when there's data, otherwise a quiet
+                    "log first weight" prompt. */}
+                <div style={{ marginTop: 18 }}>
+                    {startWeight > 0 ? (
+                        <div
+                            className="bzt-rise-in"
+                            style={{
+                                display: 'inline-flex', alignItems: 'center', gap: 12,
+                                padding: '8px 14px 8px 12px', borderRadius: 999,
+                                background: t.surfaceContainerLow,
+                                border: `1px solid ${t.outline}`,
+                                animationDelay: '180ms',
+                            }}
+                        >
+                            <span style={{
+                                width: 6, height: 6, borderRadius: '50%',
+                                background: isLosing ? '#10b981' : t.primary,
+                                boxShadow: `0 0 8px ${isLosing ? 'rgb(16 185 129 / 0.6)' : 'rgb(var(--primary) / 0.55)'}`,
+                            }} />
+                            <span style={{
+                                fontFamily: t.body, fontSize: 13, fontWeight: 600,
+                                color: t.onSurface,
+                            }}>
+                                {isLosing ? '−' : '+'}{Math.abs(parseFloat(delta))} {tx('kgUnit')}
+                            </span>
+                            <span style={{
+                                width: 1, height: 14, background: t.outline,
+                            }} />
+                            <span style={{
+                                fontFamily: t.body, fontSize: 13, fontWeight: 500,
+                                color: t.onSurfaceVariant,
+                            }}>
+                                <span style={{ color: t.primary, fontWeight: 700 }}>{pct}%</span>{' '}
+                                {tx('toGoalLabel')}
+                            </span>
+                        </div>
+                    ) : (
+                        <p style={{
+                            fontFamily: t.body, fontSize: 14, color: t.onSurfaceVariant,
+                            margin: 0, letterSpacing: '0.01em',
+                        }}>
+                            {tx('logFirstWeight')}
+                        </p>
+                    )}
+                </div>
             </div>
-            <div style={{
-                width: 56, height: 56, borderRadius: '50%',
-                background: t.surfaceContainerHighest, border: `1px solid ${t.outline}`,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontFamily: t.display, fontSize: 18, fontWeight: 500,
-                color: t.primary, letterSpacing: '0.04em',
-            }}>{initials}</div>
+
+            {/* Avatar — slightly bigger, ringed in primary on hover */}
+            <div
+                className="bzt-rise-in"
+                style={{
+                    width: 64, height: 64, borderRadius: '50%',
+                    background: t.surfaceContainerHighest,
+                    border: `1px solid ${t.outline}`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontFamily: t.display, fontSize: 20, fontWeight: 600,
+                    color: t.primary, letterSpacing: '0.04em',
+                    flexShrink: 0,
+                    boxShadow: `0 8px 24px rgb(0 0 0 / 0.20), inset 0 0 0 1px rgb(var(--primary) / 0.08)`,
+                    animationDelay: '80ms',
+                }}
+            >{initials}</div>
         </div>
     );
 }
@@ -62,7 +165,8 @@ export const CommunityBioZackTeam = () => {
     const navigate = useNavigate();
     const { logs } = useSelfLogs();
     const { activeProgram, getTodaysDay, todaysDayNumber } = useActiveProgram();
-    const { courses, userProgress } = useAcademy();
+    const { assignedDietId, snapshot: assignedDietSnapshot } = useAssignedDiet();
+    const { courses, userProgress, lessons, loadLessons } = useAcademy();
     const { posts } = useCommunity();
 
     const sortedByDate = useMemo(() => [...logs].sort((a, b) => a.date.localeCompare(b.date)), [logs]);
@@ -74,16 +178,28 @@ export const CommunityBioZackTeam = () => {
         [sortedByDate]
     );
 
-    const startWeight = weightHistory[0]?.weight ?? 0;
-    const currentWeight = weightHistory[weightHistory.length - 1]?.weight ?? 0;
-    const goalWeight = startWeight > 0 ? Math.round(startWeight * 0.9) : 0;
+    // `users/{uid}.startWeightKg` is the immovable anchor (set once at
+    // onboarding, never re-written). `users/{uid}.currentWeightKg` is
+    // mirrored on every weekly check-in via `useWeeklyCheckIns.submit()`,
+    // so it tracks the most recent weigh-in. Both legacy/historical
+    // accounts (no `startWeightKg` yet) fall back to the first logged
+    // weight, then the onboarding value — the one-shot migration in
+    // ProgressPanel will heal these on next mount.
+    const startWeight = user?.startWeightKg ?? weightHistory[0]?.weight ?? user?.currentWeightKg ?? 0;
+    const currentWeight = weightHistory[weightHistory.length - 1]?.weight ?? user?.currentWeightKg ?? 0;
+    const goalWeight = user?.targetWeightKg ?? 0;
 
     // Real activity score + streak from the user doc (lib/activityScore.ts)
     const xp = user?.activityScore ?? 0;
-    const level = levelFromScore(xp);
-    const xpPct = levelProgress(xp);
     const currentStreak = user?.streak?.current ?? 0;
     const bestStreak = user?.streak?.best ?? 0;
+
+    // Set of YYYY-MM-DD dates where the user logged something — feeds the
+    // calendar strip's "logged" dot indicator.
+    const loggedDates = useMemo(
+        () => new Set(logs.map(l => l.date).filter(Boolean) as string[]),
+        [logs]
+    );
 
     const name = user?.name?.split(' ')[0] ?? tx('athleteFallback');
     const initials = (user?.name ?? '').split(' ').map(s => s[0]).join('').slice(0, 2).toUpperCase() || 'ME';
@@ -99,19 +215,24 @@ export const CommunityBioZackTeam = () => {
                 goalWeight={goalWeight}
             />
 
-            {/* 2. Stats row */}
-            <div style={{
-                display: 'grid', gap: 16, marginBottom: 32,
-                gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-            }}>
-                <MetricCard label={tx('currentStreakLabel')} value={currentStreak} unit={tx('daysUnit')} sub={`${tx('bestPrefix')} ${bestStreak} ${tx('daysUnit')}`} hero />
-                <MetricCard label={tx('levelLabel')} value={level} sub={`${xp} ${tx('xpUnit')} · ${xpPct}% ${tx('xpToNext')}`} />
-                <MetricCard label={tx('logsLabel')} value={logs.length} sub={tx('allTimeLabel')} />
+            {/* 2. Combined week status panel — calendar + streak ring + level + rank.
+                   Replaces the old 3 separate metric cards + standalone standing card. */}
+            <div style={{ marginBottom: 24 }}>
+                <WeekStatusPanel
+                    uid={user?.id}
+                    score={xp}
+                    currentStreak={currentStreak}
+                    bestStreak={bestStreak}
+                    logCount={logs.length}
+                    loggedDates={loggedDates}
+                    isCoach={user?.role === 'coach' || user?.role === 'admin'}
+                    onNavigate={navigate}
+                />
             </div>
 
             {/* 3. Continue Academy */}
             <div style={{ marginBottom: 24 }}>
-                <ContinueAcademyCard courses={courses} userProgress={userProgress} onNavigate={navigate} />
+                <ContinueAcademyCard courses={courses} userProgress={userProgress} lessons={lessons} loadLessons={loadLessons} onNavigate={navigate} />
             </div>
 
             {/* 4. Today's Workout */}
@@ -124,23 +245,27 @@ export const CommunityBioZackTeam = () => {
                 />
             </div>
 
-            {/* 5. Your Standing (private rank widget) */}
+            {/* 5. Today's Diet — deep-links to /diets/plan/:id when assigned. */}
             <div style={{ marginBottom: 24 }}>
-                <YourStandingCard
-                    uid={user?.id}
-                    score={xp}
-                    isCoach={user?.role === 'coach' || user?.role === 'admin'}
+                <TodayDietCard
+                    dietProfile={user?.dietProfile}
+                    assignedDietId={assignedDietId}
+                    assignedSnapshot={assignedDietSnapshot}
                     onNavigate={navigate}
                 />
             </div>
 
-            {/* 6. Community Activity */}
-            <div style={{ marginBottom: 32 }}>
-                <CommunityActivityCard posts={posts.slice(0, 3)} onNavigate={navigate} />
+            {/* 6. Progress CTA — chart + caveman "what's inside" preview. */}
+            <div style={{ marginBottom: 24 }}>
+                <ProgressCTA
+                    onNavigate={navigate}
+                    weightHistory={weightHistory.map(w => w.weight)}
+                />
             </div>
 
-            {/* 7. Progress CTA */}
-            <ProgressCTA onNavigate={navigate} />
+            {/* 7. Community Activity — last, so the social pull doesn't
+                 distract from the user's own program/plan/progress. */}
+            <CommunityActivityCard posts={posts.slice(0, 3)} onNavigate={navigate} />
         </div>
     );
 };

@@ -5,7 +5,7 @@
  * Follows Claude2626 Sections 9, 12, 13.
  */
 
-import { TrainingProgram, WorkoutGoal, Difficulty, ProgramAssignmentResult } from '../types';
+import { TrainingProgram, WorkoutGoal, Difficulty } from '../types';
 import { ALL_PROGRAMS } from './programData';
 
 // ═══════════════════════════════════════════
@@ -316,35 +316,6 @@ export function parseRepScheme(reps: string, goal: WorkoutGoal): RepSchemeInfo {
         explanation: goalExp.en,
         explanationAr: goalExp.ar,
     };
-}
-
-// ═══════════════════════════════════════════
-// PROGRAM ASSIGNMENT (Section 9)
-// ═══════════════════════════════════════════
-
-export function assignProgram(goal: WorkoutGoal, difficulty: Difficulty): ProgramAssignmentResult | null {
-    const recommendedSplits = getSplitRecommendations(goal, difficulty);
-    if (recommendedSplits.length === 0) return null;
-
-    // Find the first matching program for goal + recommended split
-    for (const split of recommendedSplits) {
-        const match = ALL_PROGRAMS.find(p => p.goal === goal && p.split === split);
-        if (match) {
-            return {
-                program: match,
-                recommendedSplits,
-                difficulty,
-                goal,
-            };
-        }
-    }
-
-    return null;
-}
-
-// Find programs matching a goal + split combination
-export function findPrograms(goal: WorkoutGoal, split: string): TrainingProgram[] {
-    return ALL_PROGRAMS.filter(p => p.goal === goal && p.split === split);
 }
 
 // Get all available splits for a goal + difficulty

@@ -71,14 +71,3 @@ export function levelProgress(score: number): number {
     return score % 100;
 }
 
-// ─── Backwards-compat: old call sites passed (uid, amount) ────────────────
-// We keep `XP` exported so existing imports compile, but it's no longer
-// the source of truth — the server owns the amounts.
-export const XP = {
-    SELF_LOG: 10,
-    WEEKLY_CHECKIN: 50,
-    WORKOUT_DAY: 20,
-    LESSON_COMPLETE: 15,
-    POST: 10,
-    COMMENT: 3,
-} as const;

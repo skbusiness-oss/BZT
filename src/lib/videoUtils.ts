@@ -9,14 +9,28 @@ export function buildEmbedUrl(raw: string): { embedUrl: string; platform: 'youtu
         url = srcMatch[1];
     }
 
-    url = url.replace(/[?&]si=[\w-]+/g, '').replace(/[?&]h=[\w-]+/g, '');
+    // YouTube `si=` is share tracking, safe to strip. Vimeo `h=` is the
+    // PRIVACY HASH for unlisted videos — stripping it caused the player
+    // to show "Sign in to Vimeo to watch this video". Preserve it.
+    url = url.replace(/[?&]si=[\w-]+/g, '');
     url = url.replace(/\?&/, '?').replace(/[?&]$/, '');
 
     if (url.includes('vimeo')) {
-        const playerMatch = url.match(/player\.vimeo\.com\/video\/(\d+)/);
-        if (playerMatch) return { embedUrl: `https://player.vimeo.com/video/${playerMatch[1]}`, platform: 'vimeo' };
-        const pageMatch = url.match(/vimeo\.com\/(?:video\/|channels\/[^/]+\/|groups\/[^/]+\/videos\/|[^/]+\/[^/]+\/)?(\d+)/);
-        if (pageMatch) return { embedUrl: `https://player.vimeo.com/video/${pageMatch[1]}`, platform: 'vimeo' };
+        // Capture the unlisted-video hash if present in the source URL.
+        // Format varies: /video/12345/abc123, /12345/abc123, ?h=abc123
+        const hashFromQuery = url.match(/[?&]h=([\w-]+)/)?.[1];
+        const playerMatch = url.match(/player\.vimeo\.com\/video\/(\d+)(?:\/([\w-]+))?/);
+        if (playerMatch) {
+            const id = playerMatch[1];
+            const hash = playerMatch[2] ?? hashFromQuery;
+            return { embedUrl: vimeoEmbed(id, hash), platform: 'vimeo' };
+        }
+        const pageMatch = url.match(/vimeo\.com\/(?:video\/|channels\/[^/]+\/|groups\/[^/]+\/videos\/|[^/]+\/[^/]+\/)?(\d+)(?:\/([\w-]+))?/);
+        if (pageMatch) {
+            const id = pageMatch[1];
+            const hash = pageMatch[2] ?? hashFromQuery;
+            return { embedUrl: vimeoEmbed(id, hash), platform: 'vimeo' };
+        }
         return null;
     }
 
@@ -35,4 +49,15 @@ export function buildEmbedUrl(raw: string): { embedUrl: string; platform: 'youtu
     }
 
     return null;
+}
+
+// Build a Vimeo embed URL, preserving the unlisted-video privacy hash
+// (otherwise the player demands a Vimeo sign-in for unlisted content)
+// and adding `dnt=1` so the player doesn't drop tracking cookies which
+// modern browsers block in third-party contexts.
+function vimeoEmbed(id: string, hash?: string): string {
+    const params = new URLSearchParams();
+    if (hash) params.set('h', hash);
+    params.set('dnt', '1');
+    return `https://player.vimeo.com/video/${id}?${params.toString()}`;
 }
