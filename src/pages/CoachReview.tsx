@@ -33,6 +33,7 @@ import {
     Zap,
     Flame,
     Apple,
+    MessageSquare,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { MacroTarget } from '../types';
@@ -226,27 +227,45 @@ export const CoachReview = () => {
                     </div>
                 </div>
 
-                {!isProgramCreation && (
-                    <div className="flex items-center gap-1 bg-surface-container-highest/50 rounded-full p-1">
+                <div className="flex items-center gap-3 flex-wrap">
+                    {/* Message client — opens Messages page with this client
+                        already selected via `?to=<userId>`. Visible during
+                        program-creation too because that's exactly when a
+                        coach often needs to ask the client about their
+                        intake answers. */}
+                    {client.userId && (
                         <button
-                            onClick={() => setSelectedWeekNum(prev => Math.max(0, prev - 1))}
-                            disabled={selectedWeekNum <= 0}
-                            className="p-2.5 rounded-full hover:bg-surface-container-highest text-on-surface/50 hover:text-primary disabled:opacity-20 transition-colors"
+                            onClick={() => navigate(`/messages?to=${client.userId}`)}
+                            className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-primary/10 text-primary border border-primary/30 hover:bg-primary/15 transition-colors text-sm font-headline font-bold"
+                            title={`Message ${client.name}`}
                         >
-                            <ChevronLeft size={18} />
+                            <MessageSquare size={16} />
+                            <span className="hidden sm:inline">{t('messageClient') ?? 'Message client'}</span>
                         </button>
-                        <span className="font-headline font-bold text-on-surface min-w-[120px] text-center text-sm">
-                            {selectedWeekNum === 0 ? t('intakeWeek') : `${t('week')} ${selectedWeekNum}`}
-                        </span>
-                        <button
-                            onClick={() => setSelectedWeekNum(prev => Math.min(client.programLength, prev + 1))}
-                            disabled={selectedWeekNum >= client.programLength}
-                            className="p-2.5 rounded-full hover:bg-surface-container-highest text-on-surface/50 hover:text-primary disabled:opacity-20 transition-colors"
-                        >
-                            <ChevronRight size={18} />
-                        </button>
-                    </div>
-                )}
+                    )}
+
+                    {!isProgramCreation && (
+                        <div className="flex items-center gap-1 bg-surface-container-highest/50 rounded-full p-1">
+                            <button
+                                onClick={() => setSelectedWeekNum(prev => Math.max(0, prev - 1))}
+                                disabled={selectedWeekNum <= 0}
+                                className="p-2.5 rounded-full hover:bg-surface-container-highest text-on-surface/50 hover:text-primary disabled:opacity-20 transition-colors"
+                            >
+                                <ChevronLeft size={18} />
+                            </button>
+                            <span className="font-headline font-bold text-on-surface min-w-[120px] text-center text-sm">
+                                {selectedWeekNum === 0 ? t('intakeWeek') : `${t('week')} ${selectedWeekNum}`}
+                            </span>
+                            <button
+                                onClick={() => setSelectedWeekNum(prev => Math.min(client.programLength, prev + 1))}
+                                disabled={selectedWeekNum >= client.programLength}
+                                className="p-2.5 rounded-full hover:bg-surface-container-highest text-on-surface/50 hover:text-primary disabled:opacity-20 transition-colors"
+                            >
+                                <ChevronRight size={18} />
+                            </button>
+                        </div>
+                    )}
+                </div>
             </div>
 
             {/* ── Prominent client-info CTA ── */}

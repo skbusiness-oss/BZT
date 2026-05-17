@@ -167,7 +167,7 @@ service cloud.firestore {
       // writes go to /weighIns and /metrics below. Kept here so historical
       // entries still render in charts; not used for new submissions.
       match /selfLogs/{logId} {
-        allow read: if isSignedIn() && isActive() && (isOwner(uid) || isCoach());
+        allow read: if isSignedIn() && (isOwner(uid) || isCoach());
         allow create: if isSignedIn() && isOwner(uid)
                               && request.resource.data.keys().hasOnly(
                                    ['date', 'weight', 'measurements', 'metrics', 'notes',
@@ -189,7 +189,7 @@ service cloud.firestore {
       // submitted). Cadence: 7-day rolling window enforced client-side; the
       // rule below ensures the lock can never be flipped back to false.
       match /weighIns/{date} {
-        allow read: if isSignedIn() && isActive() && (isOwner(uid) || isCoach());
+        allow read: if isSignedIn() && (isOwner(uid) || isCoach());
         allow create: if isSignedIn() && isOwner(uid)
                               && request.resource.data.keys().hasOnly(
                                    ['weight', 'weekStart', 'locked', 'createdAt']);
@@ -206,7 +206,7 @@ service cloud.firestore {
       // stay in lockstep. Same lock semantics — `locked: true` is set on
       // create, the rule blocks subsequent edits.
       match /metrics/{date} {
-        allow read: if isSignedIn() && isActive() && (isOwner(uid) || isCoach());
+        allow read: if isSignedIn() && (isOwner(uid) || isCoach());
         allow create: if isSignedIn() && isOwner(uid)
                               && request.resource.data.keys().hasOnly(
                                    ['strength', 'hunger', 'energy', 'cardioCalories',
@@ -223,7 +223,6 @@ service cloud.firestore {
     // ─── clients/{clientId} ───────────────────────────────────
     match /clients/{clientId} {
       allow read: if isSignedIn()
-                  && isActive()
                   && (resource.data.userId == request.auth.uid || isCoach());
       allow create, delete: if isSignedIn() && isCoach();
       allow update: if isSignedIn()
@@ -243,7 +242,6 @@ service cloud.firestore {
     // ─── checkIns/{checkInId} ─────────────────────────────────
     match /checkIns/{checkInId} {
       allow read: if isSignedIn()
-                  && isActive()
                   && (resource.data.clientId == request.auth.uid || isCoach());
 
       // Client can only create a checkIn for themselves; also enforce userId matches
@@ -290,7 +288,6 @@ service cloud.firestore {
     // ─── messages/{messageId} ─────────────────────────────────
     match /messages/{messageId} {
       allow read: if isSignedIn()
-                  && isActive()
                   && (resource.data.senderId == request.auth.uid
                       || resource.data.receiverId == request.auth.uid);
 
@@ -308,7 +305,7 @@ service cloud.firestore {
 
     // ─── posts/{postId} ───────────────────────────────────────
     match /posts/{postId} {
-      allow read: if isSignedIn() && isActive();
+      allow read: if isSignedIn();
 
       // authorId must match caller; authorRole must match caller's actual role
       // (prevents spoofing e.g. a community member posting as 'coach')
@@ -344,7 +341,7 @@ service cloud.firestore {
 
       // ── comments ────────────────────────────────────────────
       match /comments/{commentId} {
-        allow read: if isSignedIn() && isActive();
+        allow read: if isSignedIn();
 
         allow create: if isSignedIn()
                       && request.resource.data.authorId == request.auth.uid
@@ -404,7 +401,7 @@ service cloud.firestore {
     // ─── userLessonProgress/{progressId} ─────────────────────
     // progressId = "{userId}_{courseId}_{lessonId}"
     match /userLessonProgress/{progressId} {
-      allow read: if isSignedIn() && isActive() && (request.auth.uid == resource.data.userId || isCoach());
+      allow read: if isSignedIn() && (request.auth.uid == resource.data.userId || isCoach());
       allow create: if isSignedIn()
                     && progressId == request.auth.uid + '_' + request.resource.data.courseId + '_' + request.resource.data.lessonId
                     && isValidLessonProgressWrite(progressId);
@@ -420,7 +417,7 @@ service cloud.firestore {
     // ─── userCourseProgress/{progressId} ─────────────────────
     // Legacy summary collection; course progress is now derived from userLessonProgress.
     match /userCourseProgress/{progressId} {
-      allow read: if isSignedIn() && isActive() && (request.auth.uid == resource.data.userId || isCoach());
+      allow read: if isSignedIn() && (request.auth.uid == resource.data.userId || isCoach());
       allow create, update: if isSignedIn() && isCoach();
       allow delete: if false;
     }
@@ -461,7 +458,7 @@ service cloud.firestore {
     // Stores each user's active training program.
     // Users manage their own; coaches can assign to any user.
     match /userPrograms/{userId} {
-      allow read: if isSignedIn() && isActive() && (isOwner(userId) || isCoach());
+      allow read: if isSignedIn() && (isOwner(userId) || isCoach());
       allow write: if isSignedIn() && (isOwner(userId) || isCoach());
     }
 
@@ -471,7 +468,7 @@ service cloud.firestore {
     // weekly check-in. Mirrors userPrograms — same trust model, no
     // shape constraint (the snapshot insulates the user from catalog edits).
     match /userDiets/{userId} {
-      allow read: if isSignedIn() && isActive() && (isOwner(userId) || isCoach());
+      allow read: if isSignedIn() && (isOwner(userId) || isCoach());
       allow write: if isSignedIn() && (isOwner(userId) || isCoach());
     }
 

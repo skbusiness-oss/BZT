@@ -1,10 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { useLanguage } from '../context/LanguageContext';
 import { Send, MessageSquare, ArrowLeft } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { collection, query, where, getDocs, limit } from 'firebase/firestore';
+import { tsToDate, tsToMillis } from '../lib/firestoreTime';
 
 export const Messages = () => {
     const { user } = useAuth();
@@ -43,6 +45,19 @@ export const Messages = () => {
         }
     }, [isCoach, user, coachId]);
 
+    // Deep-link support: `/messages?to=<userId>` pre-selects a conversation.
+    // Used by the "Message client" button on CoachReview so a coach can jump
+    // from a weekly review straight into the existing thread (no duplicate
+    // threads — `getConversation(user.id, otherUserId)` finds the messages
+    // either party already sent regardless of who initiated).
+    const [searchParams] = useSearchParams();
+    useEffect(() => {
+        const to = searchParams.get('to');
+        if (to && isCoach) {
+            setSelectedUserId(to);
+        }
+    }, [searchParams, isCoach]);
+
     // Scroll to bottom when messages change
     useEffect(() => {
         chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -71,13 +86,11 @@ export const Messages = () => {
             const unread = messages.filter(m => m.senderId === c.userId && m.receiverId === user.id && !m.read).length;
             const lastMsg = [...messages].filter(m =>
                 (m.senderId === user.id && m.receiverId === c.userId) || (m.senderId === c.userId && m.receiverId === user.id)
-            ).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0];
+            ).sort((a, b) => tsToMillis(b.timestamp) - tsToMillis(a.timestamp))[0];
             return { userId: c.userId, name: c.name, unread, lastMsg, category: c.category };
         }).sort((a, b) => {
             if (a.unread !== b.unread) return b.unread - a.unread;
-            const aTime = a.lastMsg ? new Date(a.lastMsg.timestamp).getTime() : 0;
-            const bTime = b.lastMsg ? new Date(b.lastMsg.timestamp).getTime() : 0;
-            return bTime - aTime;
+            return tsToMillis(b.lastMsg?.timestamp) - tsToMillis(a.lastMsg?.timestamp);
         })
         : [];
 
@@ -89,8 +102,12 @@ export const Messages = () => {
         setText('');
     };
 
-    const formatTime = (ts: string) => {
-        const d = new Date(ts);
+    const formatTime = (ts: unknown) => {
+        // Firestore returns Timestamp objects from serverTimestamp() writes.
+        // Pending writes appear as null on the writer's local snapshot
+        // briefly — show a dash until the server stamp lands.
+        const d = tsToDate(ts);
+        if (!d) return '—';
         return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ', ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
     };
 

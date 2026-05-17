@@ -50,6 +50,19 @@ const GOAL_COLORS: Record<WorkoutGoal, string> = {
     endurance: 'teal',
 };
 
+// Cover image per goal — lives under /public/workout-covers/. Filenames
+// use hyphens, not the underscore goal ids. Files are pre-bundled into
+// the deploy so the <img> tag below doesn't trigger an extra network
+// round-trip; the browser fetches them in parallel with the page chunk.
+const GOAL_IMAGES: Record<WorkoutGoal, string> = {
+    fat_loss: '/workout-covers/goal-fat-loss.jpg',
+    muscle_gain: '/workout-covers/goal-muscle-gain.jpg',
+    strength: '/workout-covers/goal-strength.jpg',
+    recomp: '/workout-covers/goal-recomp.jpg',
+    maintenance: '/workout-covers/goal-maintenance.jpg',
+    endurance: '/workout-covers/goal-endurance.jpg',
+};
+
 interface WorkoutWizardProps {
     /**
      * If set, the wizard saves the program to `userPrograms/{targetUserId}` instead
@@ -161,30 +174,54 @@ export const WorkoutWizard = ({ targetUserId, onAssigned }: WorkoutWizardProps =
                         const GoalIcon = GOAL_ICONS[goal];
                         const isSelected = selectedGoal === goal;
                         const color = GOAL_COLORS[goal];
+                        const img = GOAL_IMAGES[goal];
 
                         return (
                             <button
                                 key={goal}
                                 onClick={() => handleGoalSelect(goal)}
                                 className={clsx(
-                                    'relative rounded-2xl border p-4 text-start transition-all',
+                                    'relative rounded-2xl border text-start transition-all overflow-hidden min-h-[148px]',
                                     isSelected
-                                        ? `bg-${color}-500/15 border-${color}-400 ring-2 ring-${color}-400 shadow-lg`
-                                        : 'bg-white/[0.04] border-white/[0.06] hover:bg-white/[0.07] hover:border-white/[0.1]'
+                                        ? `border-${color}-400 ring-2 ring-${color}-400 shadow-lg`
+                                        : 'border-white/[0.06] hover:border-white/[0.15]'
                                 )}
                             >
-                                <div className={clsx(
-                                    'w-10 h-10 rounded-xl flex items-center justify-center mb-3',
-                                    `bg-${color}-500/15`
-                                )}>
-                                    <GoalIcon className={`text-${color}-400`} size={20} />
+                                {/* Cover image. Loading=lazy because there are
+                                    6 of these on a single step and only one
+                                    is "above the fold" on mobile. */}
+                                <img
+                                    src={img}
+                                    alt=""
+                                    loading="lazy"
+                                    className="absolute inset-0 w-full h-full object-cover"
+                                />
+                                {/* Bottom-up dark gradient for text legibility.
+                                    Selected state adds a tint of the goal color
+                                    on top so the chosen card visibly pops. */}
+                                <div
+                                    className="absolute inset-0"
+                                    style={{
+                                        background: isSelected
+                                            ? 'linear-gradient(180deg, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.65) 55%, rgba(0,0,0,0.90) 100%)'
+                                            : 'linear-gradient(180deg, rgba(0,0,0,0.20) 0%, rgba(0,0,0,0.70) 60%, rgba(0,0,0,0.92) 100%)',
+                                    }}
+                                />
+                                {/* Content sits above the image+overlay layers */}
+                                <div className="relative p-4 flex flex-col h-full">
+                                    <div className={clsx(
+                                        'w-10 h-10 rounded-xl flex items-center justify-center mb-3 backdrop-blur-sm',
+                                        `bg-${color}-500/30`
+                                    )}>
+                                        <GoalIcon className={`text-${color}-200`} size={20} />
+                                    </div>
+                                    <h3 className="font-bold text-white text-sm" style={{ textShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>
+                                        {ctx.emoji} {isAr ? ctx.labelAr : ctx.label}
+                                    </h3>
+                                    <p className="text-[11px] text-white/85 mt-1 line-clamp-2" style={{ textShadow: '0 1px 3px rgba(0,0,0,0.5)' }}>
+                                        {isAr ? desc.descAr : desc.desc}
+                                    </p>
                                 </div>
-                                <h3 className="font-bold text-on-surface text-sm">
-                                    {ctx.emoji} {isAr ? ctx.labelAr : ctx.label}
-                                </h3>
-                                <p className="text-[11px] text-on-surface-variant mt-1 line-clamp-2">
-                                    {isAr ? desc.descAr : desc.desc}
-                                </p>
                             </button>
                         );
                     })}

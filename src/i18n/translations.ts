@@ -441,6 +441,7 @@ export const translations = {
     premiumClient: { en: 'Premium client', ar: 'عميل بريميوم' },
     communityMemberFree: { en: 'Community member (free)', ar: 'عضو مجتمع (مجاني)' },
     yourCoach: { en: 'Your coach', ar: 'مدربك' },
+    messageClient: { en: 'Message client', ar: 'راسل الكلاينت' },
     youLabel: { en: 'You', ar: 'أنت' },
     clientLabelText: { en: 'Client', ar: 'عميل' },
     manageClient: { en: 'Manage client', ar: 'إدارة العميل' },

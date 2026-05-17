@@ -11,6 +11,7 @@ import { db } from '../lib/firebase';
 import { useAuth } from './AuthContext';
 import { Message } from '../types';
 import { rateLimits, validateText } from '../lib/validation';
+import { tsToMillis } from '../lib/firestoreTime';
 import type { QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 
 function docToObj<T>(snap: QueryDocumentSnapshot<DocumentData>): T {
@@ -40,7 +41,7 @@ export const MessagesProvider = ({ children }: { children: ReactNode }) => {
     const checkReady = () => { if (++listenersReady >= 2) setLoading(false); };
 
     const sortMessages = (msgs: Message[]) =>
-      msgs.sort((a, b) => ((a.timestamp as unknown as { seconds: number })?.seconds || 0) - ((b.timestamp as unknown as { seconds: number })?.seconds || 0));
+      msgs.sort((a, b) => tsToMillis(a.timestamp) - tsToMillis(b.timestamp));
 
     const msgsAsSender = query(collection(db, 'messages'), where('senderId', '==', user.id));
     const msgsAsReceiver = query(collection(db, 'messages'), where('receiverId', '==', user.id));
@@ -91,7 +92,7 @@ export const MessagesProvider = ({ children }: { children: ReactNode }) => {
   const getConversation = useCallback((userId1: string, userId2: string): Message[] =>
     messages
       .filter((m) => (m.senderId === userId1 && m.receiverId === userId2) || (m.senderId === userId2 && m.receiverId === userId1))
-      .sort((a, b) => new Date(a.timestamp as unknown as string).getTime() - new Date(b.timestamp as unknown as string).getTime()),
+      .sort((a, b) => tsToMillis(a.timestamp) - tsToMillis(b.timestamp)),
     [messages]
   );
 
