@@ -143,7 +143,10 @@ export const AssignDietPicker = ({
                 WebkitBackdropFilter: 'blur(14px)',
             }}
         >
-            <div className="bzt-rise-in max-w-3xl w-full rounded-3xl bg-surface-container-low border border-outline-variant/30 overflow-hidden max-h-[92vh] flex flex-col">
+            <div
+                className="bzt-rise-in max-w-3xl w-full rounded-3xl bg-surface-container-high border border-outline-variant/40 overflow-hidden max-h-[92vh] flex flex-col"
+                style={{ boxShadow: '0 24px 64px rgb(0 0 0 / 0.55)' }}
+            >
                 {/* Header */}
                 <div className="px-6 md:px-8 pt-6 pb-5 flex items-center justify-between gap-4 border-b border-outline-variant/20 bg-surface-container-lowest">
                     <div className="flex items-center gap-3 min-w-0">

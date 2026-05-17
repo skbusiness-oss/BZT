@@ -197,7 +197,7 @@ export const CheckIn = () => {
 
                     return (
                         <div className="flex flex-col items-center gap-3">
-                            <div className="flex items-center justify-center gap-3 bg-surface-container-low rounded-full p-1.5 ghost-border shadow-lg w-full max-w-md">
+                            <div className="flex items-center justify-center gap-3 bg-surface-container-low rounded-full p-2 ghost-border shadow-lg w-full max-w-md">
                                 <button
                                     disabled={!canGoBack}
                                     onClick={() => setSelectedWeekNum(prev => prev - 1)}

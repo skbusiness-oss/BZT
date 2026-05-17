@@ -172,7 +172,7 @@ function WeekPicker({ label, weeks, value, onChange }: {
                 className="w-full clay-input p-2.5 text-sm"
             >
                 {weeks.map(w => (
-                    <option key={w.id} value={w.weekNumber} style={{ background: '#0e1322' }}>
+                    <option key={w.id} value={w.weekNumber} style={{ background: 'rgb(var(--surface-container))' }}>
                         Week {w.weekNumber}{w.minWeight ? ` · ${w.minWeight} kg` : ''}
                     </option>
                 ))}

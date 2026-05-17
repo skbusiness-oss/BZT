@@ -37,8 +37,8 @@ const SidebarItem = ({ to, icon: Icon, label, end = false, onClick }: { to: stri
             className={({ isActive }) => clsx(
                 "flex items-center gap-3 px-2 py-2 rounded-xl transition-colors group",
                 isActive
-                    ? "bg-primary/10 text-on-surface font-medium"
-                    : "text-on-surface-variant hover:bg-surface-container/40 hover:text-on-surface"
+                    ? "bg-primary/15 text-on-surface font-medium border border-primary/20"
+                    : "border border-transparent text-on-surface-variant hover:bg-surface-container/40 hover:text-on-surface"
             )}
         >
             {({ isActive }) => (

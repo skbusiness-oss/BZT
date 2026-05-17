@@ -132,7 +132,7 @@ export const Login = () => {
                                 >
                                     {String(i + 1).padStart(2, '0')}
                                 </span>
-                                <div className="flex-1 pt-0.5 border-t border-outline-variant/20 pt-3">
+                                <div className="flex-1 pt-3 border-t border-outline-variant/20">
                                     <div className="flex items-center gap-2.5 mb-1">
                                         <Icon size={15} className="text-primary/80" />
                                         <h3 className="text-on-surface font-headline text-[19px] font-bold tracking-tight">
@@ -150,8 +150,8 @@ export const Login = () => {
                     {/* Mobile-only sign in form (mirrors the desktop right panel) */}
                     <div className="md:hidden mt-12 bzt-rise-in" style={{ animationDelay: '320ms' }}>
                         <div
-                            className="rounded-3xl bg-surface-container-low border border-outline-variant/30 p-7"
-                            style={{ boxShadow: '0 24px 48px rgb(0 0 0 / 0.20)' }}
+                            className="rounded-3xl bg-surface-container-high border border-outline-variant/40 p-6"
+                            style={{ boxShadow: '0 24px 48px rgb(0 0 0 / 0.25)' }}
                         >
                             {displayError && (
                                 <div className="mb-5 p-3.5 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-[13px] font-body font-medium leading-snug">
@@ -166,7 +166,7 @@ export const Login = () => {
                                 <button
                                     type="submit"
                                     disabled={isLoading}
-                                    className="bzt-press w-full px-6 py-4 rounded-2xl font-label text-[12px] font-extrabold uppercase tracking-[0.18em] bg-gradient-to-br from-primary to-primary-container text-on-primary disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3 mt-7 transition-all"
+                                    className="bzt-press w-full px-6 py-4 rounded-2xl font-label text-[12px] font-extrabold uppercase tracking-[0.18em] bg-gradient-to-br from-primary to-primary-container text-on-primary disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3 mt-8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-surface transition-all"
                                     style={{ boxShadow: '0 12px 28px rgb(var(--primary) / 0.32)' }}
                                 >
                                     {isLoading ? <Loader2 size={18} className="animate-spin" /> : <><LogIn size={18} /> {t('signInButton')}</>}
@@ -230,7 +230,7 @@ export const Login = () => {
                                         <button
                                             type="submit"
                                             disabled={resetLoading}
-                                            className="bzt-press w-full px-6 py-4 rounded-2xl font-label text-[12px] font-extrabold uppercase tracking-[0.18em] bg-gradient-to-br from-primary to-primary-container text-on-primary disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center mt-7 transition-all"
+                                            className="bzt-press w-full px-6 py-4 rounded-2xl font-label text-[12px] font-extrabold uppercase tracking-[0.18em] bg-gradient-to-br from-primary to-primary-container text-on-primary disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center mt-8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-surface transition-all"
                                             style={{ boxShadow: '0 12px 28px rgb(var(--primary) / 0.32)' }}
                                         >
                                             {resetLoading ? <Loader2 size={18} className="animate-spin" /> : t('sendResetLink')}
@@ -295,7 +295,7 @@ export const Login = () => {
                                 <button
                                     type="submit"
                                     disabled={isLoading}
-                                    className="bzt-press w-full px-6 py-4 rounded-2xl font-label text-[12px] font-extrabold uppercase tracking-[0.18em] bg-gradient-to-br from-primary to-primary-container text-on-primary disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3 mt-7 transition-all"
+                                    className="bzt-press w-full px-6 py-4 rounded-2xl font-label text-[12px] font-extrabold uppercase tracking-[0.18em] bg-gradient-to-br from-primary to-primary-container text-on-primary disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3 mt-8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-surface transition-all"
                                     style={{ boxShadow: '0 12px 28px rgb(var(--primary) / 0.32)' }}
                                 >
                                     {isLoading ? <Loader2 size={18} className="animate-spin" /> : <><LogIn size={18} /> {t('signInButton')}</>}

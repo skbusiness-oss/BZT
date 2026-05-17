@@ -334,7 +334,7 @@ function Hero({ plan, onAssign, assigning, assignError, assigned, replacingPlanN
                     </span>
                 </div>
                 <h1 className="font-headline font-extrabold text-[clamp(1.8rem,3.6vw,2.6rem)] tracking-[-0.03em] leading-[1.1] mb-6"
-                    style={{ color: '#fff', textShadow: '0 2px 14px rgba(0,0,0,0.55)' }}>
+                    style={{ color: '#fff', textShadow: '0 1px 3px rgba(0,0,0,0.45)' }}>
                     {plan.name}
                 </h1>
 
@@ -433,7 +433,7 @@ function HeroStat({ value, suffix, label, hero, divided }: {
                 className={`font-headline font-extrabold tracking-tight leading-none ${hero ? 'text-[26px] md:text-[30px]' : 'text-[22px] md:text-[26px]'}`}
                 style={{
                     color: hero ? '#e6c364' : '#fff',
-                    textShadow: '0 1px 8px rgba(0,0,0,0.5)',
+                    textShadow: '0 1px 3px rgba(0,0,0,0.45)',
                 }}
             >
                 {value}

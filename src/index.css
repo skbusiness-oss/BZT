@@ -23,7 +23,7 @@ html[lang="ar"] * {
 
 :root,
 [data-theme="dark"] {
-  /* Primary (rich gold) */
+  /* Primary (rich gold) — unchanged */
   --primary: 230 195 100;
   --primary-container: 201 168 76;
   --primary-fixed: 255 224 143;
@@ -32,21 +32,30 @@ html[lang="ar"] * {
   --on-primary-fixed: 36 26 0;
   --on-primary-fixed-variant: 88 68 0;
 
-  /* Surfaces */
-  --surface: 14 19 34;
-  --surface-bright: 52 57 73;
-  --surface-dim: 14 19 34;
-  --surface-container-lowest: 9 14 28;
-  --surface-container-low: 22 27 43;
-  --surface-container: 26 31 47;
-  --surface-container-high: 37 41 58;
-  --surface-container-highest: 47 52 69;
+  /* Surfaces — neutral charcoal ladder for the black/gold theme.
+     Previously these were blue-tinted (R/G < B by ~15-20 points)
+     which gave the app a dominant midnight-blue cast. Switched to
+     a near-neutral grayscale with the tiniest warm bias (R = G,
+     keeps it from looking sterile and harmonizes with the gold
+     primary). Lightness ladder is preserved so the hierarchy of
+     surface > container-low > container > container-high still
+     reads in the UI. */
+  --surface: 12 12 12;
+  --surface-bright: 52 52 52;
+  --surface-dim: 8 8 8;
+  --surface-container-lowest: 6 6 6;
+  --surface-container-low: 18 18 18;
+  --surface-container: 24 24 24;
+  --surface-container-high: 34 34 34;
+  --surface-container-highest: 46 46 46;
 
-  /* Foreground */
-  --on-surface: 222 225 247;
-  --on-surface-variant: 208 197 178;
-  --outline: 153 144 126;
-  --outline-variant: 77 70 55;
+  /* Foreground — warm off-white that harmonizes with gold accents.
+     Previously a slight blue tint (222 225 247); now neutral-warm
+     so paragraphs don't fight the gold primary. */
+  --on-surface: 232 230 224;
+  --on-surface-variant: 180 174 162;
+  --outline: 140 132 118;
+  --outline-variant: 70 65 56;
 }
 
 [data-theme="light"] {
@@ -115,6 +124,33 @@ body {
   background-color: rgb(var(--surface));
   color: rgb(var(--on-surface));
   transition: background-color 0.2s ease, color 0.2s ease;
+  /* The vignette below is the only thing on the body's stacking context
+     that needs to sit BEHIND the app. Setting position:relative makes
+     ::before's absolute positioning anchor to the body, not html. */
+  position: relative;
+  min-height: 100vh;
+}
+
+/* Subtle depth scrim — dark theme only.
+   A single whisper of gold at the top center where the eye lands.
+   Previously there was also a bottom linear-gradient darkening
+   (rgba(0,0,0,0.35)) — dropped because on the new near-black surface
+   tokens (--surface: 12 12 12), darkening pure-near-black just reads
+   as a muddy bottom edge instead of depth. The radial alone is enough
+   to break the flat field without calling attention to itself.
+   Pointer-events:none so the scrim never intercepts clicks.
+   Position:fixed so it follows scroll. */
+[data-theme="dark"] body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background: radial-gradient(
+    ellipse 90% 60% at 50% -10%,
+    rgb(var(--primary) / 0.06),
+    transparent 60%
+  );
 }
 
 /* =====================================================================

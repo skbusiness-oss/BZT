@@ -79,7 +79,7 @@ export const TosModal = () => {
             aria-labelledby="bzt-tos-title"
         >
             <div
-                className="bzt-rise-in max-w-lg w-full rounded-3xl bg-surface-container-low border border-outline-variant/30 overflow-hidden"
+                className="bzt-rise-in max-w-lg w-full rounded-3xl bg-surface-container-high border border-outline-variant/40 overflow-hidden"
                 style={{ boxShadow: '0 32px 80px rgb(0 0 0 / 0.55)' }}
             >
                 {/* Header — stronger gold band, badge, eyebrow + headline */}

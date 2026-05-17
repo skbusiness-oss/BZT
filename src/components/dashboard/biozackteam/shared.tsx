@@ -40,6 +40,16 @@ export const t = {
 };
 export const goldGradient = `linear-gradient(135deg, ${t.primary} 0%, ${t.primaryContainer} 100%)`;
 
+// Pill paddings — two values, snapped to the 4/8/12/16/20 spacing scale.
+// Previously this file had 7 different ad-hoc pill paddings (8px 18px,
+// 8px 16px, 6px 14px, 6px 12px, 5px 11px, 14px 16px, 2rem) which made
+// otherwise-identical pills appear subtly different across dashboard
+// tiles. Two constants cover every pill in the app:
+//   - pillPadSm  — small chips (week numbers, status tags, week-strip days)
+//   - pillPad    — default CTA / inline-action pill
+export const pillPadSm = '6px 12px';
+export const pillPad = '8px 16px';
+
 // ─── Primitives ─────────────────────────────────────────────────────────
 export function Card({ children, variant = 'default', style = {}, onClick, className }: {
     children: React.ReactNode;
@@ -61,7 +71,7 @@ export function Card({ children, variant = 'default', style = {}, onClick, class
         <div
             onClick={onClick}
             className={className}
-            style={{ borderRadius: 20, padding: '2rem', cursor: onClick ? 'pointer' : undefined, ...variants[variant], ...style }}
+            style={{ borderRadius: 20, padding: '1.5rem', cursor: onClick ? 'pointer' : undefined, ...variants[variant], ...style }}
         >
             {children}
         </div>
@@ -164,7 +174,7 @@ export function ContinueAcademyCard({ courses, userProgress, lessons, loadLesson
                 <h2 style={{
                     fontFamily: t.display, fontSize: 22, fontWeight: 600,
                     color: '#fff', margin: '0 0 4px', letterSpacing: '-0.02em',
-                    textShadow: '0 2px 12px rgba(0,0,0,0.5)',
+                    textShadow: '0 1px 3px rgba(0,0,0,0.45)',
                 }}>
                     {tx('academyEmptyTitle')}
                 </h2>
@@ -173,7 +183,7 @@ export function ContinueAcademyCard({ courses, userProgress, lessons, loadLesson
                 </p>
                 <span style={{
                     alignSelf: 'flex-start',
-                    padding: '8px 18px', borderRadius: 999,
+                    padding: pillPad, borderRadius: 999,
                     background: goldGradient, color: t.onPrimaryFixed,
                     fontFamily: t.body, fontSize: 12, fontWeight: 600,
                     letterSpacing: '0.04em', textTransform: 'uppercase',
@@ -223,7 +233,7 @@ export function ContinueAcademyCard({ courses, userProgress, lessons, loadLesson
                 <h2 style={{
                     fontFamily: t.display, fontSize: 22, fontWeight: 600,
                     color: '#fff', margin: '0 0 4px', letterSpacing: '-0.02em',
-                    textShadow: '0 2px 12px rgba(0,0,0,0.5)',
+                    textShadow: '0 1px 3px rgba(0,0,0,0.45)',
                 }}>{next.title}</h2>
                 <p style={{
                     fontFamily: t.body, fontSize: 12, color: 'rgba(255,255,255,0.82)',
@@ -236,7 +246,7 @@ export function ContinueAcademyCard({ courses, userProgress, lessons, loadLesson
                 </div>
                 <span style={{
                     alignSelf: 'flex-start',
-                    padding: '8px 18px', borderRadius: 999,
+                    padding: pillPad, borderRadius: 999,
                     background: goldGradient, color: t.onPrimaryFixed,
                     fontFamily: t.body, fontSize: 12, fontWeight: 600,
                     letterSpacing: '0.04em', textTransform: 'uppercase',
@@ -310,14 +320,14 @@ export function TodayWorkoutCard({ activeProgram, getTodaysDay, todaysDayNumber,
                 <h2 style={{
                     fontFamily: t.display, fontSize: 22, fontWeight: 600,
                     color: '#fff', margin: '0 0 4px', letterSpacing: '-0.02em',
-                    textShadow: '0 2px 12px rgba(0,0,0,0.5)',
+                    textShadow: '0 1px 3px rgba(0,0,0,0.45)',
                 }}>{tx('noProgramYet')}</h2>
                 <p style={{ fontFamily: t.body, fontSize: 12, color: 'rgba(255,255,255,0.82)', margin: '0 0 14px' }}>
                     {tx('chooseProgramSub')}
                 </p>
                 <span style={{
                     alignSelf: 'flex-start',
-                    padding: '8px 18px', borderRadius: 999,
+                    padding: pillPad, borderRadius: 999,
                     background: goldGradient, color: t.onPrimaryFixed,
                     fontFamily: t.body, fontSize: 12, fontWeight: 600,
                     letterSpacing: '0.04em', textTransform: 'uppercase',
@@ -378,7 +388,7 @@ export function TodayWorkoutCard({ activeProgram, getTodaysDay, todaysDayNumber,
                     }}>{tx('todaysTraining')}</div>
                     {!isRest && (
                         <div style={{
-                            padding: '6px 14px', borderRadius: 999,
+                            padding: pillPadSm, borderRadius: 999,
                             background: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)',
                             color: '#fff', fontFamily: t.body, fontSize: 11, fontWeight: 600,
                             textTransform: 'uppercase', letterSpacing: '0.1em', whiteSpace: 'nowrap',
@@ -391,7 +401,7 @@ export function TodayWorkoutCard({ activeProgram, getTodaysDay, todaysDayNumber,
                     <h2 style={{
                         fontFamily: t.display, fontSize: 26, fontWeight: 600,
                         color: '#fff', margin: '0 0 4px', letterSpacing: '-0.02em',
-                        textShadow: '0 2px 12px rgba(0,0,0,0.5)',
+                        textShadow: '0 1px 3px rgba(0,0,0,0.45)',
                     }}>
                         {isRest ? tx('restDayLabel') : (today?.label ?? activeProgram.programName)}
                     </h2>
@@ -403,7 +413,7 @@ export function TodayWorkoutCard({ activeProgram, getTodaysDay, todaysDayNumber,
                     {!isRest && (
                         <span style={{
                             display: 'inline-block',
-                            padding: '8px 18px', borderRadius: 999,
+                            padding: pillPad, borderRadius: 999,
                             background: goldGradient, color: t.onPrimaryFixed,
                             fontFamily: t.body, fontSize: 12, fontWeight: 600,
                             letterSpacing: '0.04em', textTransform: 'uppercase',
@@ -465,14 +475,14 @@ export function TodayDietCard({
                 <h2 style={{
                     fontFamily: t.display, fontSize: 22, fontWeight: 600,
                     color: '#fff', margin: '0 0 4px', letterSpacing: '-0.02em',
-                    textShadow: '0 2px 12px rgba(0,0,0,0.5)',
+                    textShadow: '0 1px 3px rgba(0,0,0,0.45)',
                 }}>{tx('startMyPlan') ?? 'Start my plan'}</h2>
                 <p style={{ fontFamily: t.body, fontSize: 12, color: 'rgba(255,255,255,0.82)', margin: '0 0 14px' }}>
                     {tx('dietCalculateBlurb') ?? 'Sex, age, weight, height, activity, goal. We do the math, match the plan.'}
                 </p>
                 <span style={{
                     alignSelf: 'flex-start',
-                    padding: '8px 18px', borderRadius: 999,
+                    padding: pillPad, borderRadius: 999,
                     background: goldGradient, color: t.onPrimaryFixed,
                     fontFamily: t.body, fontSize: 12, fontWeight: 600,
                     letterSpacing: '0.04em', textTransform: 'uppercase',
@@ -521,7 +531,7 @@ export function TodayDietCard({
                     </div>
                     {assignedDietId && (
                         <span style={{
-                            padding: '5px 11px', borderRadius: 999,
+                            padding: pillPadSm, borderRadius: 999,
                             background: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)',
                             color: '#fff', fontFamily: t.body, fontSize: 10, fontWeight: 700,
                             textTransform: 'uppercase', letterSpacing: '0.16em', whiteSpace: 'nowrap',
@@ -535,7 +545,7 @@ export function TodayDietCard({
                         <div style={{
                             fontFamily: t.display, fontSize: 18, fontWeight: 600,
                             color: 'rgba(255,255,255,0.92)', letterSpacing: '-0.02em',
-                            marginBottom: 6, textShadow: '0 2px 10px rgba(0,0,0,0.5)',
+                            marginBottom: 6, textShadow: '0 1px 3px rgba(0,0,0,0.45)',
                         }}>
                             {tPlanName(assignedSnapshot.name, lang, tx('mealsWord'))}
                         </div>
@@ -544,7 +554,7 @@ export function TodayDietCard({
                         <span style={{
                             fontFamily: t.display, fontSize: 36, fontWeight: 700,
                             color: '#fff', letterSpacing: '-0.02em',
-                            textShadow: '0 2px 12px rgba(0,0,0,0.5)',
+                            textShadow: '0 1px 3px rgba(0,0,0,0.45)',
                         }}>{headlineKcal}</span>
                         <span style={{ fontFamily: t.body, fontSize: 13, color: 'rgba(255,255,255,0.82)', textTransform: 'uppercase', letterSpacing: '0.12em', fontWeight: 600 }}>
                             kcal
@@ -555,7 +565,7 @@ export function TodayDietCard({
                     </p>
                     <span style={{
                         display: 'inline-block',
-                        padding: '8px 18px', borderRadius: 999,
+                        padding: pillPad, borderRadius: 999,
                         background: goldGradient, color: t.onPrimaryFixed,
                         fontFamily: t.body, fontSize: 12, fontWeight: 600,
                         letterSpacing: '0.04em', textTransform: 'uppercase',
@@ -613,11 +623,11 @@ export function CommunityActivityCard({ posts, onNavigate }: {
                         <h2 style={{
                             fontFamily: t.display, fontSize: 22, fontWeight: 600,
                             color: '#fff', margin: 0, letterSpacing: '-0.02em',
-                            textShadow: '0 2px 12px rgba(0,0,0,0.5)',
+                            textShadow: '0 1px 3px rgba(0,0,0,0.45)',
                         }}>{tx('whatsHappening')}</h2>
                     </div>
                     <button onClick={() => onNavigate('/community')} style={{
-                        padding: '8px 16px', borderRadius: 999,
+                        padding: pillPad, borderRadius: 999,
                         border: '1px solid rgba(255,255,255,0.30)',
                         background: 'rgba(255,255,255,0.10)', backdropFilter: 'blur(8px)',
                         color: '#fff', fontFamily: t.body, fontSize: 11, fontWeight: 600,
@@ -746,7 +756,7 @@ export function YourStandingCard({ uid, score, isCoach, onNavigate }: {
                     }}>{tx('yourStanding')}</div>
                     {isCoach && (
                         <span style={{
-                            padding: '6px 12px', borderRadius: 999,
+                            padding: pillPadSm, borderRadius: 999,
                             background: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)',
                             color: '#fff', fontFamily: t.body, fontSize: 10, fontWeight: 700,
                             textTransform: 'uppercase', letterSpacing: '0.12em', whiteSpace: 'nowrap',
@@ -758,7 +768,7 @@ export function YourStandingCard({ uid, score, isCoach, onNavigate }: {
                         <span style={{
                             fontFamily: t.display, fontSize: 48, fontWeight: 300,
                             lineHeight: 1, color: '#fff', letterSpacing: '-0.03em',
-                            textShadow: '0 2px 12px rgba(0,0,0,0.5)',
+                            textShadow: '0 1px 3px rgba(0,0,0,0.45)',
                         }}>{rankLabel}</span>
                         <span style={{ fontFamily: t.body, fontSize: 13, color: 'rgba(255,255,255,0.82)' }}>
                             {subLabel}
@@ -1072,7 +1082,7 @@ export function ProgressCTA({ onNavigate, weightHistory }: {
                 <h2 style={{
                     fontFamily: t.display, fontSize: 22, fontWeight: 600,
                     color: '#fff', margin: '0 0 4px', letterSpacing: '-0.02em',
-                    textShadow: '0 2px 12px rgba(0,0,0,0.5)',
+                    textShadow: '0 1px 3px rgba(0,0,0,0.45)',
                 }}>
                     {tx('viewProgressCta')}
                 </h2>
@@ -1086,7 +1096,7 @@ export function ProgressCTA({ onNavigate, weightHistory }: {
                 </p>
                 <span style={{
                     alignSelf: 'flex-start',
-                    padding: '8px 18px', borderRadius: 999,
+                    padding: pillPad, borderRadius: 999,
                     background: goldGradient, color: t.onPrimaryFixed,
                     fontFamily: t.body, fontSize: 12, fontWeight: 600,
                     letterSpacing: '0.04em', textTransform: 'uppercase',

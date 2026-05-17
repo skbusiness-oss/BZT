@@ -79,7 +79,7 @@ export const ManageCourseModal = ({ course, categories, maxOrder, onSave, onClos
 
     return (
         <div className="fixed inset-0 bg-surface/90 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-200 p-4">
-            <div className="bg-surface-container-low p-8 rounded-2xl max-w-lg w-full mx-4 animate-in zoom-in-95 duration-200 ghost-border shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="bg-surface-container-high p-8 rounded-2xl max-w-lg w-full mx-4 animate-in zoom-in-95 duration-200 border border-outline-variant/40 shadow-2xl max-h-[90vh] overflow-y-auto">
                 <div className="flex items-center justify-between mb-2">
                     <div>
                         <span className="text-[10px] font-headline font-bold uppercase tracking-[0.3em] text-primary block mb-1">Academy</span>

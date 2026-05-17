@@ -111,7 +111,7 @@ export const Diets = () => {
                                 {profile ? (t('dietProfileSaved') ?? 'Your plan') : (t('dietCalculatorEyebrow') ?? 'Calculator')}
                             </span>
                         </div>
-                        <h2 className="font-headline font-extrabold text-[26px] md:text-[30px] tracking-tight leading-tight mb-2" style={{ color: '#fff', textShadow: '0 2px 12px rgba(0,0,0,0.5)' }}>
+                        <h2 className="font-headline font-extrabold text-[26px] md:text-[30px] tracking-tight leading-tight mb-2" style={{ color: '#fff', textShadow: '0 1px 3px rgba(0,0,0,0.45)' }}>
                             {profile
                                 ? (t('dietRecalculatePrompt') ?? 'Update your targets')
                                 : (t('dietCalculatePrompt') ?? 'Calculate my plan')
@@ -168,7 +168,7 @@ export const Diets = () => {
                                     {t('activePlanEyebrow') ?? 'Your active plan'}
                                 </span>
                             </div>
-                            <h2 className="font-headline font-extrabold text-[22px] md:text-[26px] tracking-tight leading-tight mb-1.5 truncate" style={{ color: '#fff', textShadow: '0 2px 12px rgba(0,0,0,0.5)' }}>
+                            <h2 className="font-headline font-extrabold text-[22px] md:text-[26px] tracking-tight leading-tight mb-1.5 truncate" style={{ color: '#fff', textShadow: '0 1px 3px rgba(0,0,0,0.45)' }}>
                                 {tPlanName(activePlan?.name ?? assignedSnapshot?.name ?? assignedDietId ?? '', lang, t('mealsWord'))}
                             </h2>
                             <p className="text-[13px] font-body leading-relaxed" style={{ color: 'rgba(255,255,255,0.85)' }}>

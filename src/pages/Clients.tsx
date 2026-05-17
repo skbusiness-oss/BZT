@@ -420,7 +420,7 @@ export const Clients = () => {
             {/* Manage Client Modal (existing) */}
             {showRoleModal && selectedClient && (
                 <div className="fixed inset-0 bg-surface/90 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-200">
-                    <div className="bg-surface-container-low p-8 rounded-2xl max-w-sm w-full mx-4 animate-in zoom-in-95 duration-200 ghost-border shadow-2xl">
+                    <div className="bg-surface-container-high p-8 rounded-2xl max-w-sm w-full mx-4 animate-in zoom-in-95 duration-200 ghost-border shadow-2xl">
                         <div className="flex items-center justify-between mb-8">
                             <h2 className="text-2xl font-headline font-bold text-on-surface">{t('manageClient') ?? 'Manage'}</h2>
                             <button onClick={() => { setShowRoleModal(false); setSelectedClient(null); }} className="text-on-surface/50 hover:text-on-surface transition-colors p-2 rounded-full hover:bg-surface-container-highest">

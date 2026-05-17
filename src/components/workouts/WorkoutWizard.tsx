@@ -215,10 +215,10 @@ export const WorkoutWizard = ({ targetUserId, onAssigned }: WorkoutWizardProps =
                                     )}>
                                         <GoalIcon className={`text-${color}-200`} size={20} />
                                     </div>
-                                    <h3 className="font-bold text-white text-sm" style={{ textShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>
+                                    <h3 className="font-bold text-white text-sm">
                                         {ctx.emoji} {isAr ? ctx.labelAr : ctx.label}
                                     </h3>
-                                    <p className="text-[11px] text-white/85 mt-1 line-clamp-2" style={{ textShadow: '0 1px 3px rgba(0,0,0,0.5)' }}>
+                                    <p className="text-[11px] text-white/85 mt-1 line-clamp-2">
                                         {isAr ? desc.descAr : desc.desc}
                                     </p>
                                 </div>

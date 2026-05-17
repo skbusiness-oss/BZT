@@ -358,7 +358,7 @@ export const VideoLibrary = () => {
                 </p>
 
                 {/* Tab bar */}
-                <div className="flex items-center gap-1 bg-surface-container-low rounded-full p-1.5 w-fit mb-8 overflow-x-auto no-scrollbar">
+                <div className="flex items-center gap-1 bg-surface-container-low rounded-full p-2 w-fit mb-8 overflow-x-auto no-scrollbar">
                     {TABS.map(tab => (
                         <button
                             key={tab.id}
@@ -701,8 +701,8 @@ export const VideoLibrary = () => {
                                         <>
                                             {cat.icon && <span className="text-base">{cat.icon}</span>}
                                             <span className="flex-1 text-sm font-body text-on-surface">{cat.name}</span>
-                                            <button onClick={() => { setEditingCat(cat); setEditingCatName(cat.name); }} className="p-1.5 rounded-lg text-on-surface-variant hover:text-primary transition-colors"><Edit2 size={13} /></button>
-                                            <button onClick={() => handleArchiveCategory(cat)} className="p-1.5 rounded-lg text-on-surface-variant hover:text-red-400 transition-colors"><Trash2 size={13} /></button>
+                                            <button onClick={() => { setEditingCat(cat); setEditingCatName(cat.name); }} className="min-w-9 min-h-9 p-2 rounded-lg text-on-surface-variant hover:text-primary hover:bg-surface-container-highest/50 transition-colors flex items-center justify-center" aria-label="Edit category"><Edit2 size={14} /></button>
+                                            <button onClick={() => handleArchiveCategory(cat)} className="min-w-9 min-h-9 p-2 rounded-lg text-on-surface-variant hover:text-red-400 hover:bg-red-500/10 transition-colors flex items-center justify-center" aria-label="Archive category"><Trash2 size={14} /></button>
                                         </>
                                     )}
                                 </div>
@@ -752,8 +752,8 @@ export const VideoLibrary = () => {
                                         <p className="text-[10px] text-on-surface-variant">{video.category}</p>
                                     </div>
                                     <div className="flex gap-1 shrink-0">
-                                        <button onClick={e => handleEditClick(video, e)} className="p-1.5 rounded-lg text-on-surface-variant hover:text-primary transition-colors"><Edit2 size={13} /></button>
-                                        <button onClick={e => handleDeleteClick(video, e)} className="p-1.5 rounded-lg text-on-surface-variant hover:text-red-400 transition-colors"><Trash2 size={13} /></button>
+                                        <button onClick={e => handleEditClick(video, e)} className="min-w-9 min-h-9 p-2 rounded-lg text-on-surface-variant hover:text-primary hover:bg-surface-container-highest/50 transition-colors flex items-center justify-center" aria-label="Edit video"><Edit2 size={14} /></button>
+                                        <button onClick={e => handleDeleteClick(video, e)} className="min-w-9 min-h-9 p-2 rounded-lg text-on-surface-variant hover:text-red-400 hover:bg-red-500/10 transition-colors flex items-center justify-center" aria-label="Delete video"><Trash2 size={14} /></button>
                                     </div>
                                 </div>
                             ))}
@@ -786,7 +786,7 @@ export const VideoLibrary = () => {
             {/* ── Legacy Add Video Modal ────────────────────────────────────── */}
             {showAddModal && (
                 <div className="fixed inset-0 bg-surface/90 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-200 p-4">
-                    <div className="bg-surface-container-low p-8 rounded-2xl max-w-2xl w-full mx-4 animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto ghost-border">
+                    <div className="bg-surface-container-high p-8 rounded-2xl max-w-2xl w-full mx-4 animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto ghost-border shadow-2xl">
                         <div className="flex items-center justify-between mb-6">
                             <h2 className="text-2xl font-headline font-bold text-on-surface">{editingVideoId ? 'Edit Video' : 'Add Video'}</h2>
                             <button onClick={() => { setShowAddModal(false); setRawInput(''); setEditingVideoId(null); setSaveError(null); }} className="text-on-surface/50 hover:text-on-surface p-2 rounded-full hover:bg-surface-container-highest transition-colors"><X size={20} /></button>
@@ -856,7 +856,7 @@ export const VideoLibrary = () => {
             {/* ── Legacy Category Modal ─────────────────────────────────────── */}
             {showCategoryModal && (
                 <div className="fixed inset-0 bg-surface/90 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-200 p-4">
-                    <div className="bg-surface-container-low p-8 max-w-sm w-full mx-4 rounded-2xl animate-in zoom-in-95 duration-200 ghost-border shadow-2xl">
+                    <div className="bg-surface-container-high p-8 max-w-sm w-full mx-4 rounded-2xl animate-in zoom-in-95 duration-200 ghost-border shadow-2xl">
                         <div className="flex items-center justify-between mb-6">
                             <h2 className="text-2xl font-headline font-bold text-on-surface">Add Category</h2>
                             <button onClick={() => setShowCategoryModal(false)} className="text-on-surface/50 hover:text-on-surface p-2 rounded-full hover:bg-surface-container-highest transition-colors"><X size={20} /></button>
