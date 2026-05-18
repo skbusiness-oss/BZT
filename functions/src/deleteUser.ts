@@ -22,6 +22,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore';
 import * as crypto from 'crypto';
+import { throttle } from './rateLimit';
 
 async function callerIsCoach(uid: string | undefined): Promise<boolean> {
     if (!uid) return false;
@@ -291,6 +292,10 @@ export const deleteUser = onCall(
     async (request) => {
         const callerUid = request.auth?.uid;
         if (!callerUid) throw new HttpsError('unauthenticated', 'Sign in required.');
+        // Deletes are heavyweight (cascade across multiple collections).
+        // Cap at 10/min/caller — even an aggressive cleanup run shouldn't
+        // exceed that, and a compromised admin token can't loop deletions.
+        await throttle(callerUid, 'deleteUser', { maxPerWindow: 10, windowSec: 60 });
         const callerClaims = (await getAuth().getUser(callerUid)).customClaims as { role?: string } | undefined;
         const callerClaimRole = callerClaims?.role ?? null;
         if (!(await callerIsCoach(callerUid))) {

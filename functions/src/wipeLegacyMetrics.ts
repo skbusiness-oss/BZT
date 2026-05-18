@@ -112,10 +112,11 @@ export const wipeLegacyMetrics = onCall(
             );
         }
 
-        const { targetUid, all, clearWeightAnchors } = (request.data ?? {}) as {
+        const { targetUid, all, clearWeightAnchors, confirmAdminEmail } = (request.data ?? {}) as {
             targetUid?: string;
             all?: boolean;
             clearWeightAnchors?: boolean;
+            confirmAdminEmail?: string;
         };
         if (!all && !targetUid) {
             throw new HttpsError(
@@ -128,6 +129,30 @@ export const wipeLegacyMetrics = onCall(
                 'invalid-argument',
                 'Specify `all` OR `targetUid`, not both.',
             );
+        }
+
+        // Extra friction for the destructive all-users path. A hijacked
+        // session token alone is not enough — the attacker would also
+        // need to know the admin's email address (which IS public
+        // information, so this is one extra speedbump, not a hard
+        // defense. Real defense is 2FA on the admin Auth account +
+        // password-manager-only credentials, both manual-action items
+        // tracked separately).
+        if (all) {
+            if (!confirmAdminEmail || typeof confirmAdminEmail !== 'string') {
+                throw new HttpsError(
+                    'invalid-argument',
+                    'wipeLegacyMetrics({all: true}) requires `confirmAdminEmail` matching the caller.',
+                );
+            }
+            const callerAuth = await getAuth().getUser(callerUid);
+            const callerEmail = (callerAuth.email ?? '').toLowerCase();
+            if (!callerEmail || callerEmail !== confirmAdminEmail.trim().toLowerCase()) {
+                throw new HttpsError(
+                    'permission-denied',
+                    'confirmAdminEmail does not match the calling admin account.',
+                );
+            }
         }
 
         const db = getFirestore();
@@ -163,6 +188,26 @@ export const wipeLegacyMetrics = onCall(
                 totals[k] = (totals[k] ?? 0) + v;
             }
         }
+
+        // Audit log entry. Records the destructive operation against
+        // every user touched so a future "wait, who wiped X?" question
+        // has a paper trail. Best-effort write — does NOT fail the
+        // wipe if logging itself fails (the wipe already happened).
+        try {
+            await db.collection('auditLog').add({
+                action: 'wipeLegacyMetrics',
+                actorUid: callerUid,
+                scope: 'all',
+                affectedUserCount: results.length,
+                totals,
+                weightAnchorsCleared: wipeAnchors,
+                createdAt: FieldValue.serverTimestamp(),
+            });
+        } catch (err) {
+            // eslint-disable-next-line no-console
+            console.warn('[auditLog/wipeLegacyMetrics] write failed:', err);
+        }
+
         return {
             ok: true,
             count: results.length,

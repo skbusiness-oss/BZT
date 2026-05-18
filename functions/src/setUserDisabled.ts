@@ -14,6 +14,7 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { throttle } from './rateLimit';
 
 async function callerIsCoach(uid: string | undefined): Promise<boolean> {
     if (!uid) return false;
@@ -29,6 +30,7 @@ export const setUserDisabled = onCall(
     async (request) => {
         const callerUid = request.auth?.uid;
         if (!callerUid) throw new HttpsError('unauthenticated', 'Sign in required.');
+        await throttle(callerUid, 'setUserDisabled', { maxPerWindow: 20, windowSec: 60 });
         const callerClaims = (await getAuth().getUser(callerUid)).customClaims as { role?: string } | undefined;
         const callerClaimRole = callerClaims?.role ?? null;
         if (!(await callerIsCoach(callerUid))) {
@@ -62,6 +64,21 @@ export const setUserDisabled = onCall(
         if (disabled) {
             await getAuth().revokeRefreshTokens(targetUid);
         }
+
+        // 1a. Custom claim so Firestore rules can deny reads in zero
+        //     Firestore-get() cost. Previously the rule helper
+        //     `isActive()` did a get(users/{uid}) on every read, which
+        //     was removed entirely earlier today because it was the
+        //     suspected culprit in a rules-eval failure. The claim
+        //     approach is cheaper (no read) AND more reliable (read by
+        //     the SDK directly from the token). Re-merge with existing
+        //     role claim so we don't wipe role:'coach' etc.
+        const existingClaims =
+            ((await getAuth().getUser(targetUid)).customClaims as { role?: string; disabled?: boolean }) ?? {};
+        await getAuth().setCustomUserClaims(targetUid, {
+            ...existingClaims,
+            disabled: disabled || undefined, // undefined removes the key on re-enable
+        });
 
         // 2. Firestore mirror (for UI / coach-side queries / audit)
         await getFirestore().doc(`users/${targetUid}`).set(

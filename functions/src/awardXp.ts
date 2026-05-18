@@ -12,6 +12,7 @@ import {
     getFirestore, FieldValue, Timestamp,
     Firestore, Transaction,
 } from 'firebase-admin/firestore';
+import { throttle } from './rateLimit';
 
 // --- Constants (mirror src/lib/activityScore.ts) ---
 const XP_TABLE: Record<string, number> = {
@@ -144,6 +145,12 @@ export const awardXp = onCall(
     async (request) => {
         const uid = request.auth?.uid;
         if (!uid) throw new HttpsError('unauthenticated', 'Sign in required.');
+        // Generous — legitimate XP credits fire after check-in submit,
+        // lesson complete, post create, etc. 60/min is well above any
+        // real-user pace, hard stop for a scripted XP-farming attempt
+        // (idempotency already prevents successful farming, but each
+        // attempt still costs Firestore reads).
+        await throttle(uid, 'awardXp', { maxPerWindow: 60, windowSec: 60 });
 
         const data = request.data as { source?: string; sourceId?: string } | undefined;
         const source = data?.source;

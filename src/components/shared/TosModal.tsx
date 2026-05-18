@@ -39,11 +39,14 @@ export const TosModal = () => {
         try { localStorage.setItem(tosAcceptedKey(user.id), new Date().toISOString()); } catch { /* private mode */ }
         try {
             await updateDoc(doc(db, 'users', user.id), {
-                // Client ISO string — set immediately, no waiting for the
-                // serverTimestamp() sentinel to resolve. The optional server
-                // timestamp below is for analytics / dispute resolution only.
-                tosAcceptedAt: new Date().toISOString(),
-                tosAcceptedAtServer: serverTimestamp(),
+                // serverTimestamp() — resolved to request.time on the
+                // server. Previously this was `new Date().toISOString()`
+                // (client clock) which the firestore.rules layer now
+                // rejects because a client can back-date the acceptance
+                // via a direct REST write. AuthContext.tsToIso handles
+                // the Firestore Timestamp object so the UI still reads
+                // it as an ISO string downstream.
+                tosAcceptedAt: serverTimestamp(),
                 tosVersion: TOS_VERSION,
             });
             // The onSnapshot in AuthContext will pick up the change and

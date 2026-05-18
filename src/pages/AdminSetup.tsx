@@ -177,6 +177,15 @@ export const AdminSetup = () => {
                 </section>
             )}
 
+            {/* ── Forward old admin-addressed messages to coach ───────
+                One-shot data fix for messages sent BEFORE the team-
+                routing fix (every client message went to admin because
+                of a `limit(1)` lookup that picked admin first). Creates
+                a duplicate of each admin-addressed message addressed to
+                the coach. Idempotent — re-running skips messages already
+                forwarded. */}
+            <ForwardMessagesSection />
+
             {/* ── Wipe legacy metrics ───────────────────────────────────
                 Destructive one-shot to clear every user's selfLogs /
                 weighIns / metrics / xpEvents subcollections plus the
@@ -189,6 +198,97 @@ export const AdminSetup = () => {
     );
 };
 
+function ForwardMessagesSection() {
+    // Pre-filled with the two UIDs that prompted this feature, but both
+    // are editable in case the team composition changes later.
+    const [fromUid, setFromUid] = useState('ITc4VlP0PNeNUetjNxpEyGJOpW32');
+    const [toUid, setToUid] = useState('Y9DlGI9kF6dPFPBh4cDvMnxbayB3');
+    const [running, setRunning] = useState(false);
+    const [result, setResult] = useState<string | null>(null);
+    const [error, setError] = useState<string | null>(null);
+
+    const handleRun = async () => {
+        if (!fromUid.trim() || !toUid.trim() || running) return;
+        setRunning(true);
+        setResult(null);
+        setError(null);
+        try {
+            const fn = httpsCallable<
+                { fromUid: string; toUid: string },
+                { ok: boolean; forwardedCount: number; skippedAlreadyForwardedCount: number; sourceTotal: number }
+            >(functions, 'forwardMessagesToCoach');
+            const res = await fn({ fromUid: fromUid.trim(), toUid: toUid.trim() });
+            setResult(JSON.stringify(res.data, null, 2));
+        } catch (e: unknown) {
+            const code = (e as { code?: string })?.code ?? '(no code)';
+            const msg = e instanceof Error ? e.message : String(e);
+            setError(`[${code}] ${msg}`);
+            // eslint-disable-next-line no-console
+            console.error('[forwardMessagesToCoach] failed:', code, e);
+        } finally {
+            setRunning(false);
+        }
+    };
+
+    return (
+        <section className="bg-surface-container-low rounded-2xl p-8 ghost-border">
+            <span className="font-label text-[10px] font-bold uppercase tracking-widest text-primary block mb-2">
+                One-shot data fix · Admin only
+            </span>
+            <h2 className="text-2xl font-headline font-bold text-on-surface mb-2">Forward old admin messages to coach</h2>
+            <p className="text-sm font-body text-on-surface/60 mb-5">
+                Re-routes every message whose receiver is the <code>FROM</code> UID, creating a
+                duplicate addressed to the <code>TO</code> UID. Used after the team-routing fix
+                so coach Zaki can see historical client conversations that landed in admin's
+                inbox by mistake. Idempotent — safe to re-run.
+            </p>
+
+            <div className="space-y-4 max-w-md">
+                <div>
+                    <label className="block text-[10px] font-label font-bold text-on-surface/60 uppercase tracking-widest mb-2">
+                        FROM UID (currently receiving)
+                    </label>
+                    <input
+                        type="text"
+                        value={fromUid}
+                        onChange={e => setFromUid(e.target.value)}
+                        className="w-full bg-surface-container-lowest border-none outline-none focus:ring-1 focus:ring-primary/40 rounded-xl px-4 py-3 text-sm font-mono text-on-surface"
+                    />
+                </div>
+                <div>
+                    <label className="block text-[10px] font-label font-bold text-on-surface/60 uppercase tracking-widest mb-2">
+                        TO UID (should also receive)
+                    </label>
+                    <input
+                        type="text"
+                        value={toUid}
+                        onChange={e => setToUid(e.target.value)}
+                        className="w-full bg-surface-container-lowest border-none outline-none focus:ring-1 focus:ring-primary/40 rounded-xl px-4 py-3 text-sm font-mono text-on-surface"
+                    />
+                </div>
+                <button
+                    type="button"
+                    onClick={handleRun}
+                    disabled={!fromUid.trim() || !toUid.trim() || running}
+                    className="w-full px-4 py-3 rounded-xl text-sm font-bold uppercase tracking-widest transition-all gold-gradient text-on-primary disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                    {running ? 'Forwarding…' : 'Forward messages'}
+                </button>
+                {result && (
+                    <pre className="text-xs font-mono text-on-surface bg-surface-container-lowest rounded-xl p-4 overflow-auto">
+                        {result}
+                    </pre>
+                )}
+                {error && (
+                    <div className="text-xs font-mono text-red-400 bg-red-500/10 border border-red-500/30 rounded-xl p-4">
+                        {error}
+                    </div>
+                )}
+            </div>
+        </section>
+    );
+}
+
 /**
  * Admin-only "Wipe All Legacy Metrics" section. Requires the admin to
  * type the literal word WIPE to enable the destructive button, then
@@ -197,24 +297,40 @@ export const AdminSetup = () => {
  * the click.
  */
 function WipeLegacyMetricsSection() {
+    const { user } = useAuth();
     const [confirm, setConfirm] = useState('');
+    const [emailConfirm, setEmailConfirm] = useState('');
     const [clearAnchors, setClearAnchors] = useState(true);
     const [running, setRunning] = useState(false);
     const [result, setResult] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
 
+    // Both gates must pass:
+    //  - Type WIPE (existing speedbump)
+    //  - Type the caller's own email (matches the server-side
+    //    confirmAdminEmail check in functions/src/wipeLegacyMetrics.ts)
+    const callerEmail = user?.email?.trim().toLowerCase() ?? '';
+    const emailMatches = !!callerEmail && emailConfirm.trim().toLowerCase() === callerEmail;
+    const canWipe = confirm === 'WIPE' && emailMatches && !running;
+
     const handleWipe = async () => {
-        if (confirm !== 'WIPE') return;
+        if (!canWipe) return;
         setRunning(true);
         setResult(null);
         setError(null);
         try {
-            const fn = httpsCallable<{ all: boolean; clearWeightAnchors: boolean }, {
-                ok: boolean; count: number; totals: Record<string, number>; weightAnchorsCleared: boolean;
-            }>(functions, 'wipeLegacyMetrics');
-            const res = await fn({ all: true, clearWeightAnchors: clearAnchors });
+            const fn = httpsCallable<
+                { all: boolean; clearWeightAnchors: boolean; confirmAdminEmail: string },
+                { ok: boolean; count: number; totals: Record<string, number>; weightAnchorsCleared: boolean }
+            >(functions, 'wipeLegacyMetrics');
+            const res = await fn({
+                all: true,
+                clearWeightAnchors: clearAnchors,
+                confirmAdminEmail: emailConfirm.trim(),
+            });
             setResult(JSON.stringify(res.data, null, 2));
             setConfirm('');
+            setEmailConfirm('');
         } catch (e: unknown) {
             const code = (e as { code?: string })?.code ?? '(no code)';
             const msg = e instanceof Error ? e.message : String(e);
@@ -270,14 +386,31 @@ function WipeLegacyMetricsSection() {
                     />
                 </div>
 
+                <div>
+                    <label className="block text-[10px] font-label font-bold text-on-surface/60 uppercase tracking-widest mb-2">
+                        Type your admin email to authorize
+                    </label>
+                    <input
+                        type="email"
+                        value={emailConfirm}
+                        onChange={e => setEmailConfirm(e.target.value)}
+                        placeholder={callerEmail || 'your-email@example.com'}
+                        autoComplete="off"
+                        className="w-full bg-surface-container-lowest border-none outline-none focus:ring-1 focus:ring-red-500/50 rounded-xl px-4 py-3 text-sm font-body text-on-surface placeholder-on-surface/30"
+                    />
+                    <p className="text-[10px] text-on-surface/40 mt-1 font-body">
+                        Server requires this match the signed-in admin. A hijacked session token alone won't pass this check.
+                    </p>
+                </div>
+
                 <button
                     type="button"
                     onClick={handleWipe}
-                    disabled={confirm !== 'WIPE' || running}
+                    disabled={!canWipe}
                     className="w-full px-4 py-3 rounded-xl text-sm font-bold uppercase tracking-widest transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                     style={{
-                        background: confirm === 'WIPE' && !running ? 'rgb(220 38 38)' : 'rgb(220 38 38 / 0.25)',
-                        color: confirm === 'WIPE' && !running ? '#fff' : 'rgb(220 38 38 / 0.6)',
+                        background: canWipe ? 'rgb(220 38 38)' : 'rgb(220 38 38 / 0.25)',
+                        color: canWipe ? '#fff' : 'rgb(220 38 38 / 0.6)',
                     }}
                 >
                     {running ? 'Wiping…' : 'Wipe All Legacy Metrics'}

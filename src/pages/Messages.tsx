@@ -5,7 +5,7 @@ import { useData } from '../context/DataContext';
 import { useLanguage } from '../context/LanguageContext';
 import { Send, MessageSquare, ArrowLeft } from 'lucide-react';
 import { db } from '../lib/firebase';
-import { collection, query, where, getDocs, limit } from 'firebase/firestore';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 import { tsToDate, tsToMillis } from '../lib/firestoreTime';
 
 export const Messages = () => {
@@ -14,36 +14,72 @@ export const Messages = () => {
     const { t } = useLanguage();
     const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
     const [text, setText] = useState('');
+    const [sending, setSending] = useState(false);
+    const [sendError, setSendError] = useState<string | null>(null);
     const chatEndRef = useRef<HTMLDivElement>(null);
 
     const isCoach = user?.role === 'coach' || user?.role === 'admin';
 
-    // For client role — resolve their assigned coach
-    const [coachId, setCoachId] = useState<string | null>(null);
+    // For client / community role — resolve the FULL coaching team so the
+    // client can pick which member to message. Previously this used a
+    // `limit(1)` lookup against the `users` collection, which arbitrarily
+    // returned the first match (usually the admin) and made the actual
+    // coach unreachable. We now query `publicProfiles` (readable by all
+    // signed-in users; the `users` collection is restricted to owner +
+    // coach reads so community/client users can't list it).
+    interface TeamMember { uid: string; name: string; role: 'coach' | 'admin' }
+    const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
     const clientDoc = clients.find(c => c.userId === user?.id);
 
     useEffect(() => {
-        if (!isCoach && user) {
-            // Prefer the coachId stored on the client document
-            if (clientDoc?.coachId) {
-                setCoachId(clientDoc.coachId);
-            } else {
-                // Fallback: query for any user with role 'coach' or 'admin'
-                const q = query(collection(db, 'users'), where('role', 'in', ['coach', 'admin']), limit(1));
-                getDocs(q).then(snap => {
-                    if (!snap.empty) setCoachId(snap.docs[0].id);
-                });
-            }
-        }
-    }, [isCoach, user, clientDoc?.coachId]);
+        if (isCoach || !user) return;
+        const q = query(
+            collection(db, 'publicProfiles'),
+            where('role', 'in', ['coach', 'admin']),
+        );
+        getDocs(q).then(snap => {
+            const members: TeamMember[] = snap.docs
+                .map(d => {
+                    const data = d.data() as { name?: string; displayName?: string; role?: string };
+                    const role = (data.role as 'coach' | 'admin') ?? 'coach';
+                    // publicProfiles docs may not have `name` yet (the
+                    // existing setUserRole / awardXp Cloud Functions
+                    // never wrote it — known gap, tracked separately).
+                    // Until the function-side write lands, fall back to
+                    // a role-based label so the tile is at least
+                    // distinguishable from the others.
+                    const fallback = role === 'coach' ? 'Coach Zaki' : 'Admin';
+                    return {
+                        uid: d.id,
+                        name: data.name ?? data.displayName ?? fallback,
+                        role,
+                    };
+                })
+                // Coach first, admin second — most clients want to talk
+                // to the coach by default; admin is for billing/access.
+                .sort((a, b) => (a.role === 'coach' ? -1 : 1) - (b.role === 'coach' ? -1 : 1));
+            setTeamMembers(members);
+        }).catch((err) => {
+            // eslint-disable-next-line no-console
+            console.error('[Messages] team lookup failed:', err);
+        });
+    }, [isCoach, user]);
 
-    // Auto-select conversation for client
+    // Auto-select FIRST team member (prefers coach via the sort above)
+    // OR the client's assigned coach if set. Avoids the surprise where
+    // the client opens /messages and sees an empty conversation despite
+    // having a clear default thread to land in.
     useEffect(() => {
-        if (!isCoach && user && coachId) {
-            setSelectedUserId(coachId);
-            markMessagesRead(user.id, coachId);
+        if (isCoach || !user || selectedUserId) return;
+        const preferred = clientDoc?.coachId
+            ?? teamMembers.find(m => m.role === 'coach')?.uid
+            ?? teamMembers[0]?.uid
+            ?? null;
+        if (preferred) {
+            setSelectedUserId(preferred);
+            markMessagesRead(user.id, preferred);
         }
-    }, [isCoach, user, coachId]);
+    }, [isCoach, user, clientDoc?.coachId, teamMembers, selectedUserId, markMessagesRead]);
 
     // Deep-link support: `/messages?to=<userId>` pre-selects a conversation.
     // Used by the "Message client" button on CoachReview so a coach can jump
@@ -72,15 +108,22 @@ export const Messages = () => {
 
     if (!user) return null;
 
-    // If client and coach hasn't been found yet
-    if (!isCoach && !coachId) return (
+    // If client and team hasn't been resolved yet
+    if (!isCoach && teamMembers.length === 0) return (
         <div className="flex items-center justify-center h-64 text-on-surface/50 font-body">
             <MessageSquare className="mr-3 opacity-30" size={24} />
             {t('lookingForCoach')}
         </div>
     );
 
-    // Conversation contacts
+    // Conversation contacts.
+    //   - Coach/admin: one contact per coaching client (existing behavior).
+    //   - Client/community: one contact per team member (coach + admin)
+    //     so they can choose who to message. Previously the contact list
+    //     was empty for non-coach users — they were silently auto-routed
+    //     to a single arbitrary recipient (the first admin/coach the
+    //     `users` query returned), which is what hid Coach Zack and
+    //     made messages appear lost.
     const contacts = isCoach
         ? clients.map(c => {
             const unread = messages.filter(m => m.senderId === c.userId && m.receiverId === user.id && !m.read).length;
@@ -92,14 +135,39 @@ export const Messages = () => {
             if (a.unread !== b.unread) return b.unread - a.unread;
             return tsToMillis(b.lastMsg?.timestamp) - tsToMillis(a.lastMsg?.timestamp);
         })
-        : [];
+        : teamMembers.map(m => {
+            const unread = messages.filter(x => x.senderId === m.uid && x.receiverId === user.id && !x.read).length;
+            const lastMsg = [...messages].filter(x =>
+                (x.senderId === user.id && x.receiverId === m.uid) || (x.senderId === m.uid && x.receiverId === user.id)
+            ).sort((a, b) => tsToMillis(b.timestamp) - tsToMillis(a.timestamp))[0];
+            // `category` is a coach-side concept; reuse the role label so
+            // the existing contact-tile renderer (which colors-by-category)
+            // doesn't crash on an undefined value.
+            return { userId: m.uid, name: m.name, unread, lastMsg, category: m.role as unknown as typeof clients[number]['category'] };
+        }).sort((a, b) => {
+            if (a.unread !== b.unread) return b.unread - a.unread;
+            return tsToMillis(b.lastMsg?.timestamp) - tsToMillis(a.lastMsg?.timestamp);
+        });
 
     const conversation = selectedUserId ? getConversation(user.id, selectedUserId) : [];
 
-    const handleSend = () => {
-        if (!text.trim() || !selectedUserId) return;
-        sendMessage(user.id, selectedUserId, user.name, text.trim());
-        setText('');
+    const handleSend = async () => {
+        if (!text.trim() || !selectedUserId || sending) return;
+        const body = text.trim();
+        setSending(true);
+        setSendError(null);
+        try {
+            await sendMessage(user.id, selectedUserId, user.name, body);
+            setText('');
+        } catch (err) {
+            const code = (err as { code?: string })?.code ?? '(no code)';
+            const msg = err instanceof Error ? err.message : 'Failed to send.';
+            setSendError(`[${code}] ${msg}`);
+            // eslint-disable-next-line no-console
+            console.error('[Messages.handleSend] failed:', code, err);
+        } finally {
+            setSending(false);
+        }
     };
 
     const formatTime = (ts: unknown) => {
@@ -111,15 +179,29 @@ export const Messages = () => {
         return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ', ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
     };
 
-    const selectedName = isCoach
-        ? contacts.find(c => c.userId === selectedUserId)?.name ?? 'Unknown'
-        : t('yourCoach');
+    // Resolve the displayed name from the contact list (which now includes
+    // team members for non-coach users too — see contacts derivation
+    // above). Falls back to the legacy "Your coach" label only when the
+    // contact list lookup misses (e.g., team query still in flight).
+    const selectedName = contacts.find(c => c.userId === selectedUserId)?.name
+        ?? (isCoach ? 'Unknown' : t('yourCoach'));
 
     return (
         <div className="flex h-[calc(100vh-120px)] md:h-[calc(100vh-80px)] gap-0 md:gap-6 animate-in fade-in duration-500 max-w-6xl mx-auto w-full pt-4 pb-20 md:pb-4">
 
-            {/* Contact List (Coach only, or hidden when chat is selected on mobile) */}
-            {isCoach && (
+            {/* Contact List.
+                - Coach/admin: one tile per coaching client.
+                - Client/community: one tile per team member (coach + admin).
+                  Previously hidden for non-coach users, which forced the
+                  auto-select to a single arbitrary recipient. Now visible
+                  so the client can choose. The tile renderer below is
+                  shared between both modes — the `category` field on each
+                  contact carries either a coaching category (orange/blue/
+                  purple) for coaches' view, or the team-member role for
+                  clients' view.
+                Hidden on mobile when a conversation is already open so
+                the chat takes the full screen. */}
+            {contacts.length > 0 && (
                 <div className={`${selectedUserId ? 'hidden md:flex' : 'flex'} flex-col w-full md:w-80 shrink-0 bg-surface-container-low rounded-2xl ghost-border overflow-hidden`}>
                     <div className="p-6 bg-surface-container/50 border-b border-outline-variant/30">
                         <span className="font-label text-[10px] uppercase tracking-widest text-primary font-bold block mb-2">Inbox</span>
@@ -143,7 +225,11 @@ export const Messages = () => {
                                     <div className="flex items-center justify-between mb-1">
                                         <span className="text-on-surface font-headline font-bold text-sm truncate">{c.name}</span>
                                         {c.unread > 0 && (
-                                            <span className="px-2 py-0.5 rounded-full bg-primary text-on-primary font-label text-[10px] font-bold uppercase tracking-widest flex items-center justify-center shrink-0">
+                                            <span
+                                                className="px-2.5 py-1 rounded-full bg-primary text-on-primary font-label text-[10px] font-bold uppercase tracking-widest flex items-center justify-center shrink-0 bzt-pulse-soft"
+                                                style={{ animation: 'bzt-pulse-soft 1.6s cubic-bezier(0.16, 1, 0.3, 1) infinite' }}
+                                                aria-label={`${c.unread} unread message${c.unread === 1 ? '' : 's'}`}
+                                            >
                                                 {c.unread} NEW
                                             </span>
                                         )}
@@ -215,18 +301,27 @@ export const Messages = () => {
 
                         {/* Input */}
                         <div className="p-4 bg-surface-container/50 border-t border-outline-variant/30">
+                            {sendError && (
+                                <div
+                                    role="alert"
+                                    className="mb-3 px-4 py-2.5 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-[13px] font-body"
+                                >
+                                    {sendError}
+                                </div>
+                            )}
                             <div className="flex gap-3">
                                 <input
                                     type="text"
                                     value={text}
                                     onChange={e => setText(e.target.value)}
-                                    onKeyDown={e => e.key === 'Enter' && handleSend()}
+                                    onKeyDown={e => { if (e.key === 'Enter') void handleSend(); }}
                                     placeholder={t('typeMessage')}
-                                    className="flex-1 bg-surface-container-lowest rounded-full px-6 py-4 text-sm font-body text-on-surface placeholder-on-surface/30 border-none outline-none focus:ring-1 focus:ring-primary/30"
+                                    disabled={sending}
+                                    className="flex-1 bg-surface-container-lowest rounded-full px-6 py-4 text-sm font-body text-on-surface placeholder-on-surface/30 border-none outline-none focus:ring-1 focus:ring-primary/30 disabled:opacity-60"
                                 />
                                 <button
-                                    onClick={handleSend}
-                                    disabled={!text.trim()}
+                                    onClick={() => void handleSend()}
+                                    disabled={!text.trim() || sending}
                                     className="w-14 h-14 rounded-full bg-gradient-to-r from-primary to-primary-container text-on-primary flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_10px_30px_rgba(230,195,100,0.3)] active:scale-95 transition-all shrink-0"
                                 >
                                     <Send size={20} className="ml-1" />
