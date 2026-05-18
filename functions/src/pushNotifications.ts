@@ -204,5 +204,46 @@ export const onCheckInReviewed = onDocumentUpdated(
                 requireInteraction: 'true',
             },
         });
+
+        // Belt + suspenders: also create an auto-message FROM the coach
+        // to the client. Two reasons:
+        //   1. If the FCM push above silently fails (token stale, perm
+        //      revoked, browser quirk), the client still gets visible
+        //      proof of review via the inbox + the message-created
+        //      trigger fires its own redundant push.
+        //   2. Gives the client a thread to reply with questions about
+        //      the feedback — they don't have to compose a new chat.
+        //
+        // Idempotency: deterministic message doc id keyed on the
+        // check-in id. If the trigger fires twice (Eventarc
+        // at-least-once delivery), the second .create() throws
+        // ALREADY_EXISTS, which we swallow.
+        const COACH_UID = 'Y9DlGI9kF6dPFPBh4cDvMnxbayB3';
+        const COACH_NAME = 'Coach Zaki';
+        const db = getFirestore();
+        const messageRef = db.doc(`messages/feedback-${event.params.checkInId}`);
+        const weekLabelAr = weekNumber !== null ? `الأسبوع ${weekNumber}` : 'تسجيلك';
+        const bilingualBody =
+            `Your ${weekLabel} feedback is ready — check it on your profile, ` +
+            `and reply here with any questions.\n\n` +
+            `راجع ملاحظات ${weekLabelAr} في صفحة الملف الشخصي، وإذا كانت لديك أسئلة اكتبها هنا.`;
+        try {
+            await messageRef.create({
+                senderId: COACH_UID,
+                receiverId: clientUid,
+                senderName: COACH_NAME,
+                text: bilingualBody,
+                timestamp: FieldValue.serverTimestamp(),
+                read: false,
+                kind: 'auto-feedback-review',
+                checkInId: event.params.checkInId,
+            });
+        } catch (err: unknown) {
+            // ALREADY_EXISTS = duplicate event delivery; safe to ignore.
+            const code = (err as { code?: string | number })?.code;
+            if (code !== 6 && code !== 'already-exists') {
+                throw err;
+            }
+        }
     },
 );
