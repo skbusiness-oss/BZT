@@ -34,6 +34,9 @@ export interface User {
     /** Overwritten on every weekly check-in — the LATEST weigh-in. */
     currentWeightKg?: number;
     targetWeightKg?: number;
+    /** E.164 phone number captured at week-0 intake, e.g. "+212612345678".
+     *  Used by the coach for WhatsApp / SMS follow-up. */
+    phone?: string;
     communityProfileStartedAt?: string;
     /** Snapshot of the user's last diet calculator run.
      * Set by `users/{uid}` writes from the DietWizard. Read-only on the server side
@@ -267,6 +270,9 @@ export interface Client {
     birthdate?: string;
     gender?: Gender;
     fitnessLevel?: FitnessLevel;
+    /** E.164 phone, e.g. "+212612345678". Mirrored from intakeData
+     *  for quick coach access without unpacking the intake blob. */
+    phone?: string;
 }
 
 export interface IntakeData {

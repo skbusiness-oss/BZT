@@ -193,6 +193,7 @@ export const Settings = () => {
                         goal: user.goal,
                         currentWeightKg: user.currentWeightKg,
                         targetWeightKg: user.targetWeightKg,
+                        phone: user.phone,
                     }}
                 />
             )}

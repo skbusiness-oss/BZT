@@ -391,6 +391,11 @@ export const translations = {
     reviewedByCoachZack: { en: 'Reviewed by Coach Zack', ar: 'تمت المراجعة بواسطة المدرب زاك' },
     noFeedbackYet: { en: 'No feedback yet.', ar: 'لا توجد ملاحظات بعد.' },
     dueLabel: { en: 'Due', ar: 'مطلوب' },
+    phoneLabel: { en: 'Phone number', ar: 'رقم الهاتف' },
+    phoneHelper: {
+        en: 'Used by your coach to reach you on WhatsApp / SMS. Pick your country code.',
+        ar: 'يستخدمه الكوتش للتواصل معك عبر واتساب أو الرسائل. اختر رمز دولتك.'
+    },
     submissionWindowTitle: { en: 'Weekly review window', ar: 'نافذة المراجعة الأسبوعية' },
     submissionWindowBody: {
         en: 'Submit your check-in on Friday — Coach Zaki sends feedback on Saturday. Submissions outside this window will not be reviewed.',

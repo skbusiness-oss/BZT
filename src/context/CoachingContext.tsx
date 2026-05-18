@@ -186,10 +186,13 @@ export const CoachingProvider = ({ children }: { children: ReactNode }) => {
       updatedAt: serverTimestamp(),
     };
 
-    // Persist birthdate, gender, fitnessLevel as top-level fields on the client doc
+    // Persist birthdate, gender, fitnessLevel, phone as top-level
+    // fields on the client doc so coach queries / lists can sort and
+    // display without unpacking intakeData on every read.
     if (initialData.birthdate) clientUpdate.birthdate = initialData.birthdate;
     if (initialData.gender) clientUpdate.gender = initialData.gender;
     if (initialData.fitnessLevel) clientUpdate.fitnessLevel = initialData.fitnessLevel;
+    if (initialData.phone) clientUpdate.phone = initialData.phone;
 
     await updateDoc(doc(db, 'clients', clientId), clientUpdate);
   };

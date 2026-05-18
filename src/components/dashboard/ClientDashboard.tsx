@@ -46,6 +46,7 @@ import {
     User,
     Clock,
 } from 'lucide-react';
+import { PhoneInput } from '../shared/PhoneInput';
 
 // ─── Client welcome header — editorial hero, mirrors Community shape ──────
 function getGreetingKey(): 'goodMorning' | 'goodAfternoon' | 'goodEvening' {
@@ -192,7 +193,7 @@ function ClientWelcomeHeader({
 
 export const ClientDashboard = () => {
     const { user } = useAuth();
-    const { t: tStrict } = useLanguage();
+    const { t: tStrict, lang } = useLanguage();
     const t = tStrict as unknown as (k: string) => string | undefined;
     const { clients, getClientWeeks, completeOnboarding, createProgram, uploadPhoto } = useData();
     const navigate = useNavigate();
@@ -217,6 +218,7 @@ export const ClientDashboard = () => {
         gender: '',
         fitnessLevel: 'beginner',
         mealsPerDay: '3',
+        phone: '',
     });
 
     // Photo upload state for onboarding
@@ -295,7 +297,8 @@ export const ClientDashboard = () => {
             alert(t('fillRequired'));
             return;
         }
-        if (!(formData.startingWeight && formData.height && formData.birthdate && formData.gender)) {
+        const phoneOk = formData.phone.startsWith('+') && formData.phone.replace(/\D+/g, '').length >= 7;
+        if (!(formData.startingWeight && formData.height && formData.birthdate && formData.gender && phoneOk)) {
             alert(t('fillRequired'));
             return;
         }
@@ -308,6 +311,17 @@ export const ClientDashboard = () => {
             backPhoto: photoUrls.back ?? '',
         }, photoUrls);
         createProgram(client.id, defaultTargets);
+
+        // Mirror the phone onto users/{uid} so the coach can reach the
+        // user from any surface that reads the user doc (Messages,
+        // ClientInfoPanel, etc.) without joining through the clients
+        // collection. Best-effort; intake still completes if this fails.
+        try {
+            await updateDoc(doc(db, 'users', user.id), { phone: formData.phone });
+        } catch (e) {
+            // eslint-disable-next-line no-console
+            console.error('Failed to mirror phone to user doc:', e);
+        }
 
         // 2. Compute + persist dietProfile and auto-assign the matched plan.
         //    Best-effort — if any of the diet writes fail we still let the
@@ -404,6 +418,18 @@ export const ClientDashboard = () => {
                                     ))}
                                 </div>
                             </div>
+                        </div>
+                        {/* Phone — required so the coach can reach the client */}
+                        <div>
+                            <label className="block text-[10px] font-label font-bold uppercase tracking-widest text-on-surface/60 mb-2">
+                                {t('phoneLabel')} <span className="text-red-400">*</span>
+                            </label>
+                            <PhoneInput
+                                value={formData.phone}
+                                onChange={(next) => setFormData({ ...formData, phone: next })}
+                                lang={lang as 'en' | 'ar'}
+                            />
+                            <p className="text-[11px] text-on-surface/50 mt-1.5">{t('phoneHelper')}</p>
                         </div>
                     </section>
 
@@ -610,7 +636,7 @@ export const ClientDashboard = () => {
                     <div className="pt-8 border-t border-outline-variant/30">
                         <button
                             onClick={handleIntakeSubmit}
-                            disabled={!formData.startingWeight || !formData.height || !formData.birthdate || !formData.gender}
+                            disabled={!formData.startingWeight || !formData.height || !formData.birthdate || !formData.gender || !(formData.phone.startsWith('+') && formData.phone.replace(/\D+/g, '').length >= 7)}
                             className="w-full px-6 py-4 rounded-xl font-label text-[12px] font-bold uppercase tracking-widest bg-gradient-to-r from-primary to-primary-container text-on-primary border border-primary/20 shadow-[0_5px_15px_rgba(230,195,100,0.3)] hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
                         >
                             <CheckCircle2 size={20} /> {t('submitIntake')}

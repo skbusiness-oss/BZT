@@ -35,6 +35,7 @@ import { db } from '../../lib/firebase';
 import { computeDietProfile, matchDiet } from '../../lib/dietCalculator';
 import { dietPlans } from '../../data/diets';
 import { tPlanName } from '../../lib/dietTranslations';
+import { PhoneInput } from '../shared/PhoneInput';
 import type {
     Sex, ActivityLevel, DietGoal, MealsPerDay, DietProfile,
 } from '../../types';
@@ -87,6 +88,7 @@ interface Props {
         goal?: string;
         currentWeightKg?: number;
         targetWeightKg?: number;
+        phone?: string;
     };
 }
 
@@ -105,6 +107,7 @@ export const CommunityBaselineForm = ({ onClose, initial }: Props) => {
     const [currentWeightKg, setCurrentWeightKg] = useState<string>(initial?.currentWeightKg?.toString() ?? '');
     const [targetWeightKg, setTargetWeightKg] = useState<string>(initial?.targetWeightKg?.toString() ?? '');
     const [activityLevel, setActivityLevel] = useState<ActivityLevel>('moderate');
+    const [phone, setPhone] = useState<string>(initial?.phone ?? '');
 
     // ── Step 2 ────────────────────────────────────────────────────────
     const [mealsPerDay, setMealsPerDay] = useState<MealsPerDay>(3);
@@ -112,12 +115,18 @@ export const CommunityBaselineForm = ({ onClose, initial }: Props) => {
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
+    // Phone must include country-code prefix AND at least 6 digits of
+    // local number. PhoneInput emits e.164 ("+212612345678"); we
+    // require >= 8 chars total after stripping the "+" sign.
+    const phoneValid = phone.startsWith('+') && phone.replace(/\D+/g, '').length >= 7;
+
     const step1Valid =
         Number(age) > 0 && Number(age) < 120 &&
         Number(heightCm) > 80 && Number(heightCm) < 250 &&
         goal.length > 0 &&
         Number(currentWeightKg) > 20 && Number(currentWeightKg) < 350 &&
-        Number(targetWeightKg) > 20 && Number(targetWeightKg) < 350;
+        Number(targetWeightKg) > 20 && Number(targetWeightKg) < 350 &&
+        phoneValid;
 
     // Live profile + auto-match. Recomputes whenever any input changes.
     const profile: DietProfile | null = useMemo(() => {
@@ -161,6 +170,7 @@ export const CommunityBaselineForm = ({ onClose, initial }: Props) => {
                 ...startWeightUpdate,
                 currentWeightKg: Number(currentWeightKg),
                 targetWeightKg: Number(targetWeightKg),
+                phone,
                 dietProfile: {
                     ...profile,
                     calculatedAt: serverTimestamp(),
@@ -257,6 +267,12 @@ export const CommunityBaselineForm = ({ onClose, initial }: Props) => {
                                 <NumInput value={targetWeightKg} onChange={setTargetWeightKg} placeholder="75.0" step="0.1" />
                             </Field>
                         </div>
+
+                        {/* Phone — coach uses this for WhatsApp/SMS follow-up. Required. */}
+                        <Field label={t('phoneLabel')}>
+                            <PhoneInput value={phone} onChange={setPhone} lang={lang as 'en' | 'ar'} />
+                            <p className="text-[11px] text-on-surface/50 mt-1.5">{t('phoneHelper')}</p>
+                        </Field>
 
                         {/* Goal */}
                         <Field icon={<Target size={14} />} label={t('goal')}>
