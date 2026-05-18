@@ -4,8 +4,6 @@ import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { useLanguage } from '../context/LanguageContext';
 import { Send, MessageSquare, ArrowLeft } from 'lucide-react';
-import { db } from '../lib/firebase';
-import { collection, query, where, getDocs } from 'firebase/firestore';
 import { tsToDate, tsToMillis } from '../lib/firestoreTime';
 
 export const Messages = () => {
@@ -20,66 +18,40 @@ export const Messages = () => {
 
     const isCoach = user?.role === 'coach' || user?.role === 'admin';
 
-    // For client / community role — resolve the FULL coaching team so the
-    // client can pick which member to message. Previously this used a
-    // `limit(1)` lookup against the `users` collection, which arbitrarily
-    // returned the first match (usually the admin) and made the actual
-    // coach unreachable. We now query `publicProfiles` (readable by all
-    // signed-in users; the `users` collection is restricted to owner +
-    // coach reads so community/client users can't list it).
+    // ── Sole-coach routing ──────────────────────────────────────────────
+    // For the single-coach launch (Coach Zaki, medzakc90@gmail.com), every
+    // client / community message is addressed to him directly. Previously
+    // this lookup queried publicProfiles for `role in [coach, admin]` and
+    // built a multi-tile contact list — that surfaced the admin as a
+    // selectable recipient AND auto-selected admin when the publicProfiles
+    // sort didn't put coach first. New design: hardcode the coach UID,
+    // skip the lookup entirely, never show admin as a target.
+    //
+    // Why hardcoded vs config: this is a launch-day fix for a single-
+    // coach product. When a second coach joins, replace the constant
+    // with a server-driven team list (probably a `teams/default` doc
+    // with allow-read for signed-in users).
+    const COACH_UID = 'Y9DlGI9kF6dPFPBh4cDvMnxbayB3';
+    const COACH_NAME = 'Coach Zaki';
     interface TeamMember { uid: string; name: string; role: 'coach' | 'admin' }
-    const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+    const [teamMembers] = useState<TeamMember[]>([
+        { uid: COACH_UID, name: COACH_NAME, role: 'coach' },
+    ]);
     const clientDoc = clients.find(c => c.userId === user?.id);
 
-    useEffect(() => {
-        if (isCoach || !user) return;
-        const q = query(
-            collection(db, 'publicProfiles'),
-            where('role', 'in', ['coach', 'admin']),
-        );
-        getDocs(q).then(snap => {
-            const members: TeamMember[] = snap.docs
-                .map(d => {
-                    const data = d.data() as { name?: string; displayName?: string; role?: string };
-                    const role = (data.role as 'coach' | 'admin') ?? 'coach';
-                    // publicProfiles docs may not have `name` yet (the
-                    // existing setUserRole / awardXp Cloud Functions
-                    // never wrote it — known gap, tracked separately).
-                    // Until the function-side write lands, fall back to
-                    // a role-based label so the tile is at least
-                    // distinguishable from the others.
-                    const fallback = role === 'coach' ? 'Coach Zaki' : 'Admin';
-                    return {
-                        uid: d.id,
-                        name: data.name ?? data.displayName ?? fallback,
-                        role,
-                    };
-                })
-                // Coach first, admin second — most clients want to talk
-                // to the coach by default; admin is for billing/access.
-                .sort((a, b) => (a.role === 'coach' ? -1 : 1) - (b.role === 'coach' ? -1 : 1));
-            setTeamMembers(members);
-        }).catch((err) => {
-            // eslint-disable-next-line no-console
-            console.error('[Messages] team lookup failed:', err);
-        });
-    }, [isCoach, user]);
-
-    // Auto-select FIRST team member (prefers coach via the sort above)
-    // OR the client's assigned coach if set. Avoids the surprise where
-    // the client opens /messages and sees an empty conversation despite
-    // having a clear default thread to land in.
+    // Auto-select the coach for non-coach roles. clientDoc.coachId is
+    // intentionally IGNORED here — historical docs may have it set to
+    // the admin's uid (residue from the broken team-lookup era) and
+    // honoring that would re-route messages away from the coach again.
     useEffect(() => {
         if (isCoach || !user || selectedUserId) return;
-        const preferred = clientDoc?.coachId
-            ?? teamMembers.find(m => m.role === 'coach')?.uid
-            ?? teamMembers[0]?.uid
-            ?? null;
-        if (preferred) {
-            setSelectedUserId(preferred);
-            markMessagesRead(user.id, preferred);
-        }
-    }, [isCoach, user, clientDoc?.coachId, teamMembers, selectedUserId, markMessagesRead]);
+        setSelectedUserId(COACH_UID);
+        markMessagesRead(user.id, COACH_UID);
+    }, [isCoach, user, selectedUserId, markMessagesRead]);
+    // Reference clientDoc to keep the type-checker quiet about an unused
+    // computed value (kept because it's read by other features that may
+    // need it; pulling it from useData here also warms the cache).
+    void clientDoc;
 
     // Deep-link support: `/messages?to=<userId>` pre-selects a conversation.
     // Used by the "Message client" button on CoachReview so a coach can jump
