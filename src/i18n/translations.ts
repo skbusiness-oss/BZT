@@ -391,6 +391,11 @@ export const translations = {
     reviewedByCoachZack: { en: 'Reviewed by Coach Zack', ar: 'تمت المراجعة بواسطة المدرب زاك' },
     noFeedbackYet: { en: 'No feedback yet.', ar: 'لا توجد ملاحظات بعد.' },
     dueLabel: { en: 'Due', ar: 'مطلوب' },
+    submissionWindowTitle: { en: 'Weekly review window', ar: 'نافذة المراجعة الأسبوعية' },
+    submissionWindowBody: {
+        en: 'Submit your check-in on Friday — Coach Zaki sends feedback on Saturday. Submissions outside this window will not be reviewed.',
+        ar: 'أرسل تسجيلك يوم الجمعة — يرسل الكوتش زكي ملاحظاته يوم السبت. التسجيلات خارج هذه النافذة لن تتم مراجعتها.'
+    },
     latestCheckIn: { en: 'Latest check-in', ar: 'آخر تسجيل' },
     checkInTimeline: { en: 'Check-in timeline', ar: 'سجل التسجيلات' },
     weekA: { en: 'Week A', ar: 'الأسبوع أ' },

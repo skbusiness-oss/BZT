@@ -1,0 +1,208 @@
+/**
+ * Push notification triggers.
+ *
+ * Two events fire here:
+ *   - `onMessageCreated`: new doc in messages/{id} → push to receiver's
+ *     registered FCM tokens. The receiver gets a system notification
+ *     even when the app is closed.
+ *   - `onCheckInReviewed`: a checkIns/{id} doc transitions from status
+ *     'submitted' → 'reviewed' (coach left feedback). The client gets
+ *     a push saying their week was reviewed.
+ *
+ * Token lifecycle:
+ *   - Tokens land in `users/{uid}.fcmTokens` array via src/lib/fcm.ts
+ *     after sign-in.
+ *   - FCM returns 410/404 for stale tokens (uninstalled PWA, revoked
+ *     permission). When that happens, we prune the stale token from
+ *     the user doc so future pushes don't waste cycles on it.
+ *   - Tokens DON'T expire on a fixed schedule — they survive across
+ *     sessions until explicitly revoked.
+ *
+ * Cost shape: a single push costs ~$0.0000004 in Cloud Functions
+ * invocations + zero in FCM (Google charges per-bandwidth, free at
+ * our scale). Triggers run from Firestore writes that ALREADY pay
+ * for themselves; this is incremental, not a new cost class.
+ */
+import { onDocumentCreated, onDocumentUpdated } from 'firebase-functions/v2/firestore';
+import { getMessaging } from 'firebase-admin/messaging';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+
+interface UserDoc {
+    fcmTokens?: string[];
+    displayName?: string;
+    name?: string;
+}
+
+/**
+ * Send a push to every token a user has registered. Returns the number
+ * of tokens that FCM accepted. Stale tokens are pruned from the user
+ * doc atomically (FieldValue.arrayRemove per failed token).
+ */
+async function pushToUser(
+    uid: string,
+    payload: {
+        title: string;
+        body: string;
+        data?: Record<string, string>;
+    },
+): Promise<number> {
+    const db = getFirestore();
+    const userSnap = await db.doc(`users/${uid}`).get();
+    if (!userSnap.exists) return 0;
+    const userData = (userSnap.data() ?? {}) as UserDoc;
+    const tokens = userData.fcmTokens ?? [];
+    if (tokens.length === 0) return 0;
+
+    // sendEachForMulticast tells us which tokens failed individually.
+    // We can then prune precisely without retrying-the-whole-batch on
+    // partial failures.
+    const result = await getMessaging().sendEachForMulticast({
+        tokens,
+        // Send a `notification` payload (title/body) so the browser
+        // AUTO-DISPLAYS the OS notification when the app is closed —
+        // no SW execution required for display. This is the only
+        // reliable way to get notifications when the PWA is fully
+        // killed (especially on iOS / mobile Chrome in power save).
+        //
+        // `data` is for routing only (URL, type). The SW's
+        // notificationclick handler reads `data.url` for deep linking.
+        //
+        // The SW's onBackgroundMessage is deliberately a no-op when a
+        // notification payload is present (see firebase-messaging-sw.js)
+        // to avoid duplicate notifications on platforms that fire both.
+        notification: {
+            title: payload.title,
+            body: payload.body,
+        },
+        data: {
+            ...(payload.data ?? {}),
+        },
+        webpush: {
+            // Web-specific overrides. fcm_options.link controls where
+            // a click navigates when the notification is auto-displayed
+            // by the browser (no SW execution required).
+            fcmOptions: {
+                link: payload.data?.url || '/',
+            },
+            notification: {
+                icon: '/icon-192.png',
+                badge: '/icon-192.png',
+                requireInteraction: payload.data?.requireInteraction === 'true',
+            },
+        },
+        // High priority on Android: Google delivers within seconds
+        // instead of batching for power-saving. Reasonable for chat
+        // and coach-feedback events.
+        android: { priority: 'high' },
+        // APNS priority 10 = immediate. Apple uses these for sound/
+        // badge updates; matches Android high priority.
+        apns: {
+            payload: { aps: { sound: 'default' } },
+            headers: { 'apns-priority': '10' },
+        },
+    });
+
+    // Prune stale tokens.
+    const staleTokens: string[] = [];
+    result.responses.forEach((r, i) => {
+        if (r.success) return;
+        const code = r.error?.code;
+        // The two codes that mean "this token is dead, stop trying"
+        // per Firebase docs.
+        if (
+            code === 'messaging/registration-token-not-registered' ||
+            code === 'messaging/invalid-registration-token'
+        ) {
+            staleTokens.push(tokens[i]);
+        }
+    });
+    if (staleTokens.length > 0) {
+        await db.doc(`users/${uid}`).update({
+            fcmTokens: FieldValue.arrayRemove(...staleTokens),
+        });
+    }
+    return result.successCount;
+}
+
+/**
+ * New message → notify the receiver. The receiver is the OTHER party
+ * (we deliberately don't push the sender for their own outbound).
+ * URL deep-link routes to /messages with their conversation pre-
+ * selected, so a tap from the lock screen goes straight to the thread.
+ */
+export const onMessageCreated = onDocumentCreated(
+    'messages/{messageId}',
+    async (event) => {
+        const msg = event.data?.data();
+        if (!msg) return;
+        const receiverId = msg.receiverId as string | undefined;
+        const senderId = msg.senderId as string | undefined;
+        const senderName = (msg.senderName as string | undefined) ?? 'Someone';
+        const text = (msg.text as string | undefined) ?? '';
+        if (!receiverId || !senderId || receiverId === senderId) return;
+
+        await pushToUser(receiverId, {
+            title: `New message from ${senderName}`,
+            // Trim long messages — notification body has a hard char
+            // limit on iOS (~178) and gets clipped past ~80 on Android.
+            body: text.length > 140 ? text.slice(0, 137) + '…' : text,
+            data: {
+                type: 'message',
+                messageId: event.params.messageId,
+                senderId,
+                // Deep-link target. Clicked notification opens this URL
+                // via the SW's notificationclick handler.
+                url: `/messages?to=${senderId}`,
+            },
+        });
+    },
+);
+
+/**
+ * Check-in reviewed by coach → notify the client. Fires only on the
+ * specific status transition 'submitted' → 'reviewed' (or anything
+ * → 'reviewed' from a non-reviewed prior state). Other update events
+ * (coach typing feedback live, target changes, etc.) are ignored.
+ */
+export const onCheckInReviewed = onDocumentUpdated(
+    'checkIns/{checkInId}',
+    async (event) => {
+        const before = event.data?.before.data();
+        const after = event.data?.after.data();
+        if (!before || !after) return;
+        const beforeStatus = before.status as string | undefined;
+        const afterStatus = after.status as string | undefined;
+
+        // Only fire on the specific transition INTO 'reviewed'.
+        if (afterStatus !== 'reviewed' || beforeStatus === 'reviewed') return;
+
+        // Recipient resolution. The `checkIns` schema stores TWO
+        // different fields and they are NOT the same thing:
+        //   - userId   = the auth UID of the user (matches users/{uid})
+        //   - clientId = the doc ID in the `clients` collection
+        // FCM tokens live under users/{uid}, so we MUST use userId.
+        // If userId is missing (legacy docs), fall back to clientId on
+        // the off chance the two happened to match.
+        const clientUid = (after.userId as string | undefined) ?? (after.clientId as string | undefined);
+        if (!clientUid) return;
+
+        const weekNumber = (after.weekNumber as number | undefined) ?? null;
+        const weekLabel = weekNumber !== null ? `week ${weekNumber}` : 'your check-in';
+
+        await pushToUser(clientUid, {
+            title: 'Your week has been reviewed',
+            body: `Coach Zaki left feedback on ${weekLabel}. Tap to view.`,
+            data: {
+                type: 'review',
+                checkInId: event.params.checkInId,
+                weekNumber: String(weekNumber ?? ''),
+                // Deep-link to the profile / check-in detail surface.
+                // The CheckIn page reads the latest week by default;
+                // a more specific deep-link (e.g., /checkin/<weekNum>)
+                // can land here later once the route exists.
+                url: '/checkin',
+                requireInteraction: 'true',
+            },
+        });
+    },
+);

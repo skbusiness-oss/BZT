@@ -25,6 +25,7 @@ import {
 } from 'firebase/firestore';
 import { initializeApp as initializeSecondaryApp } from 'firebase/app';
 import { DEFAULT_TARGETS } from '../lib/constants';
+import { registerFcmToken } from '../lib/fcm';
 
 // ─── Secondary Firebase app for creating client accounts ───────────────────
 // When you call createUserWithEmailAndPassword on the main app,
@@ -123,6 +124,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   /** Wall-clock ms when the most recent successful signIn() resolved.
    *  Used to gate the visibility-driven token refresh — see #3 fix. */
   const signedInAtRef = useRef<number>(0);
+  /** Guard against re-registering the FCM token on every snapshot
+   *  delta. The user-doc onSnapshot listener fires for any field
+   *  change (theme, displayName, activityScore, ...) — without this
+   *  ref, every such tick would arrayUnion the same token again.
+   *  Reset to false on auth change so a re-login re-registers cleanly. */
+  const fcmRegisteredRef = useRef<boolean>(false);
 
   const clearAuthError = () => setAuthError(null);
 
@@ -179,6 +186,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       // Tear down any previous user-doc listener whenever the auth user changes
       cleanupUserDoc();
+      // Reset FCM registration guard so the next signed-in user
+      // (could be a different account) re-registers their device.
+      fcmRegisteredRef.current = false;
 
       if (!firebaseUser) {
         setUser(null);
@@ -306,6 +316,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           setUser(nextUser);
           setFreshUserDocLoaded(true);
           setLoading(false);
+
+          // Register this device for FCM push notifications. Fire-and-
+          // forget — failures (unsupported browser, denied permission,
+          // missing VAPID config) are swallowed so they never block
+          // sign-in. registerFcmToken is idempotent (arrayUnion on the
+          // user doc) so re-registering on every snapshot is safe but
+          // wasteful; we only run it once per snapshot listener
+          // lifetime via the ref below.
+          if (!fcmRegisteredRef.current) {
+            fcmRegisteredRef.current = true;
+            registerFcmToken(firebaseUser.uid).catch(() => { /* silent */ });
+          }
 
           // Custom-claim bootstrap REMOVED — it caused a login-loop.
           // Previous behavior: if the user's id-token didn't carry a `role`

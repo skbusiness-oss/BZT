@@ -13,3 +13,4 @@ export { deleteUser } from './deleteUser';
 export { onCommentCreated, onCommentDeleted } from './maintainCommentCount';
 export { wipeLegacyMetrics } from './wipeLegacyMetrics';
 export { forwardMessagesToCoach } from './forwardMessages';
+export { onMessageCreated, onCheckInReviewed } from './pushNotifications';

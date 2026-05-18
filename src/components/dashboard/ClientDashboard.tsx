@@ -729,6 +729,44 @@ export const ClientDashboard = () => {
                 />
             </div>
 
+            {/* Submission-window notice — explains the Friday-submit /
+                   Saturday-review cadence so clients don't submit on
+                   the wrong day and wonder why no feedback arrives. */}
+            <div style={{ marginBottom: 16 }}>
+                <div
+                    style={{
+                        display: 'flex', gap: 12, alignItems: 'flex-start',
+                        padding: '14px 16px', borderRadius: 14,
+                        background: 'rgba(255, 199, 78, 0.08)',
+                        border: '1px solid rgba(255, 199, 78, 0.28)',
+                    }}
+                >
+                    <div style={{
+                        flexShrink: 0, width: 32, height: 32, borderRadius: 8,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        background: 'rgba(255, 199, 78, 0.18)',
+                        color: '#FFC74E',
+                    }}>
+                        <Calendar size={16} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{
+                            fontFamily: bzt.body, fontSize: 12, fontWeight: 700,
+                            letterSpacing: '0.08em', textTransform: 'uppercase',
+                            color: '#FFC74E', marginBottom: 4,
+                        }}>
+                            {t('submissionWindowTitle')}
+                        </div>
+                        <div style={{
+                            fontFamily: bzt.body, fontSize: 13, lineHeight: 1.5,
+                            color: bzt.onSurface, opacity: 0.85,
+                        }}>
+                            {t('submissionWindowBody')}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             {/* 4. Weekly check-in hero — consolidates the prior dual cards
                    (status row + coach-feedback banner) into one image-backed card.
                    States: pending / submitted (awaiting review) / reviewed (with quote). */}
