@@ -1,8 +1,10 @@
 import { useState, useMemo } from 'react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useSelfLogs, BodyMeasurements } from '../../hooks/useSelfLogs';
+import { useWeeklyCheckIns } from '../../hooks/useWeeklyCheckIns';
 import {
-    AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+    Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+    ComposedChart, Line, Bar, Legend,
 } from 'recharts';
 import { Scale, Ruler, Plus, Trash2, Loader2 } from 'lucide-react';
 
@@ -17,6 +19,11 @@ export const SelfTrackingPanel = ({ targetUserId }: Props) => {
     const { t: tStrict } = useLanguage();
     const t = tStrict as unknown as (k: string) => string | undefined;
     const { logs, loading, addLog, deleteLog, isOwner } = useSelfLogs(targetUserId);
+    // Weekly check-in data — weight + wellbeing scales + cardio kcal.
+    // Same uid as the self-log hook (defaults to current user when not
+    // overridden). Coach views pass the targetUserId; the hook returns
+    // empty arrays for users who never did a weekly check-in.
+    const { weighIns, metrics } = useWeeklyCheckIns(targetUserId);
 
     const [showForm, setShowForm] = useState(false);
     const [date, setDate] = useState(todayISO());
@@ -26,13 +33,54 @@ export const SelfTrackingPanel = ({ targetUserId }: Props) => {
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    const chartData = useMemo(
-        () => logs.filter(l => typeof l.weight === 'number').map(l => ({
-            date: l.date.slice(5), // MM-DD for x-axis
-            weight: l.weight as number,
-        })),
-        [logs]
-    );
+    /**
+     * Merged chart series. We have THREE data sources keyed by date:
+     *   - self-logs (ad-hoc weigh-ins)
+     *   - weighIns (weekly check-in canonical weight)
+     *   - metrics  (weekly check-in scales + cardio kcal)
+     *
+     * Strategy: weight prefers weighIns (more reliable, weekly cadence)
+     * and falls back to self-logs for dates where only an ad-hoc weight
+     * exists. The scales/cardio come from metrics. Result is a sparse
+     * row per date — Recharts handles `undefined` cells by gapping the
+     * line (`connectNulls` keeps it continuous for the scale lines).
+     */
+    const chartData = useMemo(() => {
+        const byDate = new Map<string, {
+            date: string;
+            weight?: number;
+            strength?: number;
+            hunger?: number;
+            energy?: number;
+            cardio?: number;
+        }>();
+        const upsert = (date: string) => {
+            const k = date;
+            if (!byDate.has(k)) byDate.set(k, { date });
+            return byDate.get(k)!;
+        };
+
+        for (const l of logs) {
+            if (typeof l.weight === 'number') upsert(l.date).weight = l.weight;
+        }
+        for (const w of weighIns) {
+            // Weekly weighIn takes precedence over an ad-hoc selfLog on
+            // the same date — the user is more likely to weigh deliberately
+            // on a check-in day, so trust that number.
+            upsert(w.date).weight = w.weight;
+        }
+        for (const m of metrics) {
+            const row = upsert(m.date);
+            if (typeof m.strength === 'number') row.strength = m.strength;
+            if (typeof m.hunger === 'number') row.hunger = m.hunger;
+            if (typeof m.energy === 'number') row.energy = m.energy;
+            if (typeof m.cardioCalories === 'number') row.cardio = m.cardioCalories;
+        }
+
+        return [...byDate.values()]
+            .sort((a, b) => a.date.localeCompare(b.date))
+            .map(r => ({ ...r, date: r.date.slice(5) })); // MM-DD x-axis
+    }, [logs, weighIns, metrics]);
 
     const latest = logs.length > 0 ? logs[logs.length - 1] : null;
 
@@ -129,13 +177,24 @@ export const SelfTrackingPanel = ({ targetUserId }: Props) => {
                 </div>
             </div>
 
-            {/* Chart */}
+            {/* Chart — coach overview. Weight + wellbeing sliders share a
+                single x-axis with TWO y-axes:
+                  - left  : weight (kg)
+                  - right : 1-10 scales (strength, hunger, energy)
+                A second mini bar chart underneath shows cardio kcal,
+                aligned by date so the coach can correlate cardio output
+                with weight movement at a glance. */}
             {chartData.length >= 2 && (
                 <div className="bg-surface-container-low rounded-2xl p-6 border border-outline-variant/30 ghost-border shadow-xl">
-                    <h3 className="text-on-surface font-headline font-bold text-xl mb-6">{t('weightProgress') || 'Weight Progress'}</h3>
-                    <div style={{ width: '100%', height: 260 }}>
+                    <h3 className="text-on-surface font-headline font-bold text-xl mb-1">
+                        {t('progressOverview') || 'Progress overview'}
+                    </h3>
+                    <p className="text-xs text-on-surface/50 font-body mb-4">
+                        {t('progressOverviewSub') || 'Weight (kg) + weekly wellbeing scales (1–10).'}
+                    </p>
+                    <div style={{ width: '100%', height: 280 }}>
                         <ResponsiveContainer>
-                            <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                            <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
                                 <defs>
                                     <linearGradient id="selfWeightFill" x1="0" y1="0" x2="0" y2="1">
                                         <stop offset="0%" stopColor="rgb(var(--primary) / 0.3)" />
@@ -144,12 +203,97 @@ export const SelfTrackingPanel = ({ targetUserId }: Props) => {
                                 </defs>
                                 <CartesianGrid stroke="rgb(var(--outline-variant) / 0.4)" vertical={false} strokeDasharray="3 3" />
                                 <XAxis dataKey="date" stroke="rgb(var(--outline) / 0.4)" tick={{ fontSize: 10, fill: 'rgb(var(--on-surface-variant))' }} tickLine={false} axisLine={false} />
-                                <YAxis domain={['dataMin - 1', 'dataMax + 1']} stroke="rgb(var(--outline) / 0.4)" tick={{ fontSize: 10, fill: 'rgb(var(--on-surface-variant))' }} tickLine={false} axisLine={false} width={40} />
+                                <YAxis
+                                    yAxisId="weight"
+                                    domain={['dataMin - 1', 'dataMax + 1']}
+                                    stroke="rgb(var(--outline) / 0.4)"
+                                    tick={{ fontSize: 10, fill: 'rgb(var(--on-surface-variant))' }}
+                                    tickLine={false}
+                                    axisLine={false}
+                                    width={40}
+                                    label={{ value: 'kg', position: 'insideTopLeft', fontSize: 10, fill: 'rgb(var(--on-surface-variant))' }}
+                                />
+                                <YAxis
+                                    yAxisId="scale"
+                                    orientation="right"
+                                    domain={[0, 10]}
+                                    ticks={[0, 2, 4, 6, 8, 10]}
+                                    stroke="rgb(var(--outline) / 0.4)"
+                                    tick={{ fontSize: 10, fill: 'rgb(var(--on-surface-variant))' }}
+                                    tickLine={false}
+                                    axisLine={false}
+                                    width={30}
+                                />
                                 <Tooltip contentStyle={{ background: 'rgb(var(--surface-bright) / 0.95)', border: '1px solid rgb(var(--primary) / 0.15)', borderRadius: 12, fontSize: 12, color: 'rgb(var(--on-surface))', fontFamily: 'Inter, sans-serif' }} labelStyle={{ color: 'rgb(var(--primary))', fontSize: 10, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.05em' }} />
-                                <Area type="monotone" dataKey="weight" stroke="rgb(var(--primary))" strokeWidth={3} fill="url(#selfWeightFill)" dot={{ r: 4, fill: 'rgb(var(--primary))', stroke: 'rgb(var(--surface))', strokeWidth: 2 }} activeDot={{ r: 6, fill: 'rgb(var(--primary))', stroke: 'rgb(var(--on-surface))', strokeWidth: 2 }} />
-                            </AreaChart>
+                                <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} iconType="circle" />
+                                <Area
+                                    yAxisId="weight"
+                                    type="monotone"
+                                    dataKey="weight"
+                                    name={t('weight') || 'Weight'}
+                                    stroke="rgb(var(--primary))"
+                                    strokeWidth={3}
+                                    fill="url(#selfWeightFill)"
+                                    dot={{ r: 4, fill: 'rgb(var(--primary))', stroke: 'rgb(var(--surface))', strokeWidth: 2 }}
+                                    activeDot={{ r: 6, fill: 'rgb(var(--primary))', stroke: 'rgb(var(--on-surface))', strokeWidth: 2 }}
+                                    connectNulls
+                                />
+                                <Line
+                                    yAxisId="scale"
+                                    type="monotone"
+                                    dataKey="strength"
+                                    name={t('strength') || 'Strength'}
+                                    stroke="#34d399"
+                                    strokeWidth={2}
+                                    dot={{ r: 3, fill: '#34d399' }}
+                                    connectNulls
+                                />
+                                <Line
+                                    yAxisId="scale"
+                                    type="monotone"
+                                    dataKey="hunger"
+                                    name={t('hunger') || 'Hunger'}
+                                    stroke="#f87171"
+                                    strokeWidth={2}
+                                    dot={{ r: 3, fill: '#f87171' }}
+                                    connectNulls
+                                />
+                                <Line
+                                    yAxisId="scale"
+                                    type="monotone"
+                                    dataKey="energy"
+                                    name={t('energy') || 'Energy'}
+                                    stroke="#60a5fa"
+                                    strokeWidth={2}
+                                    dot={{ r: 3, fill: '#60a5fa' }}
+                                    connectNulls
+                                />
+                            </ComposedChart>
                         </ResponsiveContainer>
                     </div>
+
+                    {/* Cardio kcal — own scale; rendered as a thin bar
+                        strip below the main chart so the coach can read
+                        weight ↔ cardio output correlation by aligning the
+                        x-axes visually. Hidden when no cardio data exists. */}
+                    {chartData.some(d => typeof d.cardio === 'number') && (
+                        <div className="mt-4 pt-4 border-t border-outline-variant/20">
+                            <div className="text-[10px] font-label font-bold uppercase tracking-widest text-on-surface/50 mb-2">
+                                🔥 {t('cardioCalories') || 'Cardio calories'} (kcal)
+                            </div>
+                            <div style={{ width: '100%', height: 80 }}>
+                                <ResponsiveContainer>
+                                    <ComposedChart data={chartData} margin={{ top: 4, right: 10, left: -10, bottom: 0 }}>
+                                        <CartesianGrid stroke="rgb(var(--outline-variant) / 0.3)" vertical={false} strokeDasharray="3 3" />
+                                        <XAxis dataKey="date" stroke="rgb(var(--outline) / 0.3)" tick={{ fontSize: 9, fill: 'rgb(var(--on-surface-variant))' }} tickLine={false} axisLine={false} />
+                                        <YAxis stroke="rgb(var(--outline) / 0.3)" tick={{ fontSize: 9, fill: 'rgb(var(--on-surface-variant))' }} tickLine={false} axisLine={false} width={36} />
+                                        <Tooltip contentStyle={{ background: 'rgb(var(--surface-bright) / 0.95)', border: '1px solid rgb(var(--primary) / 0.15)', borderRadius: 8, fontSize: 11, color: 'rgb(var(--on-surface))' }} />
+                                        <Bar dataKey="cardio" name={t('cardioCalories') || 'Cardio kcal'} fill="rgb(var(--primary) / 0.6)" radius={[3, 3, 0, 0]} />
+                                    </ComposedChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
 

@@ -367,6 +367,14 @@ export const translations = {
     cardioTargetLabel: { en: 'Cardio target', ar: 'هدف الكارديو' },
     cardioTargetHint: { en: 'Weekly cardio calories the client should burn.', ar: 'سعرات الكارديو الأسبوعية المطلوبة.' },
     cardioCalories: { en: 'Cardio calories', ar: 'سعرات الكارديو' },
+    progressOverview: { en: 'Progress overview', ar: 'نظرة عامة على التقدم' },
+    progressOverviewSub: {
+        en: 'Weight (kg) + weekly wellbeing scales (1–10).',
+        ar: 'الوزن (كجم) + مقاييس الصحة الأسبوعية (1–10).'
+    },
+    strength: { en: 'Strength', ar: 'القوة' },
+    hunger: { en: 'Hunger', ar: 'الجوع' },
+    energy: { en: 'Energy', ar: 'الطاقة' },
 
     // --- Week / check-in flow ---
     weekLockedHint: { en: 'This week is locked. Switch to your active week to log entries.', ar: 'هذا الأسبوع مقفل. انتقل للأسبوع النشط لإدخال البيانات.' },

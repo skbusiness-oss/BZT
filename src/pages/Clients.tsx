@@ -13,7 +13,7 @@ const callDeleteUser = httpsCallable<
 >(functions, 'deleteUser');
 import {
     Search, ChevronRight, CheckCircle2, AlertCircle, Plus, X, Trash2, UserCog,
-    Shield, Users, Award, AlertTriangle, Eye, Ban, Apple,
+    Shield, Users, Award, AlertTriangle, Eye, Ban, Apple, Mail, Phone,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { Category, Client, FitnessLevel } from '../types';
@@ -273,9 +273,10 @@ export const Clients = () => {
                                         )}>
                                             {client.name.charAt(0)}
                                         </div>
-                                        <div>
+                                        <div className="min-w-0">
                                             <h3 className="font-headline font-bold text-on-surface text-xl mb-1">{client.name}</h3>
-                                            <div className="flex items-center gap-3 text-[10px] font-label font-bold uppercase tracking-widest text-on-surface/40 flex-wrap">
+                                            <ContactLine email={client.email} phone={client.phone} />
+                                            <div className="flex items-center gap-3 text-[10px] font-label font-bold uppercase tracking-widest text-on-surface/40 flex-wrap mt-2">
                                                 <span className={clsx('px-2.5 py-1 rounded-md bg-surface-container border border-outline-variant/30', `text-${catColor}-400`)}>
                                                     {getCategoryLabel(client.category)}
                                                 </span>
@@ -369,13 +370,13 @@ export const Clients = () => {
                                 <div className="w-14 h-14 rounded-full bg-indigo-500/10 text-indigo-400 flex items-center justify-center font-headline font-bold text-xl">
                                     {(member.displayName ?? member.email).charAt(0).toUpperCase()}
                                 </div>
-                                <div>
+                                <div className="min-w-0">
                                     <h3 className="font-headline font-bold text-on-surface text-xl mb-1">{member.displayName}</h3>
-                                    <div className="flex items-center gap-3 text-[10px] font-label font-bold uppercase tracking-widest text-on-surface/40 flex-wrap">
+                                    <ContactLine email={member.email} phone={member.phone} />
+                                    <div className="flex items-center gap-3 text-[10px] font-label font-bold uppercase tracking-widest text-on-surface/40 flex-wrap mt-2">
                                         <span className="px-2.5 py-1 rounded-md bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
                                             👥 {t('communityAccessLabel') ?? 'Community'}
                                         </span>
-                                        <span className="normal-case tracking-normal">{member.email}</span>
                                     </div>
                                 </div>
                             </div>
@@ -653,5 +654,41 @@ function Chip({ active, onClick, label, icon }: {
         >
             {icon}{label}
         </button>
+    );
+}
+
+/**
+ * Inline contact row shown under the client/member name in the list.
+ * Email becomes a mailto: link; phone becomes a tel: link so the coach
+ * can tap-to-call from a phone. Hidden gracefully if both are missing
+ * (legacy users predating the phone capture won't have one).
+ */
+function ContactLine({ email, phone }: { email?: string; phone?: string }) {
+    if (!email && !phone) return null;
+    return (
+        <div className="flex items-center flex-wrap gap-x-4 gap-y-1 text-[12px] font-body text-on-surface/55">
+            {email && (
+                <a
+                    href={`mailto:${email}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="flex items-center gap-1.5 hover:text-primary transition-colors truncate max-w-full"
+                    title={email}
+                >
+                    <Mail size={12} className="shrink-0" />
+                    <span className="truncate">{email}</span>
+                </a>
+            )}
+            {phone && (
+                <a
+                    href={`tel:${phone}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="flex items-center gap-1.5 hover:text-primary transition-colors"
+                    dir="ltr"
+                >
+                    <Phone size={12} className="shrink-0" />
+                    <span>{phone}</span>
+                </a>
+            )}
+        </div>
     );
 }

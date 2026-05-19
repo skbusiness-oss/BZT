@@ -7,6 +7,7 @@ export interface CommunityMember {
     id: string;
     displayName: string;
     email: string;
+    phone?: string;
     disabled?: boolean;
     createdAt?: unknown;
 }

@@ -10,7 +10,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import {
     X, User, Target, Calendar, Scale, Flame, Activity, Shield, Zap,
     TrendingUp, Camera, Crown, BarChart3, Clock, CreditCard,
-    CheckCircle2, XCircle,
+    CheckCircle2, XCircle, Mail, Phone,
 } from 'lucide-react';
 
 interface Props {
@@ -164,6 +164,32 @@ export const ClientInfoPanel = ({ client, weeks, onClose }: Props) => {
                         <h3 className="text-xs font-bold uppercase text-on-surface-variant tracking-wider mb-3 flex items-center gap-2">
                             <User size={14} className="text-primary" /> {t('personalInfo') ?? 'Personal Info'}
                         </h3>
+                        {/* Contact row — tap-to-call/email so coach can reach
+                            the client during the review session itself. */}
+                        {(client.email || client.phone) && (
+                            <div className="clay-inset p-3 mb-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
+                                {client.email && (
+                                    <a
+                                        href={`mailto:${client.email}`}
+                                        className="flex items-center gap-2 text-on-surface hover:text-primary transition-colors"
+                                        title={client.email}
+                                    >
+                                        <Mail size={14} className="text-primary shrink-0" />
+                                        <span className="truncate max-w-[260px]">{client.email}</span>
+                                    </a>
+                                )}
+                                {client.phone && (
+                                    <a
+                                        href={`tel:${client.phone}`}
+                                        className="flex items-center gap-2 text-on-surface hover:text-primary transition-colors"
+                                        dir="ltr"
+                                    >
+                                        <Phone size={14} className="text-primary shrink-0" />
+                                        <span>{client.phone}</span>
+                                    </a>
+                                )}
+                            </div>
+                        )}
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                             <Stat label={t('age') ?? 'Age'} value={age !== null ? `${age}` : '--'} />
                             <Stat
