@@ -22,7 +22,7 @@
  * unsupported environments resolve to null.
  */
 import { getToken, onMessage } from 'firebase/messaging';
-import { doc, updateDoc, arrayUnion } from 'firebase/firestore';
+import { doc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { db, getFcmMessaging } from './firebase';
 
 /**
@@ -140,6 +140,31 @@ export async function registerFcmToken(uid: string): Promise<boolean> {
         return false;
     }
     return true;
+}
+
+/**
+ * Remove this device's FCM token from the given user doc on sign-out.
+ * Prevents cross-user notification bleed when User A signs out and
+ * User B signs in on the same device — without this, FCM would still
+ * deliver A's incoming-message pushes to the device, but B's app
+ * would see them and (worse) the click handler would deep-link into
+ * B's account with A's senderId.
+ *
+ * Best-effort: failure here MUST NOT block sign-out. We swallow any
+ * error so the user always succeeds in signing out.
+ */
+export async function unregisterFcmToken(uid: string): Promise<void> {
+    try {
+        const messaging = await getFcmMessaging();
+        if (!messaging) return;
+        const token = await getToken(messaging, { vapidKey: VAPID_KEY }).catch(() => null);
+        if (!token) return;
+        await updateDoc(doc(db, 'users', uid), {
+            fcmTokens: arrayRemove(token),
+        });
+    } catch {
+        // Sign-out must not be blocked by token cleanup failures.
+    }
 }
 
 /**

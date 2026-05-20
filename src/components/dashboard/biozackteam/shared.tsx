@@ -1043,7 +1043,7 @@ export function ProgressCTA({ onNavigate, weightHistory }: {
 
     return (
         <div
-            onClick={() => onNavigate('/profile')}
+            onClick={() => onNavigate('/update')}
             className="bzt-hero-card"
             style={{
                 position: 'relative', borderRadius: 20, overflow: 'hidden', cursor: 'pointer',

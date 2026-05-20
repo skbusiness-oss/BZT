@@ -56,6 +56,7 @@ export const AssignDietPicker = ({
     const [mealFilter, setMealFilter] = useState<'all' | MealsPerDay>('all');
     const [search, setSearch] = useState('');
     const [selectedId, setSelectedId] = useState<string | null>(currentDietId ?? null);
+    const [carbMode, setCarbMode] = useState<'cycling' | 'moderate'>('cycling');
     const [assigning, setAssigning] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -100,11 +101,18 @@ export const AssignDietPicker = ({
                 const client = clients.find(c => c.userId === clientUserId);
                 if (client) {
                     const targets = {
+                        mode: carbMode,
                         highCarb: {
                             carbs:    selected.trainingDay.carbs,
                             protein:  selected.trainingDay.protein,
                             fats:     selected.trainingDay.fat,
                             calories: selected.trainingDay.kcal,
+                        },
+                        moderateCarb: {
+                            carbs:    Math.round((selected.trainingDay.carbs + selected.restDay.carbs) / 2),
+                            protein:  Math.round((selected.trainingDay.protein + selected.restDay.protein) / 2),
+                            fats:     Math.round((selected.trainingDay.fat + selected.restDay.fat) / 2),
+                            calories: Math.round((selected.trainingDay.kcal + selected.restDay.kcal) / 2),
                         },
                         lowCarb: {
                             carbs:    selected.restDay.carbs,
@@ -204,6 +212,26 @@ export const AssignDietPicker = ({
                                 {m === 'all' ? (t('all') ?? 'All') : `${m}`}
                             </Chip>
                         ))}
+                    </div>
+                    {/* Carb mode toggle — controls how the assigned plan's
+                        macros are seeded into the client's weekly targets.
+                          - 'cycling' (default): High-carb on training days,
+                            Low-carb on rest days, Moderate in between if
+                            triggered manually by the coach. Classic HC/LC.
+                          - 'moderate': Same macros every day (mean of HC
+                            and LC). Used for clients who need consistency
+                            (hormonal sensitivity, hectic schedule, etc).
+                        The coach can switch later by re-assigning. */}
+                    <div className="flex flex-wrap items-center gap-2">
+                        <span className="inline-flex items-center gap-1.5 text-on-surface-variant text-[10px] font-label font-bold uppercase tracking-[0.18em] mr-2">
+                            <Sparkles size={10} /> Carb mode
+                        </span>
+                        <Chip active={carbMode === 'cycling'} onClick={() => setCarbMode('cycling')}>
+                            HC / LC cycling
+                        </Chip>
+                        <Chip active={carbMode === 'moderate'} onClick={() => setCarbMode('moderate')}>
+                            Moderate (steady)
+                        </Chip>
                     </div>
                 </div>
 

@@ -25,7 +25,7 @@ import {
 } from 'firebase/firestore';
 import { initializeApp as initializeSecondaryApp } from 'firebase/app';
 import { DEFAULT_TARGETS } from '../lib/constants';
-import { registerFcmToken } from '../lib/fcm';
+import { registerFcmToken, unregisterFcmToken } from '../lib/fcm';
 
 // ─── Secondary Firebase app for creating client accounts ───────────────────
 // When you call createUserWithEmailAndPassword on the main app,
@@ -310,6 +310,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             startWeightKg: typeof data.startWeightKg === 'number' ? data.startWeightKg : undefined,
             currentWeightKg: typeof data.currentWeightKg === 'number' ? data.currentWeightKg : undefined,
             targetWeightKg: typeof data.targetWeightKg === 'number' ? data.targetWeightKg : undefined,
+            phone: typeof data.phone === 'string' ? data.phone : undefined,
+            dietProfile: data.dietProfile,
             communityProfileStartedAt: tsToIso(data.communityProfileStartedAt) ?? (typeof data.communityProfileStartedAt === 'string' ? data.communityProfileStartedAt : undefined),
           };
 
@@ -440,6 +442,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   // ── Sign out ───────────────────────────────────────────────────────────────
   const signOut = async () => {
+    // Clean up the FCM token BEFORE clearing auth so the updateDoc has
+    // a permission-passing identity. Best-effort: if it fails (token
+    // expired / network), we still proceed with sign-out so the user
+    // never gets stuck.
+    const uid = auth.currentUser?.uid;
+    if (uid) {
+      await unregisterFcmToken(uid).catch(() => { /* ignore */ });
+    }
     await firebaseSignOut(auth);
     setUser(null);
     setFreshUserDocLoaded(false);

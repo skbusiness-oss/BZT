@@ -54,6 +54,11 @@ const PRIMARY_PROTEIN = PROTEIN_KEYS[0]; // chicken breast
 const PRIMARY_CARB    = CARB_KEYS[1];    // rice (cooked, dry rice content)
 const PRIMARY_FAT     = FAT_KEYS[2];     // almonds (per 20g)
 
+type DietTabId = 'meals' | 'foods' | 'supplements' | 'adjust' | 'notes';
+type FoodTabId = 'protein' | 'carbs' | 'fats' | 'free';
+type SignalGroupOption = typeof SIGNAL_GROUPS[number];
+type SignalRowOption = SignalGroupOption['rows'][number];
+
 export const PlanDetail = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
@@ -76,9 +81,35 @@ export const PlanDetail = () => {
     // auto-detect from the user's program day here — the user picks. Keeps
     // the page simple and predictable.
     const [dayMode, setDayMode] = useState<'training' | 'rest'>('training');
+    const [activeDietTab, setActiveDietTab] = useState<DietTabId>('meals');
+    const [activeFoodTab, setActiveFoodTab] = useState<FoodTabId>('protein');
     const [assigning, setAssigning] = useState(false);
     const [assignError, setAssignError] = useState<string | null>(null);
     const [assignedJustNow, setAssignedJustNow] = useState(false);
+    const [selectedSignalGroupTitle, setSelectedSignalGroupTitle] = useState(SIGNAL_GROUPS[0]?.title ?? '');
+    const [selectedSignalKey, setSelectedSignalKey] = useState(SIGNAL_GROUPS[0]?.rows[0]?.signal ?? '');
+    const selectedSignalGroup = SIGNAL_GROUPS.find(group => group.title === selectedSignalGroupTitle) ?? SIGNAL_GROUPS[0];
+    const selectedSignal = selectedSignalGroup?.rows.find(row => row.signal === selectedSignalKey) ?? selectedSignalGroup?.rows[0];
+
+    const detailTabs: { id: DietTabId; label: string; icon: React.ReactNode }[] = [
+        { id: 'meals', label: t('dailyPlan'), icon: <Sun size={14} /> },
+        { id: 'foods', label: t('foodKeysTitle'), icon: <Apple size={14} /> },
+        { id: 'supplements', label: t('supplementsTitle'), icon: <Pill size={14} /> },
+        { id: 'adjust', label: t('adjustCarbsTitle'), icon: <Flame size={14} /> },
+        { id: 'notes', label: lang === 'ar' ? 'ملاحظات' : 'Notes', icon: <AlertTriangle size={14} /> },
+    ];
+
+    const foodTabs: { id: FoodTabId; label: string; icon: React.ReactNode }[] = [
+        { id: 'protein', label: t('proteinSources'), icon: <Beef size={14} /> },
+        { id: 'carbs', label: t('carbSources'), icon: <Wheat size={14} /> },
+        { id: 'fats', label: t('fatSources'), icon: <Droplet size={14} /> },
+        { id: 'free', label: `${t('veggies')} / ${t('fruits')}`, icon: <Carrot size={14} /> },
+    ];
+
+    const handleSignalGroupSelect = (group: SignalGroupOption) => {
+        setSelectedSignalGroupTitle(group.title);
+        setSelectedSignalKey(group.rows[0]?.signal ?? '');
+    };
 
     if (!plan) {
         return (
@@ -172,126 +203,131 @@ export const PlanDetail = () => {
             <WorkedExample plan={plan} />
 
             {/* ── Day toggle + meal table ───────────────────────────── */}
-            <Section
-                eyebrow={t('dailyPlan')}
-                title={dayMode === 'training' ? t('trainingDay') : t('restDay')}
-                icon={dayMode === 'training' ? <Sun size={16} className="text-primary" /> : <Moon size={16} className="text-primary" />}
-                actions={
-                    <div className="inline-flex items-center rounded-full border border-outline-variant/30 bg-surface-container-lowest p-1">
-                        <DayTab active={dayMode === 'training'} onClick={() => setDayMode('training')}>
-                            <Sun size={12} /> {t('trainingShort')}
-                        </DayTab>
-                        <DayTab active={dayMode === 'rest'} onClick={() => setDayMode('rest')}>
-                            <Moon size={12} /> {t('restShort')}
-                        </DayTab>
-                    </div>
-                }
-            >
-                <DayTotals day={day} />
-                <MealsTable meals={day.meals} lang={lang} />
-            </Section>
-
-            {/* ── Food keys — protein / carb / fat / veg / fruit ───── */}
-            <Section
-                eyebrow={t('foodKeys')}
-                title={t('foodKeysTitle')}
-                icon={<Apple size={16} className="text-primary" />}
-            >
-                <p className="text-[13.5px] text-on-surface-variant font-body leading-relaxed mb-6 max-w-2xl">
-                    {t('foodKeysIntro')}
-                </p>
-
-                <div className="space-y-5">
-                    {/* Proteins */}
-                    <KeyTable
-                        icon={<Beef size={14} className="text-primary" />}
-                        title={t('proteinSources')}
-                        headers={[t('foodHeaderFood'), 'P', 'C', 'F']}
-                        rows={PROTEIN_KEYS.map(p => [tFood(p.food, lang), `${p.protein}`, `${p.carbs}`, `${p.fat}`])}
-                    />
-                    {/* Carbs */}
-                    <KeyTable
-                        icon={<Wheat size={14} className="text-primary" />}
-                        title={t('carbSources')}
-                        headers={[t('foodHeaderFood'), 'P', 'C', t('foodHeaderFibre'), 'F']}
-                        rows={CARB_KEYS.map(c => [tFood(c.food, lang), `${c.protein}`, `${c.carbs}`, `${c.fibers}`, `${c.fat}`])}
-                    />
-                    {/* Fats */}
-                    <KeyTable
-                        icon={<Droplet size={14} className="text-primary" />}
-                        title={t('fatSources')}
-                        headers={[t('foodHeaderFood'), 'P', 'C', 'F']}
-                        rows={FAT_KEYS.map(f => [tFood(f.food, lang), `${f.protein}`, `${f.carbs}`, `${f.fat}`])}
-                    />
-                    {/* Veggies + fruits — free foods, just lists */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <FreeFoodCard
-                            icon={<Carrot size={14} className="text-emerald-400" />}
-                            title={t('veggies')}
-                            items={VEGGIES.map(v => tFood(v, lang))}
-                        />
-                        <FreeFoodCard
-                            icon={<Cherry size={14} className="text-rose-400" />}
-                            title={t('fruits')}
-                            items={FRUITS.map(f => tFood(f, lang))}
-                        />
-                    </div>
-                </div>
-            </Section>
-
-            {/* ── Supplements ───────────────────────────────────────── */}
-            <Section
-                eyebrow={t('supplementsEyebrow')}
-                title={t('supplementsTitle')}
-                icon={<Pill size={16} className="text-primary" />}
-            >
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <SupplementCard
-                        when={t('preBreakfast')}
-                        items={SUPPLEMENTS.preBreakfast.map(s => tSupplement(s, lang))}
-                    />
-                    <SupplementCard
-                        when={t('intraWorkout')}
-                        items={SUPPLEMENTS.intraWorkout.map(s => tSupplement(s, lang))}
-                    />
-                    <SupplementCard
-                        when={t('postWorkout')}
-                        items={SUPPLEMENTS.postWorkout.map(s => tSupplement(s, lang))}
-                    />
-                </div>
-            </Section>
-
-            {/* ── Carb adjustment + signals matrix ─────────────────── */}
-            <Section
-                eyebrow={t('weeklyCheckin')}
-                title={t('adjustCarbsTitle')}
-                icon={<Flame size={16} className="text-primary" />}
-            >
-                <div className="rounded-2xl border border-amber-500/30 bg-amber-500/[0.06] p-6 mb-6">
-                    <div className="flex items-start gap-4">
-                        <AlertTriangle size={18} className="text-amber-400 shrink-0 mt-0.5" />
-                        <p className="text-[13.5px] text-on-surface font-body leading-relaxed">
-                            {t('carbAdjustmentNote')}
-                        </p>
-                    </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {SIGNAL_GROUPS.map(g => (
-                        <SignalGroupCard key={g.title} group={g} lang={lang} />
+            <div className="space-y-6">
+                <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+                    {detailTabs.map(tab => (
+                        <TabButton key={tab.id} active={activeDietTab === tab.id} onClick={() => setActiveDietTab(tab.id)}>
+                            {tab.icon} {tab.label}
+                        </TabButton>
                     ))}
                 </div>
-            </Section>
 
-            {/* ── Disclaimer + quote ───────────────────────────────── */}
-            <div className="rounded-2xl border border-outline-variant/25 bg-surface-container-lowest p-6 space-y-4">
-                <p className="text-[12.5px] text-on-surface-variant font-body leading-relaxed italic">
-                    {t('dietDisclaimer')}
-                </p>
-                <p className="text-[14px] text-primary font-headline font-bold tracking-tight italic">
-                    “{t('dietQuote')}”
-                </p>
+                {activeDietTab === 'meals' && (
+                    <Section
+                        eyebrow={t('dailyPlan')}
+                        title={dayMode === 'training' ? t('trainingDay') : t('restDay')}
+                        icon={dayMode === 'training' ? <Sun size={16} className="text-primary" /> : <Moon size={16} className="text-primary" />}
+                        actions={
+                            <div className="inline-flex items-center rounded-full border border-outline-variant/30 bg-surface-container-lowest p-1">
+                                <DayTab active={dayMode === 'training'} onClick={() => setDayMode('training')}>
+                                    <Sun size={12} /> {t('trainingShort')}
+                                </DayTab>
+                                <DayTab active={dayMode === 'rest'} onClick={() => setDayMode('rest')}>
+                                    <Moon size={12} /> {t('restShort')}
+                                </DayTab>
+                            </div>
+                        }
+                    >
+                        <DayTotals day={day} />
+                        <MealsTable meals={day.meals} lang={lang} />
+                    </Section>
+                )}
+
+                {activeDietTab === 'foods' && (
+                    <Section
+                        eyebrow={t('foodKeys')}
+                        title={t('foodKeysTitle')}
+                        icon={<Apple size={16} className="text-primary" />}
+                    >
+                        <p className="text-[13.5px] text-on-surface-variant font-body leading-relaxed mb-5 max-w-2xl">
+                            {t('foodKeysIntro')}
+                        </p>
+                        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1 mb-5">
+                            {foodTabs.map(tab => (
+                                <TabButton key={tab.id} active={activeFoodTab === tab.id} onClick={() => setActiveFoodTab(tab.id)} compact>
+                                    {tab.icon} {tab.label}
+                                </TabButton>
+                            ))}
+                        </div>
+                        {activeFoodTab === 'protein' && (
+                            <KeyTable
+                                icon={<Beef size={14} className="text-primary" />}
+                                title={t('proteinSources')}
+                                headers={[t('foodHeaderFood'), 'P', 'C', 'F']}
+                                rows={PROTEIN_KEYS.map(p => [tFood(p.food, lang), `${p.protein}`, `${p.carbs}`, `${p.fat}`])}
+                            />
+                        )}
+                        {activeFoodTab === 'carbs' && (
+                            <KeyTable
+                                icon={<Wheat size={14} className="text-primary" />}
+                                title={t('carbSources')}
+                                headers={[t('foodHeaderFood'), 'P', 'C', t('foodHeaderFibre'), 'F']}
+                                rows={CARB_KEYS.map(c => [tFood(c.food, lang), `${c.protein}`, `${c.carbs}`, `${c.fibers}`, `${c.fat}`])}
+                            />
+                        )}
+                        {activeFoodTab === 'fats' && (
+                            <KeyTable
+                                icon={<Droplet size={14} className="text-primary" />}
+                                title={t('fatSources')}
+                                headers={[t('foodHeaderFood'), 'P', 'C', 'F']}
+                                rows={FAT_KEYS.map(f => [tFood(f.food, lang), `${f.protein}`, `${f.carbs}`, `${f.fat}`])}
+                            />
+                        )}
+                        {activeFoodTab === 'free' && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <FreeFoodCard icon={<Carrot size={14} className="text-emerald-400" />} title={t('veggies')} items={VEGGIES.map(v => tFood(v, lang))} />
+                                <FreeFoodCard icon={<Cherry size={14} className="text-rose-400" />} title={t('fruits')} items={FRUITS.map(f => tFood(f, lang))} />
+                            </div>
+                        )}
+                    </Section>
+                )}
+
+                {activeDietTab === 'supplements' && (
+                    <Section eyebrow={t('supplementsEyebrow')} title={t('supplementsTitle')} icon={<Pill size={16} className="text-primary" />}>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <SupplementCard when={t('preBreakfast')} items={SUPPLEMENTS.preBreakfast.map(s => tSupplement(s, lang))} />
+                            <SupplementCard when={t('intraWorkout')} items={SUPPLEMENTS.intraWorkout.map(s => tSupplement(s, lang))} />
+                            <SupplementCard when={t('postWorkout')} items={SUPPLEMENTS.postWorkout.map(s => tSupplement(s, lang))} />
+                        </div>
+                    </Section>
+                )}
+
+                {activeDietTab === 'adjust' && (
+                    <Section eyebrow={t('weeklyCheckin')} title={t('adjustCarbsTitle')} icon={<Flame size={16} className="text-primary" />}>
+                        <DietDecisionGuide
+                            groups={SIGNAL_GROUPS}
+                            selectedGroup={selectedSignalGroup}
+                            selectedSignal={selectedSignal}
+                            selectedKey={selectedSignalKey}
+                            onSelectGroup={handleSignalGroupSelect}
+                            onSelectSignal={setSelectedSignalKey}
+                            lang={lang}
+                        />
+                        <details className="rounded-2xl border border-outline-variant/25 bg-surface-container-lowest p-4">
+                            <summary className="cursor-pointer text-[11px] font-label font-extrabold uppercase tracking-[0.18em] text-on-surface-variant">
+                                {lang === 'ar' ? 'كل الحالات' : 'Full reference matrix'}
+                            </summary>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                                {SIGNAL_GROUPS.map(g => (
+                                    <SignalGroupCard key={g.title} group={g} lang={lang} />
+                                ))}
+                            </div>
+                        </details>
+                    </Section>
+                )}
+
+                {activeDietTab === 'notes' && (
+                    <div className="rounded-2xl border border-outline-variant/25 bg-surface-container-lowest p-6 space-y-4">
+                        <p className="text-[12.5px] text-on-surface-variant font-body leading-relaxed italic">
+                            {t('dietDisclaimer')}
+                        </p>
+                        <p className="text-[14px] text-primary font-headline font-bold tracking-tight italic">
+                            “{t('dietQuote')}”
+                        </p>
+                    </div>
+                )}
             </div>
+
         </div>
     );
 };
@@ -686,6 +722,112 @@ function SupplementCard({ when, items }: { when: string; items: string[] }) {
     );
 }
 
+function DietDecisionGuide(props: {
+    groups?: SignalGroupOption[];
+    selectedGroup?: SignalGroupOption;
+    selectedSignal?: SignalRowOption;
+    selectedKey: string;
+    onSelectGroup?: (group: SignalGroupOption) => void;
+    onSelectSignal?: (key: string) => void;
+    options?: { group: SignalGroupOption; row: SignalRowOption }[];
+    selected?: { group: SignalGroupOption; row: SignalRowOption } | SignalRowOption;
+    onSelect?: (key: string) => void;
+    lang: 'en' | 'ar';
+}) {
+    const groups = props.groups ?? Array.from(new Map((props.options ?? []).map(item => [item.group.title, item.group])).values());
+    const selectedProp = props.selected && 'row' in props.selected ? props.selected : undefined;
+    const selectedRowProp = props.selected && !('row' in props.selected) ? props.selected : undefined;
+    const selectedGroup = props.selectedGroup ?? selectedProp?.group ?? groups[0];
+    const selectedSignal = props.selectedSignal ?? selectedProp?.row ?? selectedRowProp ?? selectedGroup?.rows[0];
+    const onSelectSignal = props.onSelectSignal ?? props.onSelect ?? (() => {});
+    const onSelectGroup = props.onSelectGroup ?? ((group: SignalGroupOption) => onSelectSignal(group.rows[0]?.signal ?? ''));
+
+    if (!selectedGroup || !selectedSignal) return null;
+
+    return (
+        <div className="space-y-5">
+            <div className="rounded-2xl bg-surface-container-lowest border border-outline-variant/25 p-5">
+                <div className="flex items-start gap-4">
+                    <AlertTriangle size={18} className="text-amber-400 shrink-0 mt-0.5" />
+                    <p className="text-[13.5px] text-on-surface font-body leading-relaxed">
+                        {props.lang === 'ar'
+                            ? 'اختر نوع المشكلة، ثم اختر الحالة الأقرب لأسبوعك. سيظهر لك التعديل المطلوب مباشرة.'
+                            : 'Pick the issue area, then the situation closest to your week. The app will show the adjustment directly.'}
+                    </p>
+                </div>
+            </div>
+
+            <div className="space-y-3">
+                <div className="text-[10px] font-label font-extrabold uppercase tracking-[0.18em] text-on-surface/50">
+                    {props.lang === 'ar' ? '1. اختر المنطقة' : '1. Choose the area'}
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+                    {groups.map(group => (
+                        <button
+                            key={group.title}
+                            type="button"
+                            onClick={() => onSelectGroup(group)}
+                            className={`text-left rounded-xl px-4 py-3 border transition-colors ${selectedGroup.title === group.title
+                                ? 'bg-primary/10 border-primary/45 text-on-surface'
+                                : 'bg-surface-container-lowest border-outline-variant/25 text-on-surface-variant hover:text-on-surface hover:border-primary/25'
+                            }`}
+                        >
+                            <div className="text-[11px] font-headline font-bold leading-tight">
+                                {tSignalGroupTitle(group.title, props.lang)}
+                            </div>
+                            <div className="mt-2 text-[10px] font-label font-bold uppercase tracking-[0.14em] text-on-surface/40">
+                                {group.rows.length} {props.lang === 'ar' ? 'حالات' : 'cases'}
+                            </div>
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.8fr)] gap-4">
+                <div className="space-y-3">
+                    <div className="text-[10px] font-label font-extrabold uppercase tracking-[0.18em] text-on-surface/50">
+                        {props.lang === 'ar' ? '2. اختر الحالة' : '2. Choose the situation'}
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        {selectedGroup.rows.map(row => (
+                            <button
+                                key={row.signal}
+                                type="button"
+                                onClick={() => onSelectSignal(row.signal)}
+                                className={`text-left rounded-xl px-4 py-3 border transition-colors ${props.selectedKey === row.signal
+                                    ? 'bg-primary/10 border-primary/45 text-on-surface'
+                                    : 'bg-surface-container-lowest border-outline-variant/25 text-on-surface-variant hover:text-on-surface hover:border-primary/25'
+                                }`}
+                            >
+                                <div className="text-[12.5px] font-body leading-relaxed">
+                                    {tSignal(row.signal, props.lang)}
+                                </div>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="rounded-2xl bg-primary/[0.06] border border-primary/20 p-5">
+                    <div className="text-[10px] font-label font-extrabold uppercase tracking-[0.22em] text-on-surface/60 mb-3">
+                        {tSignalGroupTitle(selectedGroup.title, props.lang)}
+                    </div>
+                    <p className="text-[13.5px] text-on-surface-variant font-body leading-relaxed mb-5">
+                        {tSignal(selectedSignal.signal, props.lang)}
+                    </p>
+                    <div className="rounded-xl bg-surface-container-lowest/70 border border-outline-variant/25 p-4">
+                        <div className="text-[10px] font-label font-extrabold uppercase tracking-[0.18em] text-primary mb-2">
+                            {props.lang === 'ar' ? 'ماذا تفعل' : 'What to do'}
+                        </div>
+                        <div className="text-[15px] text-primary font-headline font-bold leading-relaxed">
+                            {tAction(selectedSignal.action, props.lang)}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 function SignalGroupCard({ group, lang }: { group: typeof SIGNAL_GROUPS[number]; lang: 'en' | 'ar' }) {
     const TONE_BG: Record<typeof group.tone, string> = {
         general:     'rgb(217 119 6 / 0.10)',
@@ -784,6 +926,28 @@ function DayTab({ active, onClick, children }: { active: boolean; onClick: () =>
                 background: active ? 'linear-gradient(135deg, rgb(var(--primary)), rgb(var(--primary-container)))' : 'transparent',
                 color: active ? 'rgb(var(--on-primary))' : 'rgb(var(--on-surface) / 0.65)',
                 boxShadow: active ? '0 6px 14px rgb(var(--primary) / 0.32)' : 'none',
+            }}
+        >
+            {children}
+        </button>
+    );
+}
+
+function TabButton({ active, onClick, children, compact }: {
+    active: boolean; onClick: () => void; children: React.ReactNode; compact?: boolean;
+}) {
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            className={`bzt-press inline-flex items-center gap-2 shrink-0 rounded-full border font-label font-extrabold uppercase tracking-[0.16em] transition-all ${
+                compact ? 'px-3.5 py-2 text-[10px]' : 'px-4 py-2.5 text-[10px]'
+            }`}
+            style={{
+                background: active ? 'linear-gradient(135deg, rgb(var(--primary)), rgb(var(--primary-container)))' : 'rgb(var(--surface-container-low))',
+                color: active ? 'rgb(var(--on-primary))' : 'rgb(var(--on-surface) / 0.66)',
+                borderColor: active ? 'rgb(var(--primary) / 0.75)' : 'rgb(var(--outline-variant) / 0.30)',
+                boxShadow: active ? '0 8px 18px rgb(var(--primary) / 0.22)' : 'none',
             }}
         >
             {children}

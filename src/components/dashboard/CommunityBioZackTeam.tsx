@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { useSelfLogs } from '../../hooks/useSelfLogs';
+import { useWeeklyCheckIns } from '../../hooks/useWeeklyCheckIns';
 import { useActiveProgram } from '../../hooks/useActiveProgram';
 import { useAcademy } from '../../context/AcademyContext';
 import { useCommunity } from '../../context/CommunityContext';
@@ -12,6 +13,7 @@ import {
     WeekStatusPanel,
     ContinueAcademyCard, TodayWorkoutCard, TodayDietCard, CommunityActivityCard, ProgressCTA,
 } from './biozackteam/shared';
+import { CalendarCheck, Flame } from 'lucide-react';
 
 // ─── Header (community variant — time-of-day greeting + weight progress chip) ──
 function getGreetingKey(): 'goodMorning' | 'goodAfternoon' | 'goodEvening' {
@@ -159,11 +161,99 @@ function Header({ name, initials, currentWeight, startWeight, goalWeight }: {
 }
 
 // ═══ MAIN ═══════════════════════════════════════════════════════════════
+function WeeklyUpdateReminderCard({ locked, lastDate, nextDate, onNavigate }: {
+    locked: boolean;
+    lastDate?: string | null;
+    nextDate?: string | null;
+    onNavigate: (path: string) => void;
+}) {
+    const { t: tx } = useLanguage();
+    const fmt = (iso?: string | null) =>
+        iso ? new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
+
+    return (
+        <button
+            type="button"
+            onClick={() => onNavigate('/update')}
+            className="bzt-rise-in"
+            style={{
+                width: '100%',
+                textAlign: 'left',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 16,
+                padding: 18,
+                borderRadius: 18,
+                background: locked ? t.surfaceContainerLow : 'rgb(var(--primary) / 0.10)',
+                border: `1px solid ${locked ? t.outline : 'rgb(var(--primary) / 0.35)'}`,
+                cursor: 'pointer',
+            }}
+        >
+            <div style={{ display: 'flex', gap: 14, alignItems: 'center', minWidth: 0 }}>
+                <div style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 14,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background: locked ? t.surfaceContainerHighest : goldGradient,
+                    color: locked ? t.primary : t.onPrimaryFixed,
+                    flexShrink: 0,
+                }}>
+                    {locked ? <CalendarCheck size={20} /> : <Flame size={20} />}
+                </div>
+                <div style={{ minWidth: 0 }}>
+                    <div style={{
+                        fontFamily: t.body,
+                        fontSize: 11,
+                        fontWeight: 700,
+                        letterSpacing: '0.14em',
+                        textTransform: 'uppercase',
+                        color: locked ? t.onSurfaceVariant : t.primary,
+                    }}>
+                        Weekly update
+                    </div>
+                    <div style={{
+                        marginTop: 4,
+                        fontFamily: t.display,
+                        fontSize: 18,
+                        fontWeight: 600,
+                        color: t.onSurface,
+                        letterSpacing: '-0.01em',
+                    }}>
+                        {locked ? `Logged ${fmt(lastDate)}` : 'Log weight, signals, and cardio'}
+                    </div>
+                    <p style={{ margin: '4px 0 0', fontFamily: t.body, fontSize: 12, color: t.onSurfaceVariant }}>
+                        {locked ? `Next update opens ${fmt(nextDate)}` : 'Takes one minute and updates your charts.'}
+                    </p>
+                </div>
+            </div>
+            <span style={{
+                flexShrink: 0,
+                padding: '8px 14px',
+                borderRadius: 999,
+                background: locked ? t.surfaceContainerHighest : goldGradient,
+                color: locked ? t.onSurfaceVariant : t.onPrimaryFixed,
+                fontFamily: t.body,
+                fontSize: 11,
+                fontWeight: 700,
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
+            }}>
+                {locked ? tx('view') : 'Log cardio'}
+            </span>
+        </button>
+    );
+}
+
 export const CommunityBioZackTeam = () => {
     const { user } = useAuth();
     const { t: tx } = useLanguage();
     const navigate = useNavigate();
     const { logs } = useSelfLogs();
+    const { weighIns } = useWeeklyCheckIns();
     const { activeProgram, getTodaysDay, todaysDayNumber } = useActiveProgram();
     const { assignedDietId, snapshot: assignedDietSnapshot } = useAssignedDiet();
     const { courses, userProgress, lessons, loadLessons } = useAcademy();
@@ -203,6 +293,18 @@ export const CommunityBioZackTeam = () => {
 
     const name = user?.name?.split(' ')[0] ?? tx('athleteFallback');
     const initials = (user?.name ?? '').split(' ').map(s => s[0]).join('').slice(0, 2).toUpperCase() || 'ME';
+    const todayKey = new Date().toISOString().slice(0, 10);
+    const lastWeeklyDate = useMemo(
+        () => [...weighIns].map(w => w.date).sort((a, b) => b.localeCompare(a))[0] ?? null,
+        [weighIns]
+    );
+    const nextWeeklyDate = useMemo(() => {
+        if (!lastWeeklyDate) return null;
+        const d = new Date(lastWeeklyDate);
+        d.setDate(d.getDate() + 7);
+        return d.toISOString().slice(0, 10);
+    }, [lastWeeklyDate]);
+    const updateLocked = !!nextWeeklyDate && nextWeeklyDate > todayKey;
 
     return (
         <div style={{ fontFamily: t.body, color: t.onSurface, padding: '8px 0 40px' }}>
@@ -214,6 +316,15 @@ export const CommunityBioZackTeam = () => {
                 startWeight={startWeight}
                 goalWeight={goalWeight}
             />
+
+            <div style={{ marginBottom: 24 }}>
+                <WeeklyUpdateReminderCard
+                    locked={updateLocked}
+                    lastDate={lastWeeklyDate}
+                    nextDate={nextWeeklyDate}
+                    onNavigate={navigate}
+                />
+            </div>
 
             {/* 2. Combined week status panel — calendar + streak ring + level + rank.
                    Replaces the old 3 separate metric cards + standalone standing card. */}

@@ -19,16 +19,27 @@
  */
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useData } from '../context/DataContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import {
-    Globe, Bell, LogOut, Shield, Sun, Moon, Edit2, Calendar,
+    Globe, Bell, LogOut, Shield, Sun, Moon, Edit2, Calendar, UserRound, Activity, Target, Award,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { CommunityBaselineForm } from '../components/profile/CommunityBaselineForm';
 
+function calculateAge(birthdate: string): number {
+    const birth = new Date(birthdate);
+    const today = new Date();
+    let age = today.getFullYear() - birth.getFullYear();
+    const m = today.getMonth() - birth.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+    return age;
+}
+
 export const Settings = () => {
     const { user, signOut } = useAuth();
+    const { clients } = useData();
     const { t, lang, setLang } = useLanguage();
     const { theme, toggleTheme } = useTheme();
     const navigate = useNavigate();
@@ -44,6 +55,7 @@ export const Settings = () => {
 
     const isCommunity = user.role === 'community';
     const hasBaseline = Boolean(user.communityProfileStartedAt);
+    const client = clients.find(c => c.userId === user.id);
 
     return (
         <div className="max-w-2xl mx-auto space-y-8 animate-in fade-in duration-500 pt-4 pb-20">
@@ -88,6 +100,45 @@ export const Settings = () => {
             </section>
 
             {/* ── Preferences card ─────────────────────────────────── */}
+            {(isCommunity || client) && (
+                <section className="bg-surface-container-low rounded-2xl ghost-border overflow-hidden">
+                    <div className="px-6 pt-6 pb-3">
+                        <span className="font-label text-[10px] font-bold uppercase tracking-widest text-on-surface/55">
+                            {t('personalInfo')}
+                        </span>
+                    </div>
+
+                    {isCommunity && user.age !== undefined && (
+                        <Row icon={<Calendar size={18} className="text-on-surface-variant" />} label={t('age')} control={<InfoValue>{user.age} {t('yearsOld')}</InfoValue>} />
+                    )}
+                    {isCommunity && user.heightCm !== undefined && (
+                        <Row icon={<UserRound size={18} className="text-on-surface-variant" />} label={t('height')} control={<InfoValue>{user.heightCm} cm</InfoValue>} />
+                    )}
+                    {isCommunity && user.goal && (
+                        <Row
+                            icon={<Target size={18} className="text-on-surface-variant" />}
+                            label={t('goal')}
+                            control={<InfoValue>{t(`goal${user.goal.charAt(0).toUpperCase()}${user.goal.slice(1).replace(/_(\w)/g, (_, c) => c.toUpperCase())}`)}</InfoValue>}
+                        />
+                    )}
+                    {isCommunity && user.currentWeightKg !== undefined && (
+                        <Row icon={<Activity size={18} className="text-on-surface-variant" />} label={t('currentWeight')} control={<InfoValue>{user.currentWeightKg} kg</InfoValue>} />
+                    )}
+                    {isCommunity && user.targetWeightKg !== undefined && (
+                        <Row icon={<Award size={18} className="text-on-surface-variant" />} label={t('targetWeight') || 'Target'} control={<InfoValue>{user.targetWeightKg} kg</InfoValue>} />
+                    )}
+                    {client?.birthdate && (
+                        <Row icon={<Calendar size={18} className="text-on-surface-variant" />} label={t('age')} control={<InfoValue>{calculateAge(client.birthdate)} {t('yearsOld')}</InfoValue>} />
+                    )}
+                    {client?.gender && (
+                        <Row icon={<UserRound size={18} className="text-on-surface-variant" />} label={t('gender')} control={<InfoValue>{t(client.gender)}</InfoValue>} />
+                    )}
+                    {client?.fitnessLevel && (
+                        <Row icon={<Award size={18} className="text-on-surface-variant" />} label={t('fitnessLevel')} control={<InfoValue>{t(client.fitnessLevel === 'pro_competitions' ? 'proCompetitions' : client.fitnessLevel)}</InfoValue>} />
+                    )}
+                </section>
+            )}
+
             <section className="bg-surface-container-low rounded-2xl ghost-border overflow-hidden">
                 <div className="px-6 pt-6 pb-3">
                     <span className="font-label text-[10px] font-bold uppercase tracking-widest text-on-surface/55">
@@ -217,4 +268,8 @@ function Row({ icon, label, control, last }: {
             <div className="shrink-0">{control}</div>
         </div>
     );
+}
+
+function InfoValue({ children }: { children: React.ReactNode }) {
+    return <span className="text-sm font-headline font-bold text-on-surface">{children}</span>;
 }

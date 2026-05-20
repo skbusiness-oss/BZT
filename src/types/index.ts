@@ -167,6 +167,17 @@ export interface MacroTarget {
     calories: number;
 }
 
+export type CarbTargetMode = 'cycling' | 'moderate';
+
+export interface MacroTargets {
+    mode?: CarbTargetMode;
+    highCarb: MacroTarget;
+    lowCarb: MacroTarget;
+    moderateCarb?: MacroTarget;
+    /** Weekly cardio calorie target prescribed by the coach. */
+    cardio?: number;
+}
+
 // ─── Audience profile (post-deletion ICP analytics) ──────────────────────
 //
 // Anonymized snapshot written by the deleteUser Cloud Function before any
@@ -231,17 +242,8 @@ export interface Week {
     clientId: string;
     weekNumber: number;
     status: 'pending' | 'submitted' | 'reviewed' | 'locked';
-    activeTargets: {
-        highCarb: MacroTarget;
-        lowCarb: MacroTarget;
-        /** Weekly cardio calorie target prescribed by the coach. */
-        cardio?: number;
-    };
-    newTargets?: {
-        highCarb: MacroTarget;
-        lowCarb: MacroTarget;
-        cardio?: number;
-    };
+    activeTargets: MacroTargets;
+    newTargets?: MacroTargets;
     changeTargetsFn?: boolean;
     dailyEntries: DayEntry[];
     weeklySummary?: string;
@@ -472,6 +474,11 @@ export interface Message {
     receiverId: string;
     senderName: string;
     text: string;
+    imageUrl?: string;
+    imagePath?: string;
+    imageName?: string;
+    imageType?: string;
+    imageSize?: number;
     timestamp: string;
     read: boolean;
 }

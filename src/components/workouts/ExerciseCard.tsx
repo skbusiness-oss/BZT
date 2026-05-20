@@ -6,21 +6,25 @@
 // Dumbbell placeholder when the exercise is not in ExerciseDB.
 // ============================================================
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Exercise } from '../../types';
 import { getExerciseByName, ExerciseDetail } from '../../lib/exerciseService';
-import { Dumbbell, Timer } from 'lucide-react';
+import { getExerciseDetail as getLocalExerciseDetail } from '../../data/exerciseLibrary';
+import { Dumbbell, PlayCircle, Timer } from 'lucide-react';
 import clsx from 'clsx';
 
 interface ExerciseCardProps {
     exercise: Exercise;
     index: number;
+    onClick?: () => void;
 }
 
-export const ExerciseCard = ({ exercise, index }: ExerciseCardProps) => {
+export const ExerciseCard = ({ exercise, index, onClick }: ExerciseCardProps) => {
     const [status, setStatus] = useState<'loading' | 'done' | 'miss'>('loading');
     const [detail, setDetail] = useState<ExerciseDetail | null>(null);
     const [imgReady, setImgReady] = useState(false);
+    const localDetail = useMemo(() => getLocalExerciseDetail(exercise.name), [exercise.name]);
+    const hasVideoDetail = !!localDetail?.videoId || !!localDetail?.videoUrl || !!localDetail?.gifUrl || !!detail?.gifUrl;
 
     useEffect(() => {
         let alive = true;
@@ -38,7 +42,22 @@ export const ExerciseCard = ({ exercise, index }: ExerciseCardProps) => {
     }, [exercise.name]);
 
     return (
-        <div className="flex gap-3 p-3 rounded-xl bg-surface-container/25 border border-white/[0.04] hover:border-white/[0.07] transition-colors">
+        <div
+            className={clsx(
+                'flex gap-3 p-3 rounded-xl bg-surface-container/25 border border-white/[0.04] hover:border-white/[0.07] transition-colors',
+                onClick && 'cursor-pointer hover:bg-surface-container/45'
+            )}
+            onClick={onClick}
+            onKeyDown={event => {
+                if (!onClick) return;
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    onClick();
+                }
+            }}
+            role={onClick ? 'button' : undefined}
+            tabIndex={onClick ? 0 : undefined}
+        >
 
             {/* ── GIF tile ─────────────────────────────────── */}
             <div className="relative w-[72px] h-[72px] rounded-xl overflow-hidden shrink-0 bg-surface-container/60 flex items-center justify-center">
@@ -115,6 +134,19 @@ export const ExerciseCard = ({ exercise, index }: ExerciseCardProps) => {
                                 {detail.equipment}
                             </span>
                         )}
+                        {hasVideoDetail && (
+                            <span className="px-2 py-0.5 rounded-full bg-primary/10 border border-primary/15 text-primary text-[10px] font-medium flex items-center gap-1">
+                                <PlayCircle size={10} /> Video
+                            </span>
+                        )}
+                    </div>
+                )}
+
+                {status !== 'done' && hasVideoDetail && (
+                    <div className="flex gap-1.5 mt-1.5 flex-wrap">
+                        <span className="px-2 py-0.5 rounded-full bg-primary/10 border border-primary/15 text-primary text-[10px] font-medium flex items-center gap-1">
+                            <PlayCircle size={10} /> Video
+                        </span>
                     </div>
                 )}
 

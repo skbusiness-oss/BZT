@@ -1230,4 +1230,80 @@ for (const [key, videoId] of Object.entries(FIT_DISTANCE_VIDEOS)) {
     }
 }
 
+function stretchDetail(name: string, videoId: string, primary: string[], instructions: string[], tips: string[], mistakes: string[]): ExerciseDetail {
+    return {
+        canonicalName: name,
+        canonicalNameAr: name,
+        gifUrl: '',
+        videoId,
+        videoSource: 'youtube',
+        gifSource: 'youtube',
+        muscles: {
+            primary,
+            primaryAr: primary,
+            secondary: [],
+            secondaryAr: [],
+        },
+        instructions,
+        instructionsAr: instructions,
+        tips,
+        tipsAr: tips,
+        commonMistakes: mistakes,
+        commonMistakesAr: mistakes,
+        equipment: 'Bodyweight',
+        equipmentAr: 'Bodyweight',
+    };
+}
+
+Object.assign(LIBRARY, {
+    'Dynamic Full Body Warm-Up': stretchDetail(
+        'Dynamic Full Body Warm-Up',
+        '3qyWpJ34dWw',
+        ['Full body'],
+        ['Move continuously through the follow-along warm-up.', 'Keep each rep smooth and controlled.', 'Finish feeling warm, not tired.'],
+        ['Use this before lifting, cardio, or sport.', 'Keep the range pain-free.'],
+        ['Holding static positions before heavy lifting.', 'Rushing through the movement.']
+    ),
+    'Static Full Body Stretch': stretchDetail(
+        'Static Full Body Stretch',
+        'aZ1PzhThqcU',
+        ['Full body'],
+        ['Hold each position with slow nasal breathing.', 'Ease into the stretch over the first 10 seconds.', 'Back off if the stretch becomes sharp.'],
+        ['Best after training or on recovery days.', 'Aim for steady pressure, not pain.'],
+        ['Bouncing in the stretch.', 'Forcing end range.']
+    ),
+    'Back Pain Relief Stretch Routine': stretchDetail(
+        'Back Pain Relief Stretch Routine',
+        'UYMmtEFhuxA',
+        ['Back', 'Hips'],
+        ['Follow the routine slowly.', 'Keep the spine relaxed and breathe through each position.', 'Stop if symptoms travel or pain increases.'],
+        ['Use after long sitting or on recovery days.', 'Pair with easy walking when possible.'],
+        ['Pushing into pain.', 'Holding your breath.']
+    ),
+    'Full Body Stretching Routine': stretchDetail(
+        'Full Body Stretching Routine',
+        'E2SOrScNbww',
+        ['Full body'],
+        ['Follow the full-body mobility flow.', 'Move from one position to the next without rushing.', 'Keep breathing slow and consistent.'],
+        ['Good for mornings, rest days, or evening recovery.', 'Repeat the routine when you feel stiff.'],
+        ['Turning recovery into a hard workout.', 'Skipping positions that feel tight instead of modifying them.']
+    ),
+    'Worlds Greatest Stretch': stretchDetail('Worlds Greatest Stretch', '3qyWpJ34dWw', ['Hips', 'Thoracic spine'], ['Step into a long lunge.', 'Place one hand inside the front foot.', 'Rotate the chest toward the front leg.'], ['Keep the back knee soft.', 'Exhale during the rotation.'], ['Collapsing the front knee inward.', 'Twisting through the lower back only.']),
+    'Leg Swings': stretchDetail('Leg Swings', '3qyWpJ34dWw', ['Hips', 'Hamstrings'], ['Hold support if needed.', 'Swing the leg under control front to back.', 'Repeat side to side.'], ['Start small and build range.', 'Keep the torso tall.'], ['Kicking aggressively.', 'Arching the lower back.']),
+    'Arm Circles': stretchDetail('Arm Circles', '3qyWpJ34dWw', ['Shoulders'], ['Extend the arms.', 'Circle forward, then backward.', 'Keep ribs stacked over hips.'], ['Use small circles first.', 'Stay relaxed through the neck.'], ['Shrugging the shoulders.', 'Moving too fast.']),
+    'Hip Circles': stretchDetail('Hip Circles', '3qyWpJ34dWw', ['Hips'], ['Stand tall.', 'Draw slow circles from the hip.', 'Reverse direction.'], ['Brace lightly.', 'Keep the standing foot planted.'], ['Rotating the whole torso.', 'Forcing range.']),
+    'Hamstring Stretch': stretchDetail('Hamstring Stretch', 'aZ1PzhThqcU', ['Hamstrings'], ['Set one leg forward.', 'Hinge at the hips.', 'Hold steady tension.'], ['Keep a soft knee bend.', 'Think chest forward.'], ['Rounding aggressively.', 'Pulling into pain.']),
+    'Quad Stretch': stretchDetail('Quad Stretch', 'aZ1PzhThqcU', ['Quads'], ['Stand tall and grab one ankle.', 'Bring knees close together.', 'Squeeze the glute gently.'], ['Use a wall for balance.', 'Keep the pelvis tucked.'], ['Arching the lower back.', 'Yanking the foot.']),
+    'Chest Doorway Stretch': stretchDetail('Chest Doorway Stretch', 'aZ1PzhThqcU', ['Chest'], ['Place forearm on a doorway.', 'Step through slowly.', 'Hold with relaxed breathing.'], ['Keep the shoulder down.', 'Use a lower arm angle if pinchy.'], ['Letting the shoulder roll forward.', 'Twisting too hard.']),
+    'Childs Pose Lat Stretch': stretchDetail('Childs Pose Lat Stretch', 'E2SOrScNbww', ['Lats', 'Back'], ['Sit hips toward heels.', 'Reach hands forward.', 'Walk hands to each side for more lat stretch.'], ['Breathe into the ribs.', 'Keep shoulders relaxed.'], ['Forcing hips down.', 'Holding breath.']),
+    'Cat Cow Stretch': stretchDetail('Cat Cow Stretch', 'UYMmtEFhuxA', ['Spine'], ['Start on hands and knees.', 'Round the back slowly.', 'Then extend gently.'], ['Move one vertebra at a time.', 'Keep it pain-free.'], ['Moving too fast.', 'Dropping into the lower back.']),
+    'Knee To Chest Stretch': stretchDetail('Knee To Chest Stretch', 'UYMmtEFhuxA', ['Lower back', 'Glutes'], ['Lie on your back.', 'Pull one knee toward the chest.', 'Hold and breathe.'], ['Keep the opposite leg relaxed.', 'Use hands behind the thigh if needed.'], ['Pulling sharply.', 'Lifting the head and neck.']),
+    'Figure Four Stretch': stretchDetail('Figure Four Stretch', 'eQHmKJh20_c', ['Glutes', 'Hips'], ['Cross one ankle over the opposite thigh.', 'Pull the legs toward you.', 'Hold steady tension.'], ['Keep the foot flexed.', 'Breathe slowly.'], ['Cranking the knee.', 'Twisting the pelvis.']),
+    'Thread The Needle Stretch': stretchDetail('Thread The Needle Stretch', 'BPlCatqZRPI', ['Upper back', 'Shoulders'], ['Start on hands and knees.', 'Reach one arm under the body.', 'Rotate gently and hold.'], ['Let the shoulder rest if comfortable.', 'Exhale into the rotation.'], ['Forcing the neck down.', 'Holding your breath.']),
+    'Hip Flexor Stretch': stretchDetail('Hip Flexor Stretch', 'eQHmKJh20_c', ['Hip flexors'], ['Set a half-kneeling position.', 'Tuck the pelvis slightly.', 'Shift forward until you feel the front hip.'], ['Squeeze the back-leg glute.', 'Keep ribs down.'], ['Overarching the back.', 'Pushing the knee too far forward.']),
+    'Pancake Stretch': stretchDetail('Pancake Stretch', 'eQHmKJh20_c', ['Adductors', 'Hamstrings'], ['Sit with legs wide.', 'Hinge forward from the hips.', 'Hold a comfortable range.'], ['Use hands for support.', 'Keep knees pointed up.'], ['Rounding hard to chase depth.', 'Bouncing.']),
+    'Lat Stretch': stretchDetail('Lat Stretch', 'E2SOrScNbww', ['Lats'], ['Reach both arms forward on a bench or floor.', 'Sink the chest gently.', 'Breathe into the sides of the ribs.'], ['Keep elbows soft.', 'Shift slightly side to side.'], ['Forcing the shoulders overhead.', 'Shrugging.']),
+    'Seated Spinal Twist': stretchDetail('Seated Spinal Twist', 'BPlCatqZRPI', ['Spine', 'Hips'], ['Sit tall.', 'Cross one leg if comfortable.', 'Rotate gently from the upper back.'], ['Grow tall before rotating.', 'Use an easy breath rhythm.'], ['Yanking with the arms.', 'Twisting into pain.']),
+});
+
 export { LIBRARY as EXERCISE_LIBRARY };

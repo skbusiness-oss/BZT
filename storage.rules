@@ -29,7 +29,25 @@ service firebase.storage {
                     && request.auth.uid == userId;
     }
 
-    // ─── Legacy video PDFs: video-pdfs/{videoId}/** ───────────
+    // Chat image attachments.
+    match /chat-images/{senderId}/to/{receiverId}/{allPaths=**} {
+
+      allow read: if request.auth != null
+                  && (request.auth.uid == senderId
+                      || request.auth.uid == receiverId
+                      || isCoach());
+
+      allow write: if request.auth != null
+                   && request.auth.uid == senderId
+                   && request.resource != null
+                   && request.resource.contentType.matches('image/.*')
+                   && request.resource.size <= 10 * 1024 * 1024;
+
+      allow delete: if request.auth != null
+                    && (request.auth.uid == senderId || isCoach());
+    }
+
+    // Legacy video PDFs: video-pdfs/{videoId}/**
     // Reads: any signed-in user (so attached PDFs play in the lesson view).
     // Writes/deletes: coach/admin only via the custom claim.
     match /video-pdfs/{videoId}/{allPaths=**} {

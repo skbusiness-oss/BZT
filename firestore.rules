@@ -39,22 +39,34 @@ service cloud.firestore {
     // gate `users/{uid}` itself with this — the user needs to read their
     // own doc to discover they're disabled and trigger the sign-out.
     function isActive() {
-      return !exists(/databases/$(database)/documents/users/$(request.auth.uid))
-          || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.disabled != true;
+      return request.auth.token.disabled != true
+             && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+             && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.disabled != true;
     }
 
     function isValidString(s, maxLen) {
       return s is string && s.size() > 0 && s.size() <= maxLen;
     }
 
-    // Library catalog gate — bare minimum. Just "signed in".
-    // No isActive(), no role check, no get() calls. Disabled-user and
-    // deleted-user enforcement happens through the AuthContext tombstone
-    // gate + the `users/{uid}` listener — both client-side, both immediate
-    // sign-out. Rule-level multi-doc lookups caused repeated launch-day
-    // breakages today; trading that for a slightly looser fence here.
+    function isValidMessageBody() {
+      let hasText = request.resource.data.text is string
+                    && request.resource.data.text.size() > 0
+                    && request.resource.data.text.size() <= 2000;
+      let hasImage = ('imageUrl' in request.resource.data)
+                     && request.resource.data.imageUrl is string
+                     && request.resource.data.imageUrl.size() > 0
+                     && request.resource.data.imageUrl.size() <= 2000
+                     && request.resource.data.imagePath is string
+                     && request.resource.data.imagePath.size() > 0
+                     && request.resource.data.imagePath.size() <= 500;
+      return request.resource.data.text is string
+             && request.resource.data.text.size() <= 2000
+             && (hasText || hasImage);
+    }
+
+    // Library catalog gate — active and signed in.
     function canAccessLibrary() {
-      return isSignedIn();
+      return isSignedIn() && isActive();
     }
 
     function canReadCourseData(course) {
@@ -287,16 +299,19 @@ service cloud.firestore {
 
     // ─── messages/{messageId} ─────────────────────────────────
     match /messages/{messageId} {
-      allow read: if isSignedIn()
-                  && (resource.data.senderId == request.auth.uid
+      allow read: if isSignedIn() && isActive()
+                  && (isCoach()
+                      || resource.data.senderId == request.auth.uid
                       || resource.data.receiverId == request.auth.uid);
 
-      allow create: if isSignedIn()
+      allow create: if isSignedIn() && isActive()
                     && request.resource.data.senderId == request.auth.uid
-                    && isValidString(request.resource.data.text, 2000);
+                    && request.resource.data.receiverId is string
+                    && request.resource.data.senderName is string
+                    && isValidMessageBody();
 
       // Only mark-as-read updates allowed for the receiver
-      allow update: if isSignedIn()
+      allow update: if isSignedIn() && isActive()
                     && resource.data.receiverId == request.auth.uid
                     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
 
@@ -305,19 +320,23 @@ service cloud.firestore {
 
     // ─── posts/{postId} ───────────────────────────────────────
     match /posts/{postId} {
-      allow read: if isSignedIn();
+      allow read: if isSignedIn() && isActive();
 
       // authorId must match caller; authorRole must match caller's actual role
       // (prevents spoofing e.g. a community member posting as 'coach')
-      allow create: if isSignedIn()
+      allow create: if isSignedIn() && isActive()
                     && request.resource.data.authorId == request.auth.uid
                     && request.resource.data.authorRole == role()
                     && isValidString(request.resource.data.content, 5000);
 
-      allow update: if isSignedIn()
+      allow update: if isSignedIn() && isActive()
                     && (
                       isCoach()
-                      || resource.data.authorId == request.auth.uid
+                      || (
+                        resource.data.authorId == request.auth.uid
+                        && !request.resource.data.diff(resource.data).affectedKeys()
+                             .hasAny(['authorId', 'authorRole', 'commentCount'])
+                      )
                       // Like-toggle for non-author non-coach: only the
                       // `likes` array may change, no duplicates, set
                       // diff must equal exactly the caller's own uid
@@ -336,21 +355,21 @@ service cloud.firestore {
                       )
                     );
 
-      allow delete: if isSignedIn()
+      allow delete: if isSignedIn() && isActive()
                     && (isCoach() || resource.data.authorId == request.auth.uid);
 
       // ── comments ────────────────────────────────────────────
       match /comments/{commentId} {
-        allow read: if isSignedIn();
+        allow read: if isSignedIn() && isActive();
 
-        allow create: if isSignedIn()
+        allow create: if isSignedIn() && isActive()
                       && request.resource.data.authorId == request.auth.uid
                       && isValidString(request.resource.data.content, 1000);
 
-        allow update: if isSignedIn()
+        allow update: if isSignedIn() && isActive()
                       && (isCoach() || resource.data.authorId == request.auth.uid);
 
-        allow delete: if isSignedIn()
+        allow delete: if isSignedIn() && isActive()
                       && (isCoach() || resource.data.authorId == request.auth.uid);
       }
     }

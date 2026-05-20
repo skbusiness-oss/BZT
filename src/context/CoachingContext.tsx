@@ -18,7 +18,7 @@ const callSetUserRole = httpsCallable<
   { targetUid: string; role: 'community' | 'client' | 'coach' | 'admin' },
   { ok: boolean }
 >(functions, 'setUserRole');
-import { Client, Week, MacroTarget } from '../types';
+import { Client, Week, MacroTarget, MacroTargets } from '../types';
 import { validateImageFile } from '../lib/validation';
 import { reportError } from '../lib/reportError';
 import { DEFAULT_TARGETS } from '../lib/constants';
@@ -31,6 +31,29 @@ function docToObj<T>(snap: QueryDocumentSnapshot<DocumentData>): T {
   return { id: snap.id, ...data } as T;
 }
 
+const calculateCals = (m: MacroTarget) => (m.carbs * 4) + (m.protein * 4) + (m.fats * 9);
+
+function moderateFromTargets(targets: { highCarb: MacroTarget; lowCarb: MacroTarget }): MacroTarget {
+  const avg = {
+    carbs: Math.round((targets.highCarb.carbs + targets.lowCarb.carbs) / 2),
+    protein: Math.round((targets.highCarb.protein + targets.lowCarb.protein) / 2),
+    fats: Math.round((targets.highCarb.fats + targets.lowCarb.fats) / 2),
+    calories: 0,
+  };
+  avg.calories = calculateCals(avg);
+  return avg;
+}
+
+function normalizeTargets(targets: MacroTargets): MacroTargets {
+  return {
+    mode: targets.mode ?? 'cycling',
+    highCarb: targets.highCarb,
+    lowCarb: targets.lowCarb,
+    moderateCarb: targets.moderateCarb ?? moderateFromTargets(targets),
+    cardio: targets.cardio ?? 0,
+  };
+}
+
 export interface CoachingContextType {
   clients: Client[];
   weeks: Week[];
@@ -41,18 +64,18 @@ export interface CoachingContextType {
   cascadeTargets: (
     clientId: string,
     startWeekNum: number,
-    newTargets: { highCarb: MacroTarget; lowCarb: MacroTarget; cardio?: number }
+    newTargets: MacroTargets
   ) => Promise<void>;
   completeOnboarding: (clientId: string, initialData: Record<string, string>, photos?: { front?: string; side?: string; back?: string }) => Promise<void>;
   createProgram: (
     clientId: string,
-    initialTargets: { highCarb: MacroTarget; lowCarb: MacroTarget; cardio?: number }
+    initialTargets: MacroTargets
   ) => Promise<void>;
   advanceWeek: (clientId: string, reviewedWeekNum: number) => Promise<void>;
   addClient: (client: Omit<Client, 'id'>, uid: string) => Promise<void>;
   removeClient: (clientId: string) => Promise<void>;
   uploadPhoto: (file: File, userId: string, weekNumber: number) => Promise<string>;
-  extendProgram: (clientId: string, additionalWeeks: number, targets: { highCarb: MacroTarget; lowCarb: MacroTarget; cardio?: number }) => Promise<void>;
+  extendProgram: (clientId: string, additionalWeeks: number, targets: MacroTargets) => Promise<void>;
 }
 
 const CoachingContext = createContext<CoachingContextType | undefined>(undefined);
@@ -76,19 +99,33 @@ export const CoachingProvider = ({ children }: { children: ReactNode }) => {
       ? collection(db, 'clients')
       : query(collection(db, 'clients'), where('userId', '==', user.id));
 
-    unsubs.push(onSnapshot(clientsQuery, (snap) => {
-      setClients(snap.docs.map((d) => docToObj<Client>(d)));
-      checkReady();
-    }));
+    unsubs.push(onSnapshot(
+      clientsQuery,
+      (snap) => {
+        setClients(snap.docs.map((d) => docToObj<Client>(d)));
+        checkReady();
+      },
+      (err) => {
+        reportError('CoachingContext.clients', err);
+        checkReady();
+      }
+    ));
 
     const weeksQuery = isCoach
       ? collection(db, 'checkIns')
       : query(collection(db, 'checkIns'), where('clientId', '==', user.id));
 
-    unsubs.push(onSnapshot(weeksQuery, (snap) => {
-      setWeeks(snap.docs.map((d) => docToObj<Week>(d)));
-      checkReady();
-    }));
+    unsubs.push(onSnapshot(
+      weeksQuery,
+      (snap) => {
+        setWeeks(snap.docs.map((d) => docToObj<Week>(d)));
+        checkReady();
+      },
+      (err) => {
+        reportError('CoachingContext.weeks', err);
+        checkReady();
+      }
+    ));
 
     return () => unsubs.forEach((u) => u());
   }, [user?.id, isCoach]);
@@ -132,11 +169,12 @@ export const CoachingProvider = ({ children }: { children: ReactNode }) => {
   const cascadeTargets = async (
     clientId: string,
     startWeekNum: number,
-    newTargets: { highCarb: MacroTarget; lowCarb: MacroTarget; cardio?: number }
+    newTargets: MacroTargets
   ) => {
+    const targets = normalizeTargets(newTargets);
     const affected = weeks.filter((w) => w.clientId === clientId && w.weekNumber >= startWeekNum);
     await Promise.all(
-      affected.map((w) => updateDoc(doc(db, 'checkIns', w.id), { activeTargets: newTargets, updatedAt: serverTimestamp() }))
+      affected.map((w) => updateDoc(doc(db, 'checkIns', w.id), { activeTargets: targets, updatedAt: serverTimestamp() }))
     );
   };
 
@@ -170,7 +208,7 @@ export const CoachingProvider = ({ children }: { children: ReactNode }) => {
       userId: clients.find((c) => c.id === clientId)?.userId || null,
       weekNumber: 0,
       status: 'submitted',
-      activeTargets: { ...DEFAULT_TARGETS },
+      activeTargets: normalizeTargets(DEFAULT_TARGETS),
       dailyEntries: Array.from({ length: 7 }, () => ({ date: '' })),
       coachFeedback: '',
       photos: weekPhotos,
@@ -199,10 +237,12 @@ export const CoachingProvider = ({ children }: { children: ReactNode }) => {
 
   const createProgram = async (
     clientId: string,
-    initialTargets: { highCarb: MacroTarget; lowCarb: MacroTarget; cardio?: number }
+    initialTargets: MacroTargets
   ) => {
     const client = clients.find((c) => c.id === clientId);
     const programLength = client?.programLength || 12;
+    const firstWeekTargets = normalizeTargets(initialTargets);
+    const defaultTargets = normalizeTargets(DEFAULT_TARGETS);
     const weekWrites = Array.from({ length: programLength }, (_, i) => {
       const weekNum = i + 1;
       return setDoc(doc(db, 'checkIns', `${clientId}-w${weekNum}`), {
@@ -210,7 +250,7 @@ export const CoachingProvider = ({ children }: { children: ReactNode }) => {
         userId: client?.userId || null,
         weekNumber: weekNum,
         status: 'pending',
-        activeTargets: weekNum === 1 ? initialTargets : { ...DEFAULT_TARGETS },
+        activeTargets: weekNum === 1 ? firstWeekTargets : defaultTargets,
         dailyEntries: Array.from({ length: 7 }, () => ({ date: '' })),
         coachFeedback: '',
         photos: {},
@@ -242,19 +282,6 @@ export const CoachingProvider = ({ children }: { children: ReactNode }) => {
     await Promise.all(clientWeeks.map((w) => deleteDoc(doc(db, 'checkIns', w.id))));
 
     if (userId) {
-      // Revoke web app access: flip users/{uid}.disabled = true.
-      // AuthContext live-subscribes to this doc and will sign them out
-      // immediately, even from active sessions in other tabs.
-      try {
-        await updateDoc(doc(db, 'users', userId), {
-          disabled: true,
-          disabledAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
-      } catch (e) {
-        reportError('CoachingContext.disableUser', e);
-      }
-
       // Audit log — who deleted whom, and when
       try {
         await setDoc(doc(db, 'deletionLogs', userId), {
@@ -318,12 +345,13 @@ export const CoachingProvider = ({ children }: { children: ReactNode }) => {
   const extendProgram = async (
     clientId: string,
     additionalWeeks: number,
-    targets: { highCarb: MacroTarget; lowCarb: MacroTarget; cardio?: number }
+    targets: MacroTargets
   ) => {
     const client = clients.find((c) => c.id === clientId);
     if (!client) return;
     const currentLength = client.programLength;
     const newLength = currentLength + additionalWeeks;
+    const nextTargets = normalizeTargets(targets);
 
     const weekWrites = Array.from({ length: additionalWeeks }, (_, i) => {
       const weekNum = currentLength + i + 1;
@@ -332,7 +360,7 @@ export const CoachingProvider = ({ children }: { children: ReactNode }) => {
         userId: client.userId || null,
         weekNumber: weekNum,
         status: 'pending',
-        activeTargets: targets,
+        activeTargets: nextTargets,
         dailyEntries: Array.from({ length: 7 }, () => ({ date: '' })),
         coachFeedback: '',
         photos: {},

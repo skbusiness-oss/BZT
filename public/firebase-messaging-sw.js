@@ -1,5 +1,5 @@
 /* eslint-env serviceworker */
-/* global importScripts, firebase */
+/* global firebase */
 /**
  * Firebase Messaging service worker — handles BACKGROUND push events.
  *

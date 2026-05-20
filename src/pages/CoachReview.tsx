@@ -37,7 +37,7 @@ import {
     MessageSquare,
 } from 'lucide-react';
 import clsx from 'clsx';
-import { MacroTarget } from '../types';
+import { CarbTargetMode, MacroTarget } from '../types';
 
 export const CoachReview = () => {
     const { clientId } = useParams<{ clientId: string }>();
@@ -64,7 +64,9 @@ export const CoachReview = () => {
     const [clientProgram, setClientProgram] = useState<UserActiveProgram | null>(null);
 
     const [newHighCarb, setNewHighCarb] = useState<MacroTarget>({ carbs: 250, protein: 180, fats: 60, calories: 2260 });
+    const [newModerateCarb, setNewModerateCarb] = useState<MacroTarget>({ carbs: 185, protein: 180, fats: 70, calories: 2090 });
     const [newLowCarb, setNewLowCarb] = useState<MacroTarget>({ carbs: 120, protein: 180, fats: 80, calories: 1920 });
+    const [carbMode, setCarbMode] = useState<CarbTargetMode>('cycling');
     const [newCardio, setNewCardio] = useState<number>(0);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isExtending, setIsExtending] = useState(false);
@@ -82,7 +84,19 @@ export const CoachReview = () => {
         if (weekData) {
             setFeedback(weekData.coachFeedback || '');
             setNewHighCarb({ ...weekData.activeTargets.highCarb });
+            setNewModerateCarb({ ...(weekData.activeTargets.moderateCarb ?? {
+                carbs: Math.round((weekData.activeTargets.highCarb.carbs + weekData.activeTargets.lowCarb.carbs) / 2),
+                protein: Math.round((weekData.activeTargets.highCarb.protein + weekData.activeTargets.lowCarb.protein) / 2),
+                fats: Math.round((weekData.activeTargets.highCarb.fats + weekData.activeTargets.lowCarb.fats) / 2),
+                calories: calculateCals({
+                    carbs: Math.round((weekData.activeTargets.highCarb.carbs + weekData.activeTargets.lowCarb.carbs) / 2),
+                    protein: Math.round((weekData.activeTargets.highCarb.protein + weekData.activeTargets.lowCarb.protein) / 2),
+                    fats: Math.round((weekData.activeTargets.highCarb.fats + weekData.activeTargets.lowCarb.fats) / 2),
+                    calories: 0,
+                }),
+            }) });
             setNewLowCarb({ ...weekData.activeTargets.lowCarb });
+            setCarbMode(weekData.activeTargets.mode ?? 'cycling');
             setNewCardio(weekData.activeTargets.cardio ?? 0);
             setChangeTargets(false);
         }
@@ -139,14 +153,14 @@ export const CoachReview = () => {
         setIsSubmitting(true);
         try {
             if (isProgramCreation) {
-                await createProgram(client.id, { highCarb: newHighCarb, lowCarb: newLowCarb, cardio: newCardio });
+                await createProgram(client.id, targetPayload);
                 showToast('success', `Program created! ${client.name} is now on Week 1.`);
                 setTimeout(() => navigate('/'), 1000);
             } else if (weekData) {
                 await updateWeek(weekData.id, { coachFeedback: feedback, status: 'reviewed' });
 
                 if (changeTargets) {
-                    await cascadeTargets(client.id, weekData.weekNumber + 1, { highCarb: newHighCarb, lowCarb: newLowCarb, cardio: newCardio });
+                    await cascadeTargets(client.id, weekData.weekNumber + 1, targetPayload);
                 }
 
                 await advanceWeek(client.id, weekData.weekNumber);
@@ -172,7 +186,7 @@ export const CoachReview = () => {
         if (!client) return;
         setIsExtending(true);
         try {
-            await extendProgram(client.id, additionalWeeks, { highCarb: newHighCarb, lowCarb: newLowCarb, cardio: newCardio });
+            await extendProgram(client.id, additionalWeeks, targetPayload);
             showToast('success', `Program extended by ${additionalWeeks} weeks!`);
             setChangeTargets(false);
         } catch (e: unknown) {
@@ -186,12 +200,23 @@ export const CoachReview = () => {
     };
 
     const calculateCals = (m: MacroTarget) => (m.carbs * 4) + (m.protein * 4) + (m.fats * 9);
+    const targetPayload = {
+        mode: carbMode,
+        highCarb: newHighCarb,
+        moderateCarb: newModerateCarb,
+        lowCarb: newLowCarb,
+        cardio: newCardio,
+    };
 
-    const updateTarget = (type: 'high' | 'low', field: keyof MacroTarget, value: number) => {
+    const updateTarget = (type: 'high' | 'moderate' | 'low', field: keyof MacroTarget, value: number) => {
         if (type === 'high') {
             const updated = { ...newHighCarb, [field]: value };
             updated.calories = calculateCals(updated);
             setNewHighCarb(updated);
+        } else if (type === 'moderate') {
+            const updated = { ...newModerateCarb, [field]: value };
+            updated.calories = calculateCals(updated);
+            setNewModerateCarb(updated);
         } else {
             const updated = { ...newLowCarb, [field]: value };
             updated.calories = calculateCals(updated);
@@ -566,6 +591,27 @@ export const CoachReview = () => {
 
                         {/* Program Builder / Target Inputs */}
                         <div className={`space-y-6 transition-all duration-300 ${(isProgramCreation || changeTargets) ? 'opacity-100' : 'opacity-40 grayscale'}`}>
+                            <div className="grid grid-cols-2 gap-2 bg-surface-container-lowest rounded-xl p-1 ghost-border">
+                                {([
+                                    ['cycling', 'HC / LC cycling'],
+                                    ['moderate', 'Moderate only'],
+                                ] as const).map(([mode, label]) => (
+                                    <button
+                                        key={mode}
+                                        type="button"
+                                        onClick={() => setCarbMode(mode)}
+                                        className={clsx(
+                                            "px-3 py-2.5 rounded-lg text-[10px] font-label font-extrabold uppercase tracking-widest transition-all",
+                                            carbMode === mode
+                                                ? "bg-primary text-on-primary"
+                                                : "text-on-surface/55 hover:text-on-surface hover:bg-surface-container"
+                                        )}
+                                    >
+                                        {label}
+                                    </button>
+                                ))}
+                            </div>
+
                             {/* High Carb Inputs */}
                             <div className="bg-surface-container-lowest rounded-xl p-5 ghost-border">
                                 <div className="flex justify-between font-label text-[10px] uppercase tracking-widest text-on-surface/50 font-bold mb-4">
@@ -580,6 +626,27 @@ export const CoachReview = () => {
                                                 type="number"
                                                 value={newHighCarb[macro as keyof MacroTarget]}
                                                 onChange={(e) => updateTarget('high', macro as keyof MacroTarget, parseInt(e.target.value))}
+                                                className="w-full bg-surface-container rounded-lg px-2 py-2 text-center text-sm font-headline font-bold text-on-surface border-none outline-none focus:ring-1 focus:ring-primary/30"
+                                            />
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Moderate Carb Inputs */}
+                            <div className="bg-surface-container-lowest rounded-xl p-5 ghost-border">
+                                <div className="flex justify-between font-label text-[10px] uppercase tracking-widest text-on-surface/50 font-bold mb-4">
+                                    Moderate carb {t('adjustTargets')}
+                                    <span className="text-primary">{newModerateCarb.calories} kcal</span>
+                                </div>
+                                <div className="grid grid-cols-3 gap-3">
+                                    {['carbs', 'protein', 'fats'].map((macro) => (
+                                        <div key={macro}>
+                                            <label className="text-[10px] font-label uppercase tracking-widest text-on-surface/40 mb-1 block text-center">{macro.charAt(0)}</label>
+                                            <input
+                                                type="number"
+                                                value={newModerateCarb[macro as keyof MacroTarget]}
+                                                onChange={(e) => updateTarget('moderate', macro as keyof MacroTarget, parseInt(e.target.value))}
                                                 className="w-full bg-surface-container rounded-lg px-2 py-2 text-center text-sm font-headline font-bold text-on-surface border-none outline-none focus:ring-1 focus:ring-primary/30"
                                             />
                                         </div>

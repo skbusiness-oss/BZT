@@ -14,15 +14,16 @@ import { useState, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
 import { useActiveProgram } from '../../hooks/useActiveProgram';
-import { getGoalContext, parseRepScheme } from '../../data/programUtils';
+import { getGoalContext } from '../../data/programUtils';
 import { ALL_TRAINING_PROGRAMS } from '../../data';
 import { RestDayCard } from './RestDayCard';
 import { ExerciseModal } from './ExerciseModal';
-import { Workout, Exercise } from '../../types';
+import { ExerciseSections } from './ExerciseSections';
+import { Workout } from '../../types';
 import { getExerciseDetail } from '../../data/exerciseLibrary';
 import {
-    ArrowLeft, CheckCircle2, Timer, Dumbbell, AlertCircle,
-    Target, Zap, Trophy, ChevronRight, Flame, Sparkles,
+    ArrowLeft, CheckCircle2, Timer, Dumbbell,
+    Target, Trophy, Flame, Sparkles,
 } from 'lucide-react';
 
 export const WorkoutDayView = () => {
@@ -204,16 +205,7 @@ export const WorkoutDayView = () => {
                         {isAr ? `${workout.exercises.length} تمرين` : `${workout.exercises.length} Exercises`}
                     </h3>
 
-                    {workout.exercises.map((exercise, i) => (
-                        <ExerciseRow
-                            key={i}
-                            exercise={exercise}
-                            index={i}
-                            goal={activeProgram.goal}
-                            isAr={isAr}
-                            onTap={() => setShowExerciseModal(exercise.name)}
-                        />
-                    ))}
+                    <ExerciseSections exercises={workout.exercises} onExerciseClick={exercise => setShowExerciseModal(exercise.name)} />
                 </div>
             )}
 
@@ -240,69 +232,6 @@ export const WorkoutDayView = () => {
                     onClose={() => setShowExerciseModal(null)}
                 />
             )}
-        </div>
-    );
-};
-
-// ─── Exercise Row Component ──────────────────────────────────────────────
-
-interface ExerciseRowProps {
-    exercise: Exercise;
-    index: number;
-    goal: string;
-    isAr: boolean;
-    onTap: () => void;
-}
-
-const ExerciseRow = ({ exercise, index, goal, isAr, onTap }: ExerciseRowProps) => {
-    const repScheme = parseRepScheme(exercise.reps, goal as any);
-
-    return (
-        <div
-            className="bg-white/[0.04] hover:bg-white/[0.07] border border-white/[0.06] rounded-xl p-4 transition-colors cursor-pointer"
-            onClick={onTap}
-        >
-            <div className="flex items-start gap-3">
-                {/* Index */}
-                <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center shrink-0">
-                    <span className="text-xs font-bold text-on-surface-variant">{index + 1}</span>
-                </div>
-
-                <div className="flex-1 min-w-0">
-                    {/* Exercise name + tap indicator */}
-                    <div className="flex items-center justify-between">
-                        <h4 className="text-on-surface font-semibold text-sm truncate">{exercise.name}</h4>
-                        <ChevronRight size={16} className="text-on-surface-variant/60 shrink-0 ms-2" />
-                    </div>
-
-                    {/* Stats row */}
-                    <div className="flex items-center gap-4 mt-2 flex-wrap">
-                        <span className="text-xs text-on-surface/70 flex items-center gap-1">
-                            <Zap size={11} className="text-primary" />
-                            {exercise.sets} × {exercise.reps}
-                        </span>
-                        <span className="text-xs text-on-surface-variant flex items-center gap-1">
-                            <Timer size={11} />
-                            {exercise.restSeconds}s {isAr ? 'راحة' : 'rest'}
-                        </span>
-                        {exercise.notes && (
-                            <span className="text-xs px-2 py-0.5 rounded-md bg-primary/10 text-primary font-medium">
-                                {exercise.notes}
-                            </span>
-                        )}
-                    </div>
-
-                    {/* Rep scheme explanation */}
-                    {repScheme.type !== 'standard' && (
-                        <div className="mt-2 flex items-start gap-1.5">
-                            <AlertCircle size={11} className="text-blue-400 mt-0.5 shrink-0" />
-                            <span className="text-[11px] text-blue-300/70 leading-relaxed">
-                                {isAr ? repScheme.explanationAr : repScheme.explanation}
-                            </span>
-                        </div>
-                    )}
-                </div>
-            </div>
         </div>
     );
 };

@@ -324,6 +324,13 @@ export const WorkoutWizard = ({ targetUserId, onAssigned }: WorkoutWizardProps =
     // ─── Step 3: Split Selection ──────────────────────────────
 
     if (step === 3) {
+        const recommendedSplits = availableSplits.filter(item => item.isRecommended);
+        const otherSplits = availableSplits.filter(item => !item.isRecommended);
+        const splitGroups = [
+            { title: isAr ? 'Ø§Ù„Ø£ÙØ¶Ù„ Ù„Ùƒ' : 'Best Matches', items: recommendedSplits },
+            { title: isAr ? 'Ø®ÙŠØ§Ø±Ø§Øª Ø£Ø®Ø±Ù‰' : 'Other Splits', items: otherSplits },
+        ].filter(group => group.items.length > 0);
+
         return (
             <div dir={isRTL ? 'rtl' : 'ltr'} className="space-y-6 animate-in fade-in duration-300">
                 <StepHeader
@@ -335,15 +342,29 @@ export const WorkoutWizard = ({ targetUserId, onAssigned }: WorkoutWizardProps =
                     onBack={goBack}
                 />
 
-                <div className="space-y-3">
-                    {availableSplits.map(({ program, isRecommended }, i) => (
-                        <ProgramCard
-                            key={program.id}
-                            program={program}
-                            isRecommended={isRecommended && i === 0}
-                            isSelected={selectedProgram?.id === program.id}
-                            onClick={() => handleSplitSelect(program)}
-                        />
+                <div className="space-y-6">
+                    {splitGroups.map(group => (
+                        <section key={group.title} className="space-y-3">
+                            <div className="flex items-center justify-between">
+                                <h3 className="font-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                                    {group.title}
+                                </h3>
+                                <span className="font-label text-[10px] font-bold uppercase tracking-widest text-primary/80">
+                                    {group.items.length} options
+                                </span>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                {group.items.map(({ program, isRecommended, recommendedRank }) => (
+                                    <ProgramCard
+                                        key={program.id}
+                                        program={program}
+                                        isRecommended={isRecommended && recommendedRank === 0}
+                                        isSelected={selectedProgram?.id === program.id}
+                                        onClick={() => handleSplitSelect(program)}
+                                    />
+                                ))}
+                            </div>
+                        </section>
                     ))}
                 </div>
 

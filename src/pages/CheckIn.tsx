@@ -66,6 +66,13 @@ export const CheckIn = () => {
     if (!client || !weekData) return <div className="text-on-surface">{t('loading')}</div>;
 
     const isReadOnly = weekData.status === 'submitted' || weekData.status === 'reviewed' || weekData.status === 'locked';
+    const targetMode = weekData.activeTargets.mode ?? 'cycling';
+    const moderateTarget = weekData.activeTargets.moderateCarb ?? {
+        carbs: Math.round((weekData.activeTargets.highCarb.carbs + weekData.activeTargets.lowCarb.carbs) / 2),
+        protein: Math.round((weekData.activeTargets.highCarb.protein + weekData.activeTargets.lowCarb.protein) / 2),
+        fats: Math.round((weekData.activeTargets.highCarb.fats + weekData.activeTargets.lowCarb.fats) / 2),
+        calories: Math.round((weekData.activeTargets.highCarb.calories + weekData.activeTargets.lowCarb.calories) / 2),
+    };
 
     const handleEntryChange = (index: number, field: keyof DayEntry, value: number) => {
         if (isReadOnly) return;
@@ -264,7 +271,30 @@ export const CheckIn = () => {
                             </div>
 
                             <div className="space-y-8">
-                                <div>
+                                {targetMode === 'moderate' && (
+                                    <div>
+                                        <div className="flex justify-between mb-3">
+                                            <span className="font-label text-[10px] uppercase tracking-widest text-primary font-bold">Moderate carb day</span>
+                                            <span className="font-headline font-bold text-primary text-sm">{moderateTarget.calories} Cal</span>
+                                        </div>
+                                        <div className="grid grid-cols-3 gap-3 text-center">
+                                            <div className="bg-surface-container-lowest rounded-xl p-3">
+                                                <div className="text-[10px] font-label uppercase tracking-widest text-on-surface/40 mb-1">C</div>
+                                                <div className="text-lg font-headline font-bold text-on-surface">{moderateTarget.carbs}</div>
+                                            </div>
+                                            <div className="bg-surface-container-lowest rounded-xl p-3">
+                                                <div className="text-[10px] font-label uppercase tracking-widest text-on-surface/40 mb-1">P</div>
+                                                <div className="text-lg font-headline font-bold text-on-surface">{moderateTarget.protein}</div>
+                                            </div>
+                                            <div className="bg-surface-container-lowest rounded-xl p-3">
+                                                <div className="text-[10px] font-label uppercase tracking-widest text-on-surface/40 mb-1">F</div>
+                                                <div className="text-lg font-headline font-bold text-on-surface">{moderateTarget.fats}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className={targetMode === 'moderate' ? 'hidden' : ''}>
                                     <div className="flex justify-between mb-3">
                                         <span className="font-label text-[10px] uppercase tracking-widest text-on-surface/50 font-bold">{t('highCarbDay')}</span>
                                         <span className="font-headline font-bold text-primary text-sm">{weekData.activeTargets.highCarb.calories} Cal</span>
@@ -285,7 +315,7 @@ export const CheckIn = () => {
                                     </div>
                                 </div>
 
-                                <div className="pt-6">
+                                <div className={targetMode === 'moderate' ? 'hidden' : 'pt-6'}>
                                     <div className="flex justify-between mb-3">
                                         <span className="font-label text-[10px] uppercase tracking-widest text-primary font-bold">{t('lowCarbDay')}</span>
                                         <span className="font-headline font-bold text-primary text-sm">{weekData.activeTargets.lowCarb.calories} Cal</span>

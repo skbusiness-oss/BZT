@@ -32,7 +32,7 @@ export const translations = {
     navClients: { en: 'My Clients', ar: 'عملائي' },
     navVideoLibrary: { en: 'Video Library', ar: 'مكتبة الفيديو' },
     navWorkouts: { en: 'Workouts', ar: 'التمارين' },
-    navProfile: { en: 'Profile', ar: 'الملف الشخصي' },
+    navProfile: { en: 'Update', ar: 'التحديث' },
 
     // --- Login Page ---
     loginWelcome: { en: 'Welcome to', ar: 'مرحباً بك في' },
@@ -203,7 +203,7 @@ export const translations = {
     health: { en: 'Health', ar: 'صحة' },
 
     // --- Profile ---
-    profileTitle: { en: 'Profile', ar: 'الملف الشخصي' },
+    profileTitle: { en: 'Update', ar: 'التحديث' },
     accountInfo: { en: 'Account Information', ar: 'معلومات الحساب' },
     name: { en: 'Name', ar: 'الاسم' },
     role: { en: 'Role', ar: 'الدور' },
@@ -319,7 +319,7 @@ export const translations = {
     // --- Sidebar nav (extra) ---
     navCommunity: { en: 'Community', ar: 'المجتمع' },
     navMessages: { en: 'Messages', ar: 'الرسائل' },
-    navSettings: { en: 'Settings', ar: 'الإعدادات' },
+    navSettings: { en: 'Profile & Settings', ar: 'الملف والإعدادات' },
     navLeaderboard: { en: 'Leaderboard', ar: 'لوحة المتصدرين' },
 
     // --- Login + Auth ---
@@ -560,8 +560,8 @@ export const translations = {
     // --- Account / settings ---
     accountSection: { en: 'Account', ar: 'الحساب' },
     notifications: { en: 'Notifications', ar: 'الإشعارات' },
-    settingsTitle: { en: 'Settings', ar: 'الإعدادات' },
-    settingsSubtitle: { en: 'Preferences and account.', ar: 'التفضيلات والحساب.' },
+    settingsTitle: { en: 'Profile & Settings', ar: 'الملف والإعدادات' },
+    settingsSubtitle: { en: 'Personal info, preferences, and account.', ar: 'المعلومات الشخصية والتفضيلات والحساب.' },
     myReports: { en: 'My reports', ar: 'تقاريري' },
 
     // --- Messaging ---

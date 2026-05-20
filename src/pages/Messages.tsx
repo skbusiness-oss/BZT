@@ -1,22 +1,37 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { useLanguage } from '../context/LanguageContext';
-import { Send, MessageSquare, ArrowLeft } from 'lucide-react';
+import { Send, MessageSquare, ArrowLeft, ImagePlus, X, Loader2 } from 'lucide-react';
 import { tsToDate, tsToMillis } from '../lib/firestoreTime';
 
 export const Messages = () => {
     const { user } = useAuth();
-    const { clients, messages, sendMessage, markMessagesRead, getConversation } = useData();
+    // getConversation intentionally NOT destructured here — we use a
+    // staff-aware local filter (conversationBetween) so a client viewing
+    // "Coach Zaki" also sees their pre-fix admin history, and so the
+    // coach sees every message involving the selected client regardless
+    // of which staff UID was the recipient.
+    const { clients, messages, sendMessage, markMessagesRead } = useData();
     const { t } = useLanguage();
     const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
     const [text, setText] = useState('');
+    const [selectedImage, setSelectedImage] = useState<File | null>(null);
+    const [imagePreview, setImagePreview] = useState<string | null>(null);
     const [sending, setSending] = useState(false);
     const [sendError, setSendError] = useState<string | null>(null);
     const chatEndRef = useRef<HTMLDivElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
-    const isCoach = user?.role === 'coach' || user?.role === 'admin';
+    // Hardcoded coach UID also forces isCoach=true as a defensive anchor —
+    // matches the MessagesContext fallback so the contact list and staff
+    // listener stay in sync even if the Firestore role lookup is stale.
+    const HARDCODED_COACH_UID = 'Y9DlGI9kF6dPFPBh4cDvMnxbayB3';
+    const isCoach = user?.role === 'coach'
+                 || user?.role === 'admin'
+                 || user?.id === HARDCODED_COACH_UID;
+    const userId = user?.id;
 
     // ── Sole-coach routing ──────────────────────────────────────────────
     // For the single-coach launch (Coach Zaki, medzakc90@gmail.com), every
@@ -32,12 +47,99 @@ export const Messages = () => {
     // with a server-driven team list (probably a `teams/default` doc
     // with allow-read for signed-in users).
     const COACH_UID = 'Y9DlGI9kF6dPFPBh4cDvMnxbayB3';
+    const LEGACY_ADMIN_UID = 'ITc4VlP0PNeNUetjNxpEyGJOpW32';
     const COACH_NAME = 'Coach Zaki';
+    // Treated as a single staff identity for thread aggregation. New
+    // sends always go to COACH_UID; LEGACY_ADMIN_UID stays in the set so
+    // the coach can see (and clients can scroll back through) pre-fix
+    // history that landed in the admin inbox. After the
+    // consolidateMessagesToCoach data migration runs, LEGACY_ADMIN_UID
+    // will no longer appear as a receiver, but keeping it in the set
+    // makes the migration optional — UI works either way.
+    const STAFF_UIDS = useMemo(() => new Set<string>([COACH_UID, LEGACY_ADMIN_UID]), []);
+    const isStaffUid = (uid: string) => STAFF_UIDS.has(uid);
     interface TeamMember { uid: string; name: string; role: 'coach' | 'admin' }
     const [teamMembers] = useState<TeamMember[]>([
         { uid: COACH_UID, name: COACH_NAME, role: 'coach' },
     ]);
-    const clientDoc = clients.find(c => c.userId === user?.id);
+
+    // Local thread filter, replacing the context's getConversation.
+    // - Coach view: show every message where the OTHER party is `otherId`,
+    //   regardless of which staff UID was on the staff side. Captures
+    //   admin-addressed history without requiring the data migration to
+    //   have run yet.
+    // - Client view (other === COACH_UID): show every message between the
+    //   client and any staff member (coach or legacy admin).
+    // - Default: original pairwise filter.
+    const conversationBetween = useMemo(() => (selfId: string, otherId: string) => {
+        if (isCoach) {
+            return messages
+                .filter(message => message.senderId === otherId || message.receiverId === otherId)
+                .sort((a, b) => tsToMillis(a.timestamp) - tsToMillis(b.timestamp));
+        }
+        if (isStaffUid(otherId)) {
+            return messages
+                .filter(message =>
+                    (message.senderId === selfId && isStaffUid(message.receiverId))
+                    || (isStaffUid(message.senderId) && message.receiverId === selfId)
+                )
+                .sort((a, b) => tsToMillis(a.timestamp) - tsToMillis(b.timestamp));
+        }
+        return messages
+            .filter(message =>
+                (message.senderId === selfId && message.receiverId === otherId)
+                || (message.senderId === otherId && message.receiverId === selfId)
+            )
+            .sort((a, b) => tsToMillis(a.timestamp) - tsToMillis(b.timestamp));
+    // STAFF_UIDS is referenced via isStaffUid; intentionally omitted from
+    // deps because the set is constructed in this component and stable.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [messages, isCoach]);
+
+    const counterpartIds = useMemo(() => {
+        if (!userId) return [];
+        const ids = new Set<string>();
+        if (isCoach) {
+            // Coach sees every message in the DB (staff query in
+            // MessagesContext loads all). Treat every non-staff, non-self
+            // party as a counterpart so the contact list surfaces a tile
+            // even when the historical receiverId was admin, not coach.
+            messages.forEach(message => {
+                if (message.senderId !== userId && !isStaffUid(message.senderId)) ids.add(message.senderId);
+                if (message.receiverId !== userId && !isStaffUid(message.receiverId)) ids.add(message.receiverId);
+            });
+        } else {
+            // Client / community: collapse any staff UID to COACH_UID so
+            // the contact list shows ONE "Coach Zaki" tile even if the
+            // user historically chatted with the admin too.
+            messages.forEach(message => {
+                if (message.senderId === userId) {
+                    ids.add(isStaffUid(message.receiverId) ? COACH_UID : message.receiverId);
+                }
+                if (message.receiverId === userId) {
+                    ids.add(isStaffUid(message.senderId) ? COACH_UID : message.senderId);
+                }
+            });
+        }
+        return Array.from(ids);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [messages, userId, isCoach]);
+
+    const latestCounterpartId = useMemo(() => {
+        if (!userId) return null;
+        const latest = [...messages]
+            .filter(message => message.senderId === userId || message.receiverId === userId)
+            .sort((a, b) => tsToMillis(b.timestamp) - tsToMillis(a.timestamp))[0];
+        if (!latest) return null;
+        const other = latest.senderId === userId ? latest.receiverId : latest.senderId;
+        // Non-coach: collapse legacy admin → coach so we don't auto-select
+        // a thread keyed on the admin UID (which then sends new replies
+        // there instead of to the coach).
+        if (!isCoach && isStaffUid(other)) return COACH_UID;
+        return other;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [messages, userId, isCoach]);
+
 
     // Auto-select the coach for non-coach roles. clientDoc.coachId is
     // intentionally IGNORED here — historical docs may have it set to
@@ -45,13 +147,13 @@ export const Messages = () => {
     // honoring that would re-route messages away from the coach again.
     useEffect(() => {
         if (isCoach || !user || selectedUserId) return;
-        setSelectedUserId(COACH_UID);
-        markMessagesRead(user.id, COACH_UID);
-    }, [isCoach, user, selectedUserId, markMessagesRead]);
+        const targetId = latestCounterpartId ?? COACH_UID;
+        setSelectedUserId(targetId);
+        markMessagesRead(user.id, targetId);
+    }, [isCoach, user, selectedUserId, latestCounterpartId, markMessagesRead]);
     // Reference clientDoc to keep the type-checker quiet about an unused
     // computed value (kept because it's read by other features that may
     // need it; pulling it from useData here also warms the cache).
-    void clientDoc;
 
     // Deep-link support: `/messages?to=<userId>` pre-selects a conversation.
     // Used by the "Message client" button on CoachReview so a coach can jump
@@ -76,17 +178,17 @@ export const Messages = () => {
         if (user && selectedUserId) {
             markMessagesRead(user.id, selectedUserId);
         }
-    }, [selectedUserId, user, messages.length]);
+    }, [selectedUserId, user, messages.length, markMessagesRead]);
 
-    if (!user) return null;
-
-    // If client and team hasn't been resolved yet
-    if (!isCoach && teamMembers.length === 0) return (
-        <div className="flex items-center justify-center h-64 text-on-surface/50 font-body">
-            <MessageSquare className="mr-3 opacity-30" size={24} />
-            {t('lookingForCoach')}
-        </div>
-    );
+    useEffect(() => {
+        if (!selectedImage) {
+            setImagePreview(null);
+            return;
+        }
+        const nextPreview = URL.createObjectURL(selectedImage);
+        setImagePreview(nextPreview);
+        return () => URL.revokeObjectURL(nextPreview);
+    }, [selectedImage]);
 
     // Conversation contacts.
     //   - Coach/admin: one contact per coaching client (existing behavior).
@@ -96,41 +198,136 @@ export const Messages = () => {
     //     to a single arbitrary recipient (the first admin/coach the
     //     `users` query returned), which is what hid Coach Zack and
     //     made messages appear lost.
-    const contacts = isCoach
-        ? clients.map(c => {
-            const unread = messages.filter(m => m.senderId === c.userId && m.receiverId === user.id && !m.read).length;
-            const lastMsg = [...messages].filter(m =>
-                (m.senderId === user.id && m.receiverId === c.userId) || (m.senderId === c.userId && m.receiverId === user.id)
-            ).sort((a, b) => tsToMillis(b.timestamp) - tsToMillis(a.timestamp))[0];
-            return { userId: c.userId, name: c.name, unread, lastMsg, category: c.category };
-        }).sort((a, b) => {
-            if (a.unread !== b.unread) return b.unread - a.unread;
-            return tsToMillis(b.lastMsg?.timestamp) - tsToMillis(a.lastMsg?.timestamp);
-        })
-        : teamMembers.map(m => {
-            const unread = messages.filter(x => x.senderId === m.uid && x.receiverId === user.id && !x.read).length;
-            const lastMsg = [...messages].filter(x =>
-                (x.senderId === user.id && x.receiverId === m.uid) || (x.senderId === m.uid && x.receiverId === user.id)
-            ).sort((a, b) => tsToMillis(b.timestamp) - tsToMillis(a.timestamp))[0];
-            // `category` is a coach-side concept; reuse the role label so
-            // the existing contact-tile renderer (which colors-by-category)
-            // doesn't crash on an undefined value.
-            return { userId: m.uid, name: m.name, unread, lastMsg, category: m.role as unknown as typeof clients[number]['category'] };
-        }).sort((a, b) => {
-            if (a.unread !== b.unread) return b.unread - a.unread;
-            return tsToMillis(b.lastMsg?.timestamp) - tsToMillis(a.lastMsg?.timestamp);
-        });
+    const contacts = useMemo(() => {
+        if (!user) return [];
 
-    const conversation = selectedUserId ? getConversation(user.id, selectedUserId) : [];
+        // Coach view: a contact tile for client X aggregates every message
+        // involving X, regardless of which staff UID was on the other side.
+        // Client view: the "Coach Zaki" tile aggregates every message
+        // between the client and any staff member (COACH_UID or
+        // LEGACY_ADMIN_UID).
+        const matchesContact = (message: typeof messages[number], contactUid: string) => {
+            if (isCoach) {
+                return message.senderId === contactUid || message.receiverId === contactUid;
+            }
+            if (isStaffUid(contactUid)) {
+                return (message.senderId === user.id && isStaffUid(message.receiverId))
+                    || (isStaffUid(message.senderId) && message.receiverId === user.id);
+            }
+            return (message.senderId === user.id && message.receiverId === contactUid)
+                || (message.senderId === contactUid && message.receiverId === user.id);
+        };
+
+        const lastMessageWith = (otherId: string) => [...messages]
+            .filter(message => matchesContact(message, otherId))
+            .sort((a, b) => tsToMillis(b.timestamp) - tsToMillis(a.timestamp))[0];
+
+        // Unread is intentionally only counted when the CURRENT user is
+        // the receiver — the receiver is the only party who can flip
+        // `read` per the firestore rule, so any other count would be
+        // forever-stuck. For coaches, this means messages still
+        // addressed to LEGACY_ADMIN_UID won't show an unread badge until
+        // consolidateMessagesToCoach runs, but they DO render in the
+        // thread (see conversationBetween above).
+        const unreadFrom = (otherId: string) => {
+            if (isCoach) {
+                return messages.filter(message =>
+                    message.senderId === otherId
+                    && message.receiverId === user.id
+                    && !message.read
+                ).length;
+            }
+            if (isStaffUid(otherId)) {
+                return messages.filter(message =>
+                    isStaffUid(message.senderId)
+                    && message.receiverId === user.id
+                    && !message.read
+                ).length;
+            }
+            return messages.filter(message =>
+                message.senderId === otherId
+                && message.receiverId === user.id
+                && !message.read
+            ).length;
+        };
+
+        const sortContacts = <T extends { unread: number; lastMsg?: typeof messages[number] }>(items: T[]) =>
+            items.sort((a, b) => {
+                if (a.unread !== b.unread) return b.unread - a.unread;
+                return tsToMillis(b.lastMsg?.timestamp) - tsToMillis(a.lastMsg?.timestamp);
+            });
+
+        if (isCoach) {
+            const clientIds = new Set(clients.map(client => client.userId));
+            const clientContacts = clients.map(client => ({
+                userId: client.userId,
+                name: client.name,
+                unread: unreadFrom(client.userId),
+                lastMsg: lastMessageWith(client.userId),
+                category: client.category,
+            }));
+            const messageOnlyContacts = counterpartIds
+                .filter(id => id !== user.id && !clientIds.has(id))
+                .map(id => ({
+                    userId: id,
+                    name: 'Member',
+                    unread: unreadFrom(id),
+                    lastMsg: lastMessageWith(id),
+                    category: 'message thread',
+                }));
+
+            return sortContacts([...clientContacts, ...messageOnlyContacts]);
+        }
+
+        const teamIds = new Set(teamMembers.map(member => member.uid));
+        const teamContacts = teamMembers.map(member => ({
+            userId: member.uid,
+            name: member.name,
+            unread: unreadFrom(member.uid),
+            lastMsg: lastMessageWith(member.uid),
+            category: member.role,
+        }));
+        const historicalContacts = counterpartIds
+            // Skip the legacy admin UID — it was already collapsed into
+            // COACH_UID by counterpartIds, so a separate tile would be a
+            // duplicate of the team-member tile.
+            .filter(id => !teamIds.has(id) && !isStaffUid(id))
+            .map(id => ({
+                userId: id,
+                name: 'Coach / Support',
+                unread: unreadFrom(id),
+                lastMsg: lastMessageWith(id),
+                category: 'coach',
+            }));
+
+        return sortContacts([...teamContacts, ...historicalContacts]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [clients, counterpartIds, isCoach, messages, teamMembers, user]);
+
+    if (!user) return null;
+
+    const conversation = selectedUserId ? conversationBetween(user.id, selectedUserId) : [];
+
+    const handleImageChange = (file?: File) => {
+        if (!file) return;
+        if (!file.type.startsWith('image/')) {
+            setSendError('Please choose an image file.');
+            return;
+        }
+        setSendError(null);
+        setSelectedImage(file);
+    };
 
     const handleSend = async () => {
-        if (!text.trim() || !selectedUserId || sending) return;
+        if ((!text.trim() && !selectedImage) || !selectedUserId || sending) return;
         const body = text.trim();
         setSending(true);
         setSendError(null);
         try {
-            await sendMessage(user.id, selectedUserId, user.name, body);
+            await sendMessage(user.id, selectedUserId, user.name, body, selectedImage);
             setText('');
+            setSelectedImage(null);
+            if (fileInputRef.current) fileInputRef.current.value = '';
         } catch (err) {
             const code = (err as { code?: string })?.code ?? '(no code)';
             const msg = err instanceof Error ? err.message : 'Failed to send.';
@@ -207,7 +404,7 @@ export const Messages = () => {
                                         )}
                                     </div>
                                     <p className="text-on-surface/50 text-xs font-body truncate">
-                                        {c.lastMsg ? c.lastMsg.text : t('noMessagesYet')}
+                                        {c.lastMsg ? (c.lastMsg.text || (c.lastMsg.imageUrl ? 'Photo' : '')) : t('noMessagesYet')}
                                     </p>
                                 </div>
                             </button>
@@ -260,7 +457,18 @@ export const Messages = () => {
                                             ? 'bg-gradient-to-br from-primary to-primary-container text-on-primary rounded-br-sm shadow-[0_10px_30px_rgba(230,195,100,0.15)]'
                                             : 'bg-surface-container-high text-on-surface rounded-bl-sm ghost-border'
                                             }`}>
-                                            <p className={`text-sm leading-relaxed font-body ${isMine ? 'font-medium' : ''}`}>{msg.text}</p>
+                                            {msg.imageUrl && (
+                                                <a href={msg.imageUrl} target="_blank" rel="noreferrer" className="block mb-3">
+                                                    <img
+                                                        src={msg.imageUrl}
+                                                        alt={msg.imageName || 'Chat attachment'}
+                                                        className="max-h-72 w-full rounded-xl object-cover"
+                                                    />
+                                                </a>
+                                            )}
+                                            {msg.text && (
+                                                <p className={`text-sm leading-relaxed font-body ${isMine ? 'font-medium' : ''}`}>{msg.text}</p>
+                                            )}
                                             <p className={`text-[10px] font-label uppercase tracking-widest mt-2 font-bold ${isMine ? 'text-on-primary/60' : 'text-on-surface/40'}`}>
                                                 {formatTime(msg.timestamp)}
                                             </p>
@@ -281,7 +489,45 @@ export const Messages = () => {
                                     {sendError}
                                 </div>
                             )}
+                            {imagePreview && (
+                                <div className="mb-3 flex items-center gap-3 rounded-2xl bg-surface-container-lowest border border-outline-variant/30 p-3">
+                                    <img src={imagePreview} alt="Selected attachment" className="h-16 w-16 rounded-xl object-cover" />
+                                    <div className="min-w-0 flex-1">
+                                        <p className="truncate text-sm font-headline font-bold text-on-surface">{selectedImage?.name}</p>
+                                        <p className="text-[11px] font-body text-on-surface/45">
+                                            {selectedImage ? `${(selectedImage.size / 1024 / 1024).toFixed(1)} MB` : ''}
+                                        </p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setSelectedImage(null);
+                                            if (fileInputRef.current) fileInputRef.current.value = '';
+                                        }}
+                                        className="h-9 w-9 rounded-full bg-surface-container-high text-on-surface/60 hover:text-on-surface flex items-center justify-center"
+                                        aria-label="Remove image"
+                                    >
+                                        <X size={16} />
+                                    </button>
+                                </div>
+                            )}
                             <div className="flex gap-3">
+                                <input
+                                    ref={fileInputRef}
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    onChange={(e) => handleImageChange(e.target.files?.[0])}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => fileInputRef.current?.click()}
+                                    disabled={sending}
+                                    className="w-14 h-14 rounded-full bg-surface-container-lowest text-on-surface/60 hover:text-primary hover:bg-surface-container-high flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed transition-all shrink-0"
+                                    aria-label="Attach image"
+                                >
+                                    <ImagePlus size={20} />
+                                </button>
                                 <input
                                     type="text"
                                     value={text}
@@ -293,10 +539,10 @@ export const Messages = () => {
                                 />
                                 <button
                                     onClick={() => void handleSend()}
-                                    disabled={!text.trim() || sending}
+                                    disabled={(!text.trim() && !selectedImage) || sending}
                                     className="w-14 h-14 rounded-full bg-gradient-to-r from-primary to-primary-container text-on-primary flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_10px_30px_rgba(230,195,100,0.3)] active:scale-95 transition-all shrink-0"
                                 >
-                                    <Send size={20} className="ml-1" />
+                                    {sending ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} className="ml-1" />}
                                 </button>
                             </div>
                         </div>

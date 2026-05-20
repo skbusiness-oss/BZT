@@ -13,4 +13,6 @@ export { deleteUser } from './deleteUser';
 export { onCommentCreated, onCommentDeleted } from './maintainCommentCount';
 export { wipeLegacyMetrics } from './wipeLegacyMetrics';
 export { forwardMessagesToCoach } from './forwardMessages';
+export { consolidateMessagesToCoach } from './consolidateMessages';
 export { onMessageCreated, onCheckInReviewed } from './pushNotifications';
+export { weeklyReminders } from './weeklyReminders';

@@ -9,7 +9,7 @@ import { MessagesProvider, useMessages } from './MessagesContext';
 import { CommunityProvider, useCommunity } from './CommunityContext';
 import { MediaProvider, useMedia } from './MediaContext';
 import { AcademyProvider } from './AcademyContext';
-import { Client, LibraryTag, MacroTarget, Message, Post, Video, Week, Workout } from '../types';
+import { Client, LibraryTag, MacroTargets, Message, Post, Video, Week, Workout } from '../types';
 
 // ─── Combined type for backward compatibility ────────────────────────────────
 
@@ -31,12 +31,12 @@ interface DataContextType {
   cascadeTargets: (
     clientId: string,
     startWeekNum: number,
-    newTargets: { highCarb: MacroTarget; lowCarb: MacroTarget; cardio?: number }
+    newTargets: MacroTargets
   ) => Promise<void>;
   completeOnboarding: (clientId: string, initialData: Record<string, string>, photos?: { front?: string; side?: string; back?: string }) => Promise<void>;
   createProgram: (
     clientId: string,
-    initialTargets: { highCarb: MacroTarget; lowCarb: MacroTarget; cardio?: number }
+    initialTargets: MacroTargets
   ) => Promise<void>;
   advanceWeek: (clientId: string, reviewedWeekNum: number) => Promise<void>;
   addVideo: (video: Omit<Video, 'id'>) => Promise<void>;
@@ -54,9 +54,9 @@ interface DataContextType {
   uploadPhoto: (file: File, userId: string, weekNumber: number) => Promise<string>;
   uploadVideoPdf: (file: File, videoId: string) => Promise<{ name: string; url: string }>;
   removeVideoPdf: (videoId: string, pdfUrl: string) => Promise<void>;
-  extendProgram: (clientId: string, additionalWeeks: number, targets: { highCarb: MacroTarget; lowCarb: MacroTarget; cardio?: number }) => Promise<void>;
+  extendProgram: (clientId: string, additionalWeeks: number, targets: MacroTargets) => Promise<void>;
 
-  sendMessage: (senderId: string, receiverId: string, senderName: string, text: string) => Promise<void>;
+  sendMessage: (senderId: string, receiverId: string, senderName: string, text: string, imageFile?: File | null) => Promise<void>;
   markMessagesRead: (userId: string, otherUserId: string) => Promise<void>;
   getConversation: (userId1: string, userId2: string) => Message[];
   getUnreadCount: (userId: string) => number;

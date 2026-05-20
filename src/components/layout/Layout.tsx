@@ -90,6 +90,7 @@ export const Layout = () => {
 
     const isCoach = user.role === 'coach' || user.role === 'admin';
     const isClient = user.role === 'client';
+    const canMessageCoach = isCoach || isClient || user.role === 'community';
 
     return (
         <div className="flex h-screen text-on-surface overflow-hidden bg-surface">
@@ -171,7 +172,7 @@ export const Layout = () => {
                         <SidebarItem to="/workouts" icon={Dumbbell} label={t('navWorkouts')} onClick={closeSidebar} />
                         <SidebarItem to="/diets" icon={Utensils} label={t('navDiets')} onClick={closeSidebar} />
 
-                        {(isCoach || isClient) && (
+                        {canMessageCoach && (
                             <NavLink
                                 to="/messages"
                                 onClick={closeSidebar}
@@ -209,7 +210,7 @@ export const Layout = () => {
                         {isCoach && (
                             <SidebarItem to="/leaderboard" icon={Trophy} label={t('navLeaderboard')} onClick={closeSidebar} />
                         )}
-                        <SidebarItem to="/profile" icon={UserCircle} label={t('navProfile')} onClick={closeSidebar} />
+                        <SidebarItem to="/update" icon={UserCircle} label={t('navProfile')} onClick={closeSidebar} />
                         <SidebarItem to="/settings" icon={Settings} label={t('navSettings')} onClick={closeSidebar} />
 
                         {/* Subscribe / Upgrade — community users see this prominently. Hidden

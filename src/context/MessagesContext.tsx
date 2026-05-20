@@ -1,5 +1,5 @@
 import {
-  createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode,
+  createContext, useContext, useState, useEffect, useCallback, ReactNode,
 } from 'react';
 import {
   collection, doc,
@@ -7,10 +7,11 @@ import {
   addDoc, updateDoc,
   serverTimestamp,
 } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db, storage } from '../lib/firebase';
 import { useAuth } from './AuthContext';
 import { Message } from '../types';
-import { rateLimits, validateText } from '../lib/validation';
+import { rateLimits, validateImageFile, validateText } from '../lib/validation';
 import { tsToMillis } from '../lib/firestoreTime';
 import type { QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 
@@ -21,7 +22,7 @@ function docToObj<T>(snap: QueryDocumentSnapshot<DocumentData>): T {
 export interface MessagesContextType {
   messages: Message[];
   loading: boolean;
-  sendMessage: (senderId: string, receiverId: string, senderName: string, text: string) => Promise<void>;
+  sendMessage: (senderId: string, receiverId: string, senderName: string, text: string, imageFile?: File | null) => Promise<void>;
   markMessagesRead: (userId: string, otherUserId: string) => Promise<void>;
   getConversation: (userId1: string, userId2: string) => Message[];
   getUnreadCount: (userId: string) => number;
@@ -35,13 +36,48 @@ export const MessagesProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!user) { setLoading(false); return; }
+    if (!user) {
+      setMessages([]);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
     const unsubs: (() => void)[] = [];
-    let listenersReady = 0;
-    const checkReady = () => { if (++listenersReady >= 2) setLoading(false); };
 
     const sortMessages = (msgs: Message[]) =>
       msgs.sort((a, b) => tsToMillis(a.timestamp) - tsToMillis(b.timestamp));
+
+    // Anchor staff status to the hardcoded coach UID as a safety net.
+    // If the Firestore role lookup hiccups, lags, or the user doc lost
+    // its `role` field for any reason, the coach still gets the
+    // unfiltered listener (the Firestore RULES decide what he can
+    // actually read — if his claim/role is wrong server-side, the
+    // listener will just receive an empty snapshot rather than
+    // silently degrading to a personal-messages-only view that hides
+    // every coaching thread).
+    const HARDCODED_COACH_UID = 'Y9DlGI9kF6dPFPBh4cDvMnxbayB3';
+    const isStaff = user.role === 'coach'
+                 || user.role === 'admin'
+                 || user.id === HARDCODED_COACH_UID;
+    if (isStaff) {
+      unsubs.push(onSnapshot(
+        collection(db, 'messages'),
+        (snap) => {
+          setMessages(sortMessages(snap.docs.map((d) => docToObj<Message>(d))));
+          setLoading(false);
+        },
+        (err) => {
+          // eslint-disable-next-line no-console
+          console.error('[MessagesContext] allMessages listener failed:', (err as { code?: string })?.code ?? '(no code)', err);
+          setMessages([]);
+          setLoading(false);
+        }
+      ));
+      return () => unsubs.forEach((u) => u());
+    }
+
+    let listenersReady = 0;
+    const checkReady = () => { if (++listenersReady >= 2) setLoading(false); };
 
     const msgsAsSender = query(collection(db, 'messages'), where('senderId', '==', user.id));
     const msgsAsReceiver = query(collection(db, 'messages'), where('receiverId', '==', user.id));
@@ -85,86 +121,49 @@ export const MessagesProvider = ({ children }: { children: ReactNode }) => {
     ));
 
     return () => unsubs.forEach((u) => u());
-  }, [user?.id]);
+  }, [user?.id, user?.role]);
 
-  // ── Browser notifications on new incoming messages ─────────────────────
-  // The sidebar nav already shows an unread count badge (via
-  // getUnreadCount), but that requires the user to actually look at the
-  // sidebar. A browser Notification fires regardless of which tab/page
-  // they're on — even when the app isn't focused. Standard chat UX.
-  //
-  // We track the previously-seen message IDs in a ref so each render
-  // can detect deltas without re-firing for messages already shown.
-  // First render is suppressed (the ref starts empty and we populate
-  // it without notifying) so historical inbox messages don't all fire
-  // on initial sign-in.
-  const seenMessageIdsRef = useRef<Set<string> | null>(null);
-  const permissionRequestedRef = useRef(false);
-  useEffect(() => {
-    if (!user) {
-      seenMessageIdsRef.current = null;
-      return;
-    }
-    // First pass — record what was already there, do NOT notify.
-    if (seenMessageIdsRef.current === null) {
-      seenMessageIdsRef.current = new Set(messages.map(m => m.id));
-      return;
-    }
-    // Subsequent passes — find deltas. Only incoming-to-this-user
-    // messages count. Outgoing (senderId === self) and previously-seen
-    // are skipped.
-    const seen = seenMessageIdsRef.current;
-    const fresh = messages.filter(
-      m => !seen.has(m.id) && m.receiverId === user.id && m.senderId !== user.id,
-    );
-    fresh.forEach(m => seen.add(m.id));
-    // Also catch IDs we may have skipped (e.g., own outbound) so they
-    // don't fire on a later flip.
-    messages.forEach(m => seen.add(m.id));
-
-    if (fresh.length === 0) return;
-
-    // Lazy permission request — only when there's something to notify
-    // about. Avoids the "this site wants to send notifications" prompt
-    // on every clean sign-in.
-    if (typeof window === 'undefined' || !('Notification' in window)) return;
-    const tryNotify = (m: Message) => {
-      try {
-        const title = m.senderName ? `New message from ${m.senderName}` : 'New message';
-        new Notification(title, {
-          body: m.text.slice(0, 140),
-          tag: m.id, // dedup so the same id only fires once
-          icon: '/icon-192.png',
-        });
-      } catch {
-        // Notification constructor can throw on iOS Safari, etc.
-        // Silent — the sidebar badge is the fallback.
-      }
-    };
-
-    if (Notification.permission === 'granted') {
-      fresh.forEach(tryNotify);
-    } else if (Notification.permission === 'default' && !permissionRequestedRef.current) {
-      permissionRequestedRef.current = true;
-      Notification.requestPermission().then(perm => {
-        if (perm === 'granted') fresh.forEach(tryNotify);
-      }).catch(() => { /* user dismissed */ });
-    }
-    // 'denied' — respect the user's choice, no further prompts.
-  }, [messages, user]);
-
-  const sendMessage = async (senderId: string, receiverId: string, senderName: string, text: string) => {
+  // FCM and the service worker own background notifications. This
+  // context only writes messages and unread state, so historical
+  // messages do not replay as local browser notifications on hydration.
+  const sendMessage = async (senderId: string, receiverId: string, senderName: string, text: string, imageFile?: File | null) => {
     // Client-side rate limit: 10 messages/minute
     if (!rateLimits.message(senderId)) {
       throw new Error('You are sending messages too fast. Please wait a moment.');
     }
-    // Validate content before writing
-    const err = validateText(text, { min: 1, max: 2000 });
+    const trimmed = text.trim();
+    const hasImage = !!imageFile;
+    const err = validateText(trimmed, { min: hasImage ? 0 : 1, max: 2000 });
     if (err) throw new Error(err);
+
+    let imagePayload: Partial<Message> = {};
+    if (imageFile) {
+      const imageErr = validateImageFile(imageFile);
+      if (imageErr) throw new Error(imageErr);
+      const mimeToExt: Record<string, string> = {
+        'image/jpeg': 'jpg',
+        'image/png': 'png',
+        'image/webp': 'webp',
+        'image/gif': 'gif',
+        'image/heic': 'heic',
+        'image/heif': 'heif',
+      };
+      const ext = mimeToExt[imageFile.type] ?? 'jpg';
+      const path = `chat-images/${senderId}/to/${receiverId}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+      const snapshot = await uploadBytes(ref(storage, path), imageFile, { contentType: imageFile.type || `image/${ext}` });
+      imagePayload = {
+        imageUrl: await getDownloadURL(snapshot.ref),
+        imagePath: path,
+        imageName: imageFile.name,
+        imageType: imageFile.type,
+        imageSize: imageFile.size,
+      };
+    }
 
     await addDoc(collection(db, 'messages'), {
       senderId, receiverId, senderName,
-      text: text.trim(),
+      text: trimmed,
+      ...imagePayload,
       timestamp: serverTimestamp(),
       read: false,
     });

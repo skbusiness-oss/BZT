@@ -8,6 +8,7 @@ import { PPL_PROGRAMS } from './pplPrograms';
 import { BRO_SPLIT_PROGRAMS } from './broSplitPrograms';
 import { STRENGTH_PROGRAMS } from './strengthPrograms';
 import { HIIT_PROGRAMS, CARDIO_PROGRAMS } from './hiitCardioPrograms';
+import { STRETCHING_PROGRAMS } from './stretchingPrograms';
 export { ALL_PROGRAMS } from './programData';
 
 export const ALL_TRAINING_PROGRAMS: Workout[] = [
@@ -18,5 +19,6 @@ export const ALL_TRAINING_PROGRAMS: Workout[] = [
     ...STRENGTH_PROGRAMS,
     ...HIIT_PROGRAMS,
     ...CARDIO_PROGRAMS,
+    ...STRETCHING_PROGRAMS,
 ];
 

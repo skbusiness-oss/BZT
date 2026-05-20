@@ -139,13 +139,17 @@ export const onMessageCreated = onDocumentCreated(
         const senderId = msg.senderId as string | undefined;
         const senderName = (msg.senderName as string | undefined) ?? 'Someone';
         const text = (msg.text as string | undefined) ?? '';
+        const hasImage = typeof msg.imageUrl === 'string' && msg.imageUrl.length > 0;
         if (!receiverId || !senderId || receiverId === senderId) return;
+        const body = text
+            ? (text.length > 140 ? text.slice(0, 137) + '...' : text)
+            : (hasImage ? 'Sent you a photo.' : 'Sent you a message.');
 
         await pushToUser(receiverId, {
             title: `New message from ${senderName}`,
             // Trim long messages — notification body has a hard char
             // limit on iOS (~178) and gets clipped past ~80 on Android.
-            body: text.length > 140 ? text.slice(0, 137) + '…' : text,
+            body,
             data: {
                 type: 'message',
                 messageId: event.params.messageId,

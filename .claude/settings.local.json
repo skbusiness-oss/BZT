@@ -21,7 +21,10 @@
       "Bash(curl -sI https://biozackteam-3d593.web.app)",
       "Bash(xargs -I{} stat -c \"%y %s %n\" {})",
       "Bash(git check-ignore *)",
-      "Bash(node -e ' *)"
+      "Bash(node -e ' *)",
+      "PowerShell(npx tsc --noEmit; \"src exit=$LASTEXITCODE\")",
+      "PowerShell($gcloud = \\(Get-Command gcloud -ErrorAction SilentlyContinue\\); if \\($gcloud\\) { \"gcloud at $\\($gcloud.Source\\)\" } else { 'gcloud not on PATH' }; $firebase = \\(Get-Command firebase -ErrorAction SilentlyContinue\\); if \\($firebase\\) { \"firebase at $\\($firebase.Source\\)\" } else { 'firebase not on PATH' })",
+      "PowerShell(npm run build 2>&1)"
     ],
     "additionalDirectories": [
       "C:\\Users\\MED\\Downloads"

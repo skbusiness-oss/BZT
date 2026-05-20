@@ -5,6 +5,7 @@ import {
     Link2, CheckCircle2, AlertCircle, Edit2, Trash2, FileText,
     Download, Loader2, ArrowRight,
     Tv2, Tag, Settings2, GraduationCap,
+    Dumbbell, PlayCircle,
 } from 'lucide-react';
 import clsx from 'clsx';
 import VideoPlayer from '../components/VideoPlayer';
@@ -20,7 +21,7 @@ import { buildEmbedUrl } from '../lib/videoUtils';
 import type { Course, Lesson, LessonResource, LibraryCategory } from '../types';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-type MainTab = 'academy' | 'lives' | 'topics' | 'manage';
+type MainTab = 'academy' | 'lives' | 'topics' | 'videos' | 'manage';
 type LessonFormData = Omit<Lesson, 'id' | 'createdAt' | 'updatedAt' | 'createdBy'> & {
     resources?: LessonResource[];
 };
@@ -49,6 +50,7 @@ export const VideoLibrary = () => {
     const [activeTab, setActiveTab] = useState<MainTab>('academy');
     const [activeCourseId, setActiveCourseId] = useState<string | null>(null);
     const [topicFilter, setTopicFilter] = useState<string | null>(null);
+    const [videoCategoryFilter, setVideoCategoryFilter] = useState('All');
     const [search, setSearch] = useState('');
 
     // ── Modal state ───────────────────────────────────────────────────────────
@@ -93,6 +95,28 @@ export const VideoLibrary = () => {
         if (search) list = list.filter(c => c.title.toLowerCase().includes(search.toLowerCase()));
         return list.sort((a, b) => a.order - b.order);
     }, [courses, topicFilter, search]);
+
+    const visibleVideos = useMemo(() =>
+        videos.filter(video => isCoach || !video.isLocked || user?.role === 'client'),
+        [isCoach, user?.role, videos]
+    );
+
+    const filteredVideos = useMemo(() =>
+        visibleVideos.filter(video => {
+            const matchCategory = videoCategoryFilter === 'All' || video.category === videoCategoryFilter;
+            const query = search.trim().toLowerCase();
+            const matchSearch = !query ||
+                video.title.toLowerCase().includes(query) ||
+                (video.description ?? '').toLowerCase().includes(query) ||
+                video.category.toLowerCase().includes(query);
+            return matchCategory && matchSearch;
+        }),
+        [search, videoCategoryFilter, visibleVideos]
+    );
+    const videoCategories = useMemo(() =>
+        Array.from(new Set([...categories, ...visibleVideos.map(video => video.category).filter(Boolean)])).sort(),
+        [categories, visibleVideos]
+    );
 
     const activeCourse = activeCourseId ? courses.find(c => c.id === activeCourseId) ?? null : null;
     const activeLessons = activeCourseId ? (lessons[activeCourseId] ?? []) : [];
@@ -338,6 +362,7 @@ export const VideoLibrary = () => {
         { id: 'academy', label: 'Academy Path', icon: <GraduationCap size={15} /> },
         { id: 'lives', label: 'Live Sessions', icon: <Tv2 size={15} /> },
         { id: 'topics', label: 'Topics', icon: <Tag size={15} /> },
+        { id: 'videos', label: 'Video Archive', icon: <PlayCircle size={15} /> },
         ...(isCoach ? [{ id: 'manage' as MainTab, label: 'Manage', icon: <Settings2 size={15} /> }] : []),
     ];
 
@@ -376,13 +401,13 @@ export const VideoLibrary = () => {
                 </div>
 
                 {/* Search — Topics tab only */}
-                {activeTab === 'topics' && (
+                {(activeTab === 'topics' || activeTab === 'videos') && (
                     <div className="flex items-center gap-4 mb-4">
                         <div className="relative group bg-surface-container rounded-full pl-9 pr-1 py-1">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant/60 pointer-events-none" size={14} />
                             <input
                                 type="text"
-                                placeholder="Search courses…"
+                                placeholder={activeTab === 'videos' ? 'Search videos...' : 'Search courses...'}
                                 value={search}
                                 onChange={e => setSearch(e.target.value)}
                                 className="bg-transparent border-0 outline-none focus:ring-0 py-1.5 pr-3 text-xs font-body text-on-surface placeholder:text-on-surface-variant/50 w-48"
@@ -394,6 +419,49 @@ export const VideoLibrary = () => {
             </section>
 
             {/* ── Course Detail View ───────────────────────────────────────── */}
+            {!activeCourse && (
+                <section className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-10">
+                    <button
+                        type="button"
+                        onClick={() => navigate('/workouts?view=workouts&category=Stretching')}
+                        className="text-left rounded-2xl bg-surface-container-low p-6 ghost-border hover:bg-surface-container transition-colors group"
+                    >
+                        <div className="flex items-start gap-4">
+                            <div className="w-12 h-12 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0">
+                                <Dumbbell size={22} />
+                            </div>
+                            <div>
+                                <h2 className="font-headline font-extrabold text-xl text-on-surface tracking-tight group-hover:text-primary transition-colors">
+                                    Stretching videos
+                                </h2>
+                                <p className="text-sm font-body text-on-surface/55 mt-2">
+                                    Dynamic, static, back, and full-body stretching routines are inside Workout Library.
+                                </p>
+                            </div>
+                        </div>
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => { setActiveTab('videos'); setActiveCourseId(null); }}
+                        className="text-left rounded-2xl bg-surface-container-low p-6 ghost-border hover:bg-surface-container transition-colors group"
+                    >
+                        <div className="flex items-start gap-4">
+                            <div className="w-12 h-12 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0">
+                                <PlayCircle size={22} />
+                            </div>
+                            <div>
+                                <h2 className="font-headline font-extrabold text-xl text-on-surface tracking-tight group-hover:text-primary transition-colors">
+                                    Video archive
+                                </h2>
+                                <p className="text-sm font-body text-on-surface/55 mt-2">
+                                    Open uploaded videos even when Academy courses are not created yet.
+                                </p>
+                            </div>
+                        </div>
+                    </button>
+                </section>
+            )}
+
             {activeCourse && (
                 <CourseDetail
                     course={activeCourse}
@@ -627,6 +695,92 @@ export const VideoLibrary = () => {
             )}
 
             {/* ── Manage Tab (coach only) ──────────────────────────────────── */}
+            {!activeCourse && activeTab === 'videos' && (
+                <div className="space-y-8">
+                    <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-2">
+                        {['All', ...videoCategories].map(category => (
+                            <button
+                                key={category}
+                                type="button"
+                                onClick={() => setVideoCategoryFilter(category)}
+                                className={clsx(
+                                    'px-5 py-2 rounded-full text-xs font-bold uppercase tracking-widest whitespace-nowrap transition-all duration-300',
+                                    videoCategoryFilter === category
+                                        ? 'gold-gradient text-on-primary-fixed shadow-md'
+                                        : 'bg-surface-container-highest text-on-surface-variant hover:text-primary',
+                                )}
+                            >
+                                {category}
+                            </button>
+                        ))}
+                    </div>
+
+                    {filteredVideos.length > 0 ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {filteredVideos.map(video => (
+                                <button
+                                    key={video.id}
+                                    type="button"
+                                    onClick={() => setActiveVideo(video)}
+                                    className="group text-left rounded-2xl bg-surface-container-low overflow-hidden ghost-border hover:bg-surface-container transition-colors"
+                                >
+                                    <div className="relative aspect-video bg-surface-container-lowest">
+                                        <img
+                                            src={video.thumbnailUrl || 'https://placehold.co/640x360/1a1f2f/e6c364?text=VIDEO'}
+                                            alt={video.title}
+                                            className="w-full h-full object-cover opacity-85 group-hover:opacity-100 transition-opacity"
+                                        />
+                                        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
+                                        <div className="absolute left-4 bottom-4 w-11 h-11 rounded-full gold-gradient flex items-center justify-center text-on-primary-fixed shadow-lg">
+                                            <PlayCircle size={22} />
+                                        </div>
+                                        {video.isLocked && (
+                                            <div className="absolute right-4 top-4 px-3 py-1.5 rounded-full bg-surface/80 text-primary text-[10px] font-label font-bold uppercase tracking-widest flex items-center gap-1.5">
+                                                <Lock size={12} /> Coaching
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="p-5">
+                                        <div className="flex items-center gap-2 mb-3">
+                                            <span className="px-2.5 py-1 rounded-lg bg-primary/10 text-primary text-[10px] font-label font-bold uppercase tracking-widest">
+                                                {video.category}
+                                            </span>
+                                            {video.level && (
+                                                <span className="px-2.5 py-1 rounded-lg bg-surface-container-highest text-on-surface/55 text-[10px] font-label font-bold uppercase tracking-widest">
+                                                    {video.level}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <h3 className="font-headline font-extrabold text-xl text-on-surface tracking-tight group-hover:text-primary transition-colors">
+                                            {video.title}
+                                        </h3>
+                                        {video.description && (
+                                            <p className="text-sm font-body text-on-surface/55 mt-2 line-clamp-2">
+                                                {video.description}
+                                            </p>
+                                        )}
+                                    </div>
+                                </button>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="glass-card rounded-2xl p-16 text-center text-on-surface/40">
+                            <PlayCircle size={48} className="mx-auto mb-4 opacity-20" />
+                            <p className="text-sm font-body">
+                                {search ? `No videos match "${search}"` : 'No uploaded videos yet.'}
+                            </p>
+                            <button
+                                type="button"
+                                onClick={() => navigate('/workouts?view=workouts&category=Stretching')}
+                                className="mt-6 px-6 py-3 rounded-full gold-gradient text-on-primary-fixed font-label text-[10px] font-bold uppercase tracking-widest"
+                            >
+                                Open stretching videos
+                            </button>
+                        </div>
+                    )}
+                </div>
+            )}
+
             {!activeCourse && activeTab === 'manage' && isCoach && (
                 <div className="space-y-10">
                     {/* Create course button */}

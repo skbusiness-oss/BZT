@@ -22,7 +22,7 @@ function docToObj<T>(snap: QueryDocumentSnapshot<DocumentData>): T {
 const INITIAL_VIDEO_CATEGORIES = ['Nutrition', 'Training', 'Coaching', 'Mindset'];
 const INITIAL_WORKOUT_CATEGORIES = [
   'Full Body', 'Upper / Lower', 'Push / Pull / Legs',
-  'Bro Split', 'Powerlifting', 'HIIT / Circuit', 'Cardio-Focused',
+  'Bro Split', 'Powerlifting', 'HIIT / Circuit', 'Cardio-Focused', 'Stretching',
 ];
 
 export interface MediaContextType {

@@ -1,4 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
+import { doc, getDoc } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
+import { db, functions } from './lib/firebase';
 import { useAuth } from './context/AuthContext';
 import { Layout } from './components/layout/Layout';
 import { Login } from './pages/Login';
@@ -59,8 +62,45 @@ const RequireActive = ({ children }: { children: React.ReactNode }) => {
 //      communityProfileStartedAt is set.
 // Both are blocking overlays. ToS comes first; once it's accepted, the
 // baseline form takes over for community accounts.
+// One-shot, idempotent self-heal: when an admin signs in, verify the
+// single coach (Coach Zaki, Y9Dl…) has `role: 'coach'` in Firestore.
+// If not, call `setUserRole` so the coach's account regains its
+// inbox/staff query access. Why here vs an admin button: the system
+// has been silently broken for him — surface the fix automatically
+// the moment someone with privilege walks in.
+const HARDCODED_COACH_UID = 'Y9DlGI9kF6dPFPBh4cDvMnxbayB3';
+const healedCoachSessions = new Set<string>();
+const callSetUserRoleHeal = httpsCallable<
+    { targetUid: string; role: 'coach' },
+    { ok: boolean }
+>(functions, 'setUserRole');
+
 const AuthenticatedShell = () => {
     const { user, freshUserDocLoaded } = useAuth();
+
+    useEffect(() => {
+        if (!user || !freshUserDocLoaded) return;
+        if (user.role !== 'admin') return;
+        // Once per session per admin uid — avoids spamming the callable on
+        // every route mount.
+        if (healedCoachSessions.has(user.id)) return;
+        healedCoachSessions.add(user.id);
+        (async () => {
+            try {
+                const snap = await getDoc(doc(db, 'users', HARDCODED_COACH_UID));
+                const role = snap.exists() ? snap.data()?.role : null;
+                if (role === 'coach' || role === 'admin') return;
+                // eslint-disable-next-line no-console
+                console.info('[AuthenticatedShell] healing coach role:', role, '→ coach');
+                await callSetUserRoleHeal({ targetUid: HARDCODED_COACH_UID, role: 'coach' });
+            } catch (err) {
+                // eslint-disable-next-line no-console
+                console.warn('[AuthenticatedShell] coach role heal skipped:', err);
+            }
+        })();
+    }, [user, freshUserDocLoaded]);
+
+
     // Local-device hint, set by TosModal on accept. Belt-and-suspenders for
     // when Firestore hasn't replied yet on a returning device — the user has
     // already accepted, so we never want the modal to flash again here.
@@ -122,7 +162,7 @@ export const AppRoutes = () => {
                     </ProtectedRoute>
                 } />
                 <Route path="/messages" element={
-                    <ProtectedRoute allowedRoles={['coach', 'admin', 'client']}>
+                    <ProtectedRoute allowedRoles={['coach', 'admin', 'client', 'community']}>
                         <ErrorBoundary><RequireActive><Messages /></RequireActive></ErrorBoundary>
                     </ProtectedRoute>
                 } />
@@ -139,6 +179,7 @@ export const AppRoutes = () => {
                     </ProtectedRoute>
                 } />
                 <Route path="/profile" element={<ErrorBoundary><Profile /></ErrorBoundary>} />
+                <Route path="/update" element={<ErrorBoundary><Profile /></ErrorBoundary>} />
                 <Route path="/leaderboard" element={
                     <ProtectedRoute allowedRoles={['coach', 'admin']}>
                         <ErrorBoundary><Leaderboard /></ErrorBoundary>

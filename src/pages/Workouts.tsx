@@ -1,10 +1,13 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useData }     from '../context/DataContext';
 import { useAuth }     from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { Workout, WorkoutGoal } from '../types';
 import { ALL_PROGRAMS, ALL_TRAINING_PROGRAMS } from '../data';
-import { ExerciseCard }    from '../components/workouts/ExerciseCard';
+import { getExerciseDetail } from '../data/exerciseLibrary';
+import { ExerciseModal } from '../components/workouts/ExerciseModal';
+import { ExerciseSections } from '../components/workouts/ExerciseSections';
 import { WorkoutEditor }   from '../components/workouts/WorkoutEditor';
 import { WorkoutWizard }   from '../components/workouts/WorkoutWizard';
 import { ActiveProgramCard } from '../components/workouts/ActiveProgramCard';
@@ -38,11 +41,21 @@ const STATIC_WORKOUT_IDS = new Set(ALL_TRAINING_PROGRAMS.map(w => w.id));
 // True when the workout was saved by a coach (not a static template)
 const isCustom = (w: Workout) => !STATIC_WORKOUT_IDS.has(w.id);
 
+const groupItems = <T,>(items: T[], getLabel: (item: T) => string): [string, T[]][] => {
+    const grouped = new Map<string, T[]>();
+    items.forEach(item => {
+        const label = getLabel(item);
+        grouped.set(label, [...(grouped.get(label) ?? []), item]);
+    });
+    return Array.from(grouped.entries());
+};
+
 // ─── Component ────────────────────────────────────────────────
 
-type ViewMode = 'programs' | 'custom';
+type ViewMode = 'programs' | 'workouts' | 'custom';
 
 export const Workouts = () => {
+    const [searchParams] = useSearchParams();
     const {
         workouts, workoutCategories,
         addWorkout, updateWorkout, removeWorkout, addWorkoutCategory,
@@ -57,12 +70,13 @@ export const Workouts = () => {
     const showWizard = !isCoach && !programLoading && !activeProgram;
 
     // ── View / filter state ────────────────────────────────────
-    const [viewMode, setViewMode]         = useState<ViewMode>('programs');
+    const [viewMode, setViewMode]         = useState<ViewMode>(() => searchParams.get('view') === 'workouts' ? 'workouts' : 'programs');
     const [search, setSearch]             = useState('');
-    const [categoryFilter, setCategoryFilter] = useState('All');
+    const [categoryFilter, setCategoryFilter] = useState(() => searchParams.get('category') || 'All');
     const [goalFilter, setGoalFilter]     = useState<'all' | WorkoutGoal>('all');
     const [expandedProgram, setExpandedProgram] = useState<string | null>(null);
     const [expandedWorkout, setExpandedWorkout] = useState<string | null>(null);
+    const [selectedExerciseName, setSelectedExerciseName] = useState<string | null>(null);
 
     // ── Editor state ───────────────────────────────────────────
     const [showEditor, setShowEditor]     = useState(false);
@@ -72,6 +86,15 @@ export const Workouts = () => {
     // ── Category modal state ───────────────────────────────────
     const [showCategoryModal, setShowCategoryModal] = useState(false);
     const [newCategoryName, setNewCategoryName]     = useState('');
+
+    useEffect(() => {
+        const view = searchParams.get('view');
+        const category = searchParams.get('category');
+        if (view === 'programs' || view === 'workouts' || (view === 'custom' && isCoach)) {
+            setViewMode(view);
+        }
+        if (category) setCategoryFilter(category);
+    }, [isCoach, searchParams]);
 
     // ── Editor handlers ────────────────────────────────────────
     const openCreate = () => { setEditingWorkout(null); setShowEditor(true); };
@@ -105,6 +128,18 @@ export const Workouts = () => {
         [search, categoryFilter, goalFilter]
     );
 
+    const libraryWorkouts = useMemo(() =>
+        workouts.filter(w => {
+            if (isCustom(w)) return false;
+            const matchSearch = w.name.toLowerCase().includes(search.toLowerCase()) ||
+                                w.description.toLowerCase().includes(search.toLowerCase());
+            const matchCat  = categoryFilter === 'All' || w.category === categoryFilter;
+            const matchGoal = goalFilter === 'all' || w.goal === goalFilter;
+            return matchSearch && matchCat && matchGoal;
+        }),
+        [workouts, search, categoryFilter, goalFilter]
+    );
+
     const customWorkouts = useMemo(() =>
         workouts.filter(w => {
             if (!isCustom(w)) return false;
@@ -119,7 +154,17 @@ export const Workouts = () => {
 
     const getWorkout = (id: string) => workouts.find(w => w.id === id);
 
-    const allCategories = ['All', ...workoutCategories];
+    const groupedPrograms = useMemo(() => groupItems(filteredPrograms, p => p.split), [filteredPrograms]);
+    const groupedLibraryWorkouts = useMemo(() => groupItems(libraryWorkouts, w => w.category), [libraryWorkouts]);
+    const allCategories = ['All', ...Array.from(new Set([...ALL_PROGRAMS.map(p => p.split), ...workoutCategories, ...workouts.map(w => w.category)]))];
+    const handleCategoryFilter = (cat: string) => {
+        setCategoryFilter(cat);
+        if (cat !== 'All') {
+            const hasProgramSplit = ALL_PROGRAMS.some(p => p.split === cat);
+            const hasStaticWorkoutCategory = workouts.some(w => !isCustom(w) && w.category === cat);
+            if (!hasProgramSplit && hasStaticWorkoutCategory) setViewMode('workouts');
+        }
+    };
 
     // ─────────────────────────────────────────────────────────
     // RENDER
@@ -139,8 +184,6 @@ export const Workouts = () => {
             )}
 
             {/* ── Full browse view (always for coach, below wizard/program for clients) ── */}
-            {(!showWizard) && (
-            <>
 
             {/* ── Page header ──────────────────────────────── */}
             <div className="flex flex-col md:flex-row justify-between gap-6 bg-surface-container-low rounded-2xl p-6 md:p-8 ghost-border">
@@ -197,6 +240,18 @@ export const Workouts = () => {
                     <Calendar size={14} /> {t('trainingProgramsTab')}
                 </button>
 
+                <button
+                    onClick={() => setViewMode('workouts')}
+                    className={clsx(
+                        'px-6 py-3 rounded-full text-[10px] font-label font-bold uppercase tracking-widest transition-all flex items-center gap-2 border',
+                        viewMode === 'workouts'
+                            ? 'bg-primary text-on-primary border-primary shadow-[0_10px_20px_rgba(230,195,100,0.2)]'
+                            : 'bg-surface-container-low text-on-surface/60 border-outline-variant/30 hover:bg-surface-container hover:text-on-surface'
+                    )}
+                >
+                    <Dumbbell size={14} /> Workout Library
+                </button>
+
                 {isCoach && (
                     <button
                         onClick={() => setViewMode('custom')}
@@ -221,7 +276,7 @@ export const Workouts = () => {
                             {allCategories.map(cat => (
                                 <button
                                     key={cat}
-                                    onClick={() => setCategoryFilter(cat)}
+                                    onClick={() => handleCategoryFilter(cat)}
                                     className={clsx(
                                         'px-4 py-2 rounded-lg text-xs font-headline font-bold whitespace-nowrap transition-colors border',
                                         categoryFilter === cat
@@ -272,8 +327,20 @@ export const Workouts = () => {
                 TRAINING PROGRAMS VIEW
             ════════════════════════════════════════════════ */}
             {viewMode === 'programs' && (
-                <div className="grid grid-cols-1 gap-6">
-                    {filteredPrograms.map(program => {
+                <div className="space-y-8">
+                    {groupedPrograms.map(([split, programs]) => (
+                        <section key={split} className="space-y-4">
+                            <div className="flex items-center justify-between gap-4 px-1">
+                                <div>
+                                    <h2 className="text-lg font-headline font-extrabold text-on-surface">{split}</h2>
+                                    <p className="text-xs font-body text-on-surface/45">{programs.length} programs</p>
+                                </div>
+                                <span className="px-3 py-1.5 rounded-lg bg-surface-container-low text-[10px] font-label font-bold uppercase tracking-widest text-on-surface/60 border border-outline-variant/30">
+                                    {split}
+                                </span>
+                            </div>
+                            <div className="grid grid-cols-1 gap-4">
+                    {programs.map(program => {
                         const isExpanded  = expandedProgram === program.id;
                         const goalConfig  = GOAL_CONFIG[program.goal];
                         const GoalIcon    = goalConfig.icon;
@@ -333,10 +400,11 @@ export const Workouts = () => {
                                         </div>
 
                                         {/* 10-day grid */}
-                                        <div className="px-6 md:px-8 pb-8 space-y-3">
+                                        <div className="px-6 md:px-8 pb-8">
                                             <h4 className="text-[10px] font-label font-bold uppercase tracking-widest text-on-surface/50 mt-6 mb-4 flex items-center gap-2">
                                                 <Calendar size={14} /> 10-Day Rotation
                                             </h4>
+                                            <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
                                             {program.rotation.map(day => {
                                                 if (day.type === 'rest') {
                                                     const isActive = day.restDayType === 'active_recovery';
@@ -405,10 +473,8 @@ export const Workouts = () => {
 
                                                         {/* Expanded: ExerciseCards */}
                                                         {isWorkoutExpanded && workout && (
-                                                            <div className="border-t border-outline-variant/30 p-6 animate-in fade-in duration-300 bg-surface-container/30 space-y-3">
-                                                                {workout.exercises.map((ex, i) => (
-                                                                    <ExerciseCard key={i} exercise={ex} index={i} />
-                                                                ))}
+                                                            <div className="border-t border-outline-variant/30 p-6 animate-in fade-in duration-300 bg-surface-container/30">
+                                                                <ExerciseSections exercises={workout.exercises} onExerciseClick={exercise => setSelectedExerciseName(exercise.name)} />
                                                                 <div className="flex gap-8 mt-6 pt-6 border-t border-outline-variant/30">
                                                                     <div className="flex items-center gap-2 text-on-surface/50 font-body text-sm">
                                                                         <Award className="text-primary" size={16} />
@@ -428,12 +494,16 @@ export const Workouts = () => {
                                                     </div>
                                                 );
                                             })}
+                                            </div>
                                         </div>
                                     </div>
                                 )}
                             </div>
                         );
                     })}
+                            </div>
+                        </section>
+                    ))}
                     {filteredPrograms.length === 0 && (
                         <div className="text-center py-24 bg-surface-container-low rounded-2xl ghost-border p-8">
                             <Calendar className="text-on-surface/20 mx-auto mb-6" size={48} />
@@ -447,6 +517,91 @@ export const Workouts = () => {
             {/* ═══════════════════════════════════════════════
                 CUSTOM WORKOUTS VIEW  (coach only)
             ════════════════════════════════════════════════ */}
+            {viewMode === 'workouts' && (
+                <div className="space-y-8">
+                    {groupedLibraryWorkouts.map(([category, items]) => (
+                        <section key={category} className="space-y-4">
+                            <div className="flex items-center justify-between gap-4 px-1">
+                                <div>
+                                    <h2 className="text-lg font-headline font-extrabold text-on-surface">{category}</h2>
+                                    <p className="text-xs font-body text-on-surface/45">{items.length} sessions</p>
+                                </div>
+                                <span className="px-3 py-1.5 rounded-lg bg-surface-container-low text-[10px] font-label font-bold uppercase tracking-widest text-on-surface/60 border border-outline-variant/30">
+                                    {category}
+                                </span>
+                            </div>
+                            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                                {items.map(workout => {
+                                    const isExpanded = expandedWorkout === workout.id;
+                                    const goalConfig = GOAL_CONFIG[workout.goal];
+                                    const GoalIcon = goalConfig.icon;
+
+                                    return (
+                                        <div key={workout.id} className="bg-surface-container-low rounded-2xl ghost-border overflow-hidden transition-all duration-300">
+                                            <button
+                                                type="button"
+                                                onClick={() => setExpandedWorkout(isExpanded ? null : workout.id)}
+                                                className="w-full p-5 flex items-start justify-between gap-4 text-left hover:bg-surface-container/30 transition-colors"
+                                            >
+                                                <div className="flex items-start gap-4 min-w-0">
+                                                    <div className={clsx('w-12 h-12 rounded-xl flex items-center justify-center shrink-0 border border-current/10', goalConfig.bgColor, goalConfig.color)}>
+                                                        <GoalIcon size={22} />
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <h3 className="font-headline font-extrabold text-on-surface text-lg leading-tight mb-1">{workout.name}</h3>
+                                                        <p className="text-sm font-body text-on-surface/55 line-clamp-2">{workout.description}</p>
+                                                        <div className="flex flex-wrap gap-2 mt-3">
+                                                            <span className="bg-surface-container-highest px-2.5 py-1 rounded-lg text-[10px] font-label font-bold uppercase tracking-widest text-on-surface/60 border border-outline-variant/30">{workout.category}</span>
+                                                            <span className={clsx('px-2.5 py-1 rounded-lg text-[10px] font-label font-bold uppercase tracking-widest border border-current/20', goalConfig.bgColor, goalConfig.color)}>
+                                                                {goalConfig.label}
+                                                            </span>
+                                                            <span className="px-2.5 py-1 rounded-lg text-[10px] font-label font-bold uppercase tracking-widest text-on-surface/50 border border-outline-variant/30">
+                                                                {workout.estimatedMinutes}m
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div className="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center border border-outline-variant/30 text-on-surface/60 shrink-0">
+                                                    {isExpanded ? <ChevronUp size={18} className="text-primary" /> : <ChevronDown size={18} />}
+                                                </div>
+                                            </button>
+
+                                            {isExpanded && (
+                                                <div className="border-t border-outline-variant/30 p-5 bg-surface-container-lowest animate-in fade-in slide-in-from-top-2 duration-300">
+                                                    <ExerciseSections exercises={workout.exercises} onExerciseClick={exercise => setSelectedExerciseName(exercise.name)} />
+                                                    <div className="flex flex-wrap gap-5 mt-6 pt-5 border-t border-outline-variant/30">
+                                                        <div className="flex items-center gap-2 text-on-surface/50 font-body text-sm">
+                                                            <Award className="text-primary" size={16} />
+                                                            <strong className="text-on-surface">{workout.exercises.length}</strong> exercises
+                                                        </div>
+                                                        <div className="flex items-center gap-2 text-on-surface/50 font-body text-sm">
+                                                            <Zap className="text-primary" size={16} />
+                                                            <strong className="text-on-surface">{totalSets(workout)}</strong> total sets
+                                                        </div>
+                                                        <div className="flex items-center gap-2 text-on-surface/50 font-body text-sm">
+                                                            <Clock className="text-primary" size={16} />
+                                                            ~<strong className="text-on-surface">{workout.estimatedMinutes}</strong> min
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </section>
+                    ))}
+
+                    {libraryWorkouts.length === 0 && (
+                        <div className="text-center py-24 bg-surface-container-low rounded-2xl ghost-border p-8">
+                            <Dumbbell className="text-on-surface/20 mx-auto mb-6" size={48} />
+                            <p className="text-on-surface/70 font-headline font-bold text-xl mb-2">No sessions found</p>
+                            <p className="text-on-surface/40 font-body text-sm">Try another split, goal, or search term.</p>
+                        </div>
+                    )}
+                </div>
+            )}
+
             {viewMode === 'custom' && (
                 <div className="grid grid-cols-1 gap-6">
                     {customWorkouts.map(workout => {
@@ -536,10 +691,8 @@ export const Workouts = () => {
                                                             </span>
                                                         </div>
                                                         {day.type === 'training' && day.exercises.length > 0 && (
-                                                            <div className="space-y-3 pl-5 md:pl-6 border-l-2 border-surface-container">
-                                                                {day.exercises.map((ex, i) => (
-                                                                    <ExerciseCard key={i} exercise={ex} index={i} />
-                                                                ))}
+                                                            <div className="pl-5 md:pl-6 border-l-2 border-surface-container">
+                                                                <ExerciseSections exercises={day.exercises} onExerciseClick={exercise => setSelectedExerciseName(exercise.name)} />
                                                             </div>
                                                         )}
                                                         {day.type === 'rest' && (
@@ -552,11 +705,7 @@ export const Workouts = () => {
                                             </div>
                                         ) : (
                                             /* Single session */
-                                            <div className="space-y-3">
-                                                {workout.exercises.map((ex, i) => (
-                                                    <ExerciseCard key={i} exercise={ex} index={i} />
-                                                ))}
-                                            </div>
+                                            <ExerciseSections exercises={workout.exercises} onExerciseClick={exercise => setSelectedExerciseName(exercise.name)} />
                                         )}
 
                                         {/* Summary stats */}
@@ -603,6 +752,14 @@ export const Workouts = () => {
             )}
 
             {/* ── Add category modal ────────────────────────── */}
+            {selectedExerciseName && (
+                <ExerciseModal
+                    exerciseName={selectedExerciseName}
+                    exerciseDetail={getExerciseDetail(selectedExerciseName)}
+                    onClose={() => setSelectedExerciseName(null)}
+                />
+            )}
+
             {showCategoryModal && (
                 <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-300">
                     <div className="bg-surface-container-low p-8 rounded-2xl max-w-sm w-full mx-4 animate-in zoom-in-95 duration-300 ghost-border shadow-2xl">
@@ -645,9 +802,6 @@ export const Workouts = () => {
                         </div>
                     </div>
                 </div>
-            )}
-
-            </> /* End of browse view wrapper */
             )}
         </div>
     );

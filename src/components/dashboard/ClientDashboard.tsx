@@ -246,7 +246,9 @@ export const ClientDashboard = () => {
     ];
 
     const defaultTargets = {
+        mode: 'cycling' as const,
         highCarb: { carbs: 280, protein: 180, fats: 60, calories: 2380 },
+        moderateCarb: { carbs: 210, protein: 180, fats: 68, calories: 2172 },
         lowCarb: { carbs: 140, protein: 180, fats: 75, calories: 1955 }
     };
 

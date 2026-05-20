@@ -186,6 +186,18 @@ export const AdminSetup = () => {
                 forwarded. */}
             <ForwardMessagesSection />
 
+            {/* ── Consolidate admin-addressed messages to coach ────────
+                Destructive one-shot — mutates receiverId on every
+                admin-addressed message to point at the coach, and
+                deletes the redundant forwarded duplicates created by
+                the (non-destructive) ForwardMessagesSection above.
+                Run this AFTER forwarding to leave a clean inbox where
+                the coach can mark messages read (Firestore rules only
+                let the receiver flip `read` — so admin-addressed
+                messages stay forever unread for the coach until their
+                receiverId is migrated). */}
+            <ConsolidateMessagesSection />
+
             {/* ── Wipe legacy metrics ───────────────────────────────────
                 Destructive one-shot to clear every user's selfLogs /
                 weighIns / metrics / xpEvents subcollections plus the
@@ -273,6 +285,133 @@ function ForwardMessagesSection() {
                     className="w-full px-4 py-3 rounded-xl text-sm font-bold uppercase tracking-widest transition-all gold-gradient text-on-primary disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                     {running ? 'Forwarding…' : 'Forward messages'}
+                </button>
+                {result && (
+                    <pre className="text-xs font-mono text-on-surface bg-surface-container-lowest rounded-xl p-4 overflow-auto">
+                        {result}
+                    </pre>
+                )}
+                {error && (
+                    <div className="text-xs font-mono text-red-400 bg-red-500/10 border border-red-500/30 rounded-xl p-4">
+                        {error}
+                    </div>
+                )}
+            </div>
+        </section>
+    );
+}
+
+/**
+ * One-shot data fix: mutates receiverId on every admin-addressed
+ * message to the coach UID, and deletes the redundant forwarded
+ * duplicates created by ForwardMessagesSection above. Pre-filled with
+ * the same admin/coach UIDs that prompted the feature — both editable
+ * so this stays usable if the team composition changes.
+ *
+ * Gated by typing CONSOLIDATE so it's harder to fire accidentally.
+ */
+function ConsolidateMessagesSection() {
+    const [fromUid, setFromUid] = useState('ITc4VlP0PNeNUetjNxpEyGJOpW32');
+    const [coachUid, setCoachUid] = useState('Y9DlGI9kF6dPFPBh4cDvMnxbayB3');
+    const [confirm, setConfirm] = useState('');
+    const [running, setRunning] = useState(false);
+    const [result, setResult] = useState<string | null>(null);
+    const [error, setError] = useState<string | null>(null);
+
+    const canRun = !!fromUid.trim() && !!coachUid.trim() && confirm === 'CONSOLIDATE' && !running;
+
+    const handleRun = async () => {
+        if (!canRun) return;
+        setRunning(true);
+        setResult(null);
+        setError(null);
+        try {
+            const fn = httpsCallable<
+                { fromUid: string; coachUid: string },
+                {
+                    ok: boolean;
+                    migratedCount: number;
+                    skippedCoachOutboundCount: number;
+                    deletedDuplicateCount: number;
+                    scannedTotal: number;
+                }
+            >(functions, 'consolidateMessagesToCoach');
+            const res = await fn({ fromUid: fromUid.trim(), coachUid: coachUid.trim() });
+            setResult(JSON.stringify(res.data, null, 2));
+            setConfirm('');
+        } catch (e: unknown) {
+            const code = (e as { code?: string })?.code ?? '(no code)';
+            const msg = e instanceof Error ? e.message : String(e);
+            setError(`[${code}] ${msg}`);
+            // eslint-disable-next-line no-console
+            console.error('[consolidateMessagesToCoach] failed:', code, e);
+        } finally {
+            setRunning(false);
+        }
+    };
+
+    return (
+        <section
+            className="bg-surface-container-low rounded-2xl p-8 ghost-border"
+            style={{ borderColor: 'rgb(220 38 38 / 0.30)' }}
+        >
+            <span className="font-label text-[10px] font-bold uppercase tracking-widest text-red-400 block mb-2">
+                Destructive · Admin Only
+            </span>
+            <h2 className="text-2xl font-headline font-bold text-on-surface mb-2">Consolidate messages to coach</h2>
+            <p className="text-sm font-body text-on-surface/60 mb-3">
+                Rewrites <code>receiverId</code> in place: every message addressed to <code>FROM</code> UID
+                (and not sent BY the coach) becomes addressed to <code>COACH</code> UID. Also deletes the
+                forwarded duplicates that <em>Forward messages</em> above created — once originals are
+                migrated, the duplicates are redundant. Idempotent.
+            </p>
+            <p className="text-xs font-body text-red-400/80 mb-6">
+                ⚠ Irreversible. Preserves the original receiver in <code>originalReceiverId</code> for audit,
+                but the active routing field is overwritten.
+            </p>
+
+            <div className="space-y-4 max-w-md">
+                <div>
+                    <label className="block text-[10px] font-label font-bold text-on-surface/60 uppercase tracking-widest mb-2">
+                        FROM UID (currently receiving)
+                    </label>
+                    <input
+                        type="text"
+                        value={fromUid}
+                        onChange={e => setFromUid(e.target.value)}
+                        className="w-full bg-surface-container-lowest border-none outline-none focus:ring-1 focus:ring-primary/40 rounded-xl px-4 py-3 text-sm font-mono text-on-surface"
+                    />
+                </div>
+                <div>
+                    <label className="block text-[10px] font-label font-bold text-on-surface/60 uppercase tracking-widest mb-2">
+                        COACH UID (should receive everything)
+                    </label>
+                    <input
+                        type="text"
+                        value={coachUid}
+                        onChange={e => setCoachUid(e.target.value)}
+                        className="w-full bg-surface-container-lowest border-none outline-none focus:ring-1 focus:ring-primary/40 rounded-xl px-4 py-3 text-sm font-mono text-on-surface"
+                    />
+                </div>
+                <div>
+                    <label className="block text-[10px] font-label font-bold text-on-surface/60 uppercase tracking-widest mb-2">
+                        Type CONSOLIDATE to enable
+                    </label>
+                    <input
+                        type="text"
+                        value={confirm}
+                        onChange={e => setConfirm(e.target.value)}
+                        placeholder="CONSOLIDATE"
+                        className="w-full bg-surface-container-lowest border-none outline-none focus:ring-1 focus:ring-red-500/40 rounded-xl px-4 py-3 text-sm font-mono text-on-surface placeholder-on-surface/30"
+                    />
+                </div>
+                <button
+                    type="button"
+                    onClick={handleRun}
+                    disabled={!canRun}
+                    className="w-full px-4 py-3 rounded-xl text-sm font-bold uppercase tracking-widest transition-all bg-red-500 text-white hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                    {running ? 'Consolidating…' : 'Consolidate messages'}
                 </button>
                 {result && (
                     <pre className="text-xs font-mono text-on-surface bg-surface-container-lowest rounded-xl p-4 overflow-auto">

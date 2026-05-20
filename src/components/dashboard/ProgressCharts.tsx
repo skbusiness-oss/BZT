@@ -35,9 +35,20 @@ export const ProgressCharts = ({ weeks }: ProgressChartsProps) => {
             const avgCarbs = Math.round(filled.reduce((s, e) => s + (e.carbs || 0), 0) / count);
             const avgProtein = Math.round(filled.reduce((s, e) => s + (e.protein || 0), 0) / count);
             const avgFats = Math.round(filled.reduce((s, e) => s + (e.fats || 0), 0) / count);
-            const targetCarbs = Math.round((w.activeTargets.highCarb.carbs + w.activeTargets.lowCarb.carbs) / 2);
-            const targetProtein = w.activeTargets.highCarb.protein;
-            const targetFats = Math.round((w.activeTargets.highCarb.fats + w.activeTargets.lowCarb.fats) / 2);
+            const moderateTarget = w.activeTargets.moderateCarb ?? {
+                carbs: Math.round((w.activeTargets.highCarb.carbs + w.activeTargets.lowCarb.carbs) / 2),
+                protein: Math.round((w.activeTargets.highCarb.protein + w.activeTargets.lowCarb.protein) / 2),
+                fats: Math.round((w.activeTargets.highCarb.fats + w.activeTargets.lowCarb.fats) / 2),
+            };
+            const targetCarbs = w.activeTargets.mode === 'moderate'
+                ? moderateTarget.carbs
+                : Math.round((w.activeTargets.highCarb.carbs + w.activeTargets.lowCarb.carbs) / 2);
+            const targetProtein = w.activeTargets.mode === 'moderate'
+                ? moderateTarget.protein
+                : w.activeTargets.highCarb.protein;
+            const targetFats = w.activeTargets.mode === 'moderate'
+                ? moderateTarget.fats
+                : Math.round((w.activeTargets.highCarb.fats + w.activeTargets.lowCarb.fats) / 2);
 
             return {
                 week: `W${w.weekNumber}`,
