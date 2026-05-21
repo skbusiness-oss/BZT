@@ -514,10 +514,56 @@ function NotificationsDiagnostic({ uid }: { uid: string }) {
                 </div>
             )}
             {testResult && (
-                <div className="px-6 pb-6">
+                <div className="px-6 pb-3">
                     <div className={`rounded-xl px-4 py-3 text-xs font-mono leading-relaxed ${testOk ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/30' : 'bg-amber-500/10 text-amber-300 border border-amber-500/30'}`}>
                         <strong className="block mb-1">Test push: {testOk ? 'OK' : 'FAILED'}</strong>
                         {testResult}
+                    </div>
+                </div>
+            )}
+
+            {/* mismatched-credential is the FCM error code that means the
+                Cloud Function's service account doesn't have permission
+                to send via FCM v1. Show a directive fix here instead of
+                making the user google the message. */}
+            {testResult && /mismatched-credential|cloudmessaging\.messages\.create/i.test(testResult) && (
+                <div className="px-6 pb-6">
+                    <div className="rounded-xl px-4 py-3 text-xs font-body leading-relaxed bg-rose-500/10 text-rose-300 border border-rose-500/30">
+                        <strong className="block font-headline font-bold mb-2">Fix: grant FCM permission to the function</strong>
+                        <ol className="space-y-1 list-decimal list-inside">
+                            <li>
+                                Open{' '}
+                                <a
+                                    href="https://console.cloud.google.com/apis/library/fcm.googleapis.com?project=biozackteam-3d593"
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="underline"
+                                >
+                                    Firebase Cloud Messaging API
+                                </a>{' '}
+                                in Google Cloud Console and click <strong>Enable</strong> if not already enabled.
+                            </li>
+                            <li>
+                                Open{' '}
+                                <a
+                                    href="https://console.cloud.google.com/iam-admin/iam?project=biozackteam-3d593"
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="underline"
+                                >
+                                    IAM &amp; Admin
+                                </a>{' '}
+                                and find principal{' '}
+                                <code className="text-[10px]">51844467480-compute@developer.gserviceaccount.com</code>.
+                            </li>
+                            <li>
+                                Click <strong>Edit</strong>, <strong>Add Another Role</strong>,
+                                pick <strong>Firebase Cloud Messaging API Admin</strong>, save.
+                            </li>
+                            <li>
+                                Wait ~60 seconds, then hit <strong>Send test push</strong> again.
+                            </li>
+                        </ol>
                     </div>
                 </div>
             )}

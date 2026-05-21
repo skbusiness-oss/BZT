@@ -1,5 +1,5 @@
 import {
-  createContext, useContext, useState, useEffect, useCallback, ReactNode,
+  createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode,
 } from 'react';
 import {
   collection, doc,
@@ -117,9 +117,102 @@ export const MessagesProvider = ({ children }: { children: ReactNode }) => {
     return () => unsubs.forEach((u) => u());
   }, [currentUserId, user?.role]);
 
-  // FCM and the service worker own background notifications. This
-  // context only writes messages and unread state, so historical
-  // messages do not replay as local browser notifications on hydration.
+  // ── Foreground notification fallback ────────────────────────────────
+  // When a new incoming message lands in the Firestore listener and the
+  // user is NOT actively viewing the messages page, fire a local
+  // Notification directly. This is a defense-in-depth path that
+  // bypasses FCM entirely — so when the Cloud Function's FCM call fails
+  // (mismatched-credential / IAM denial / stale tokens), the user still
+  // gets a popup if they have the app open in a tab.
+  //
+  // What this does NOT cover:
+  //   - App fully closed → still depends on FCM (only the SW can wake)
+  //   - Permission denied → silently skip (no popup ever)
+  //   - On /messages page already → suppress (live thread already paints)
+  //
+  // Implementation notes:
+  //   - We track seen message IDs across renders via a ref. Initial
+  //     hydration populates the set without firing, so historical
+  //     messages don't replay as popups on sign-in.
+  //   - Per-message tag (msg.id) so duplicate snapshot fires (e.g., from
+  //     pending → server write) don't double-pop.
+  //   - We use the SW registration if available so click handling is
+  //     identical to FCM-delivered pushes; fall back to page-level
+  //     Notification otherwise.
+  const seenMessageIdsRef = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    if (!currentUserId) {
+      seenMessageIdsRef.current = null;
+      return;
+    }
+    // First snapshot: populate the seen set silently.
+    if (seenMessageIdsRef.current === null) {
+      seenMessageIdsRef.current = new Set(messages.map((m) => m.id));
+      return;
+    }
+    const seen = seenMessageIdsRef.current;
+    const fresh = messages.filter((m) => !seen.has(m.id));
+    if (fresh.length === 0) return;
+    fresh.forEach((m) => seen.add(m.id));
+
+    // Only notify for messages INTO this user (not for their own sends).
+    const incoming = fresh.filter((m) => m.receiverId === currentUserId && m.senderId !== currentUserId);
+    if (incoming.length === 0) return;
+
+    // Permission gate.
+    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+
+    // Suppress if user is already looking at /messages — the live
+    // thread is already rendering the message, no popup needed.
+    try {
+      if (window.location.pathname.startsWith('/messages')) return;
+    } catch {
+      // SSR / worker context — proceed.
+    }
+
+    // Best-effort SW lookup for consistent click handling. Falls back to
+    // page-level Notification if the SW isn't ready yet.
+    const showLocal = async () => {
+      let swRegistration: ServiceWorkerRegistration | undefined;
+      try {
+        if ('serviceWorker' in navigator) {
+          swRegistration = await navigator.serviceWorker.getRegistration('/firebase-messaging-sw.js').catch(() => undefined);
+        }
+      } catch {
+        // ignore
+      }
+      for (const m of incoming) {
+        const title = `New message from ${m.senderName || 'Coach'}`;
+        const body = m.text
+          ? (m.text.length > 140 ? m.text.slice(0, 137) + '...' : m.text)
+          : (m.imageUrl ? 'Sent you a photo.' : 'Sent you a message.');
+        const url = `/messages?to=${m.senderId}`;
+        const options: NotificationOptions = {
+          body,
+          icon: '/icon-192.png',
+          badge: '/icon-192.png',
+          tag: m.id,
+          data: { url },
+        };
+        try {
+          if (swRegistration && 'showNotification' in swRegistration) {
+            await swRegistration.showNotification(title, options);
+          } else {
+            new Notification(title, options);
+          }
+        } catch {
+          // Some browsers throw if too many notifications are shown
+          // quickly; degrade silently.
+        }
+      }
+    };
+    void showLocal();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages, currentUserId]);
+
+  // FCM and the service worker own BACKGROUND notifications (app closed).
+  // The effect above handles foreground delivery as a defense-in-depth
+  // fallback so users see new messages even when FCM is failing.
   const sendMessage = async (senderId: string, receiverId: string, senderName: string, text: string, imageFile?: File | null) => {
     // Client-side rate limit: 10 messages/minute
     if (!rateLimits.message(senderId)) {
