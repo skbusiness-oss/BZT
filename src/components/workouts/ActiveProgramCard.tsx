@@ -90,7 +90,12 @@ export const ActiveProgramCard = () => {
                 }}
             />
 
-            {/* Header */}
+            {/* Header — text colors are EXPLICIT white literals (not
+                theme tokens). The card has a hardcoded dark photo
+                backdrop, so text-on-surface (which is dark in light
+                theme) would vanish here. Light theme is the more
+                common app state; the previous version was unreadable
+                for those users. */}
             <div className="relative p-4 pb-3">
                 <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3">
@@ -98,16 +103,23 @@ export const ActiveProgramCard = () => {
                             <GoalIcon className={colors.text} size={22} />
                         </div>
                         <div>
-                            <h3 className="font-bold text-on-surface text-sm">{activeProgram.programName}</h3>
+                            <h3
+                                className="font-bold text-sm"
+                                style={{ color: 'rgb(255 255 255 / 0.96)', textShadow: '0 1px 8px rgba(0,0,0,0.5)' }}
+                            >
+                                {activeProgram.programName}
+                            </h3>
                             <div className="flex items-center gap-2 mt-0.5">
-                                <span className="text-[11px] text-on-surface-variant">{activeProgram.split}</span>
-                                <span className="text-on-surface-variant/40">•</span>
-                                <span className="text-[11px] text-on-surface-variant flex items-center gap-1">
+                                <span className="text-[11px]" style={{ color: 'rgb(255 255 255 / 0.78)' }}>
+                                    {activeProgram.split}
+                                </span>
+                                <span style={{ color: 'rgb(255 255 255 / 0.40)' }}>•</span>
+                                <span className="text-[11px] flex items-center gap-1" style={{ color: 'rgb(255 255 255 / 0.78)' }}>
                                     <Repeat size={10} />
                                     {isAr ? `الدورة ${activeProgram.currentCycle}` : `Cycle ${activeProgram.currentCycle}`}
                                 </span>
                                 {activeProgram.assignedByCoach && (
-                                    <span className="text-[10px] text-primary flex items-center gap-0.5">
+                                    <span className="text-[10px] flex items-center gap-0.5" style={{ color: '#e6c364' }}>
                                         <Lock size={9} />
                                         {isAr ? 'من المدرب' : 'Coach'}
                                     </span>
@@ -120,7 +132,8 @@ export const ActiveProgramCard = () => {
                     {canDelete && !showDeleteConfirm && (
                         <button
                             onClick={() => setShowDeleteConfirm(true)}
-                            className="text-on-surface-variant/60 hover:text-red-400 transition-colors p-1"
+                            className="hover:text-red-400 transition-colors p-1"
+                            style={{ color: 'rgb(255 255 255 / 0.65)' }}
                             title={isAr ? 'حذف البرنامج' : 'Delete program'}
                         >
                             <Trash2 size={16} />
@@ -156,10 +169,12 @@ export const ActiveProgramCard = () => {
                     })}
                 </div>
                 <div className="flex items-center justify-between mt-1.5">
-                    <span className="text-[10px] text-on-surface-variant/60">
+                    <span className="text-[10px]" style={{ color: 'rgb(255 255 255 / 0.70)' }}>
                         {isAr ? `${completedCount}/${totalDays} مكتمل` : `${completedCount}/${totalDays} complete`}
                     </span>
-                    <span className="text-[10px] text-on-surface-variant/60">{progressPercent}%</span>
+                    <span className="text-[10px]" style={{ color: 'rgb(255 255 255 / 0.70)' }}>
+                        {progressPercent}%
+                    </span>
                 </div>
             </div>
 
