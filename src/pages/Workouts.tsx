@@ -157,6 +157,24 @@ export const Workouts = () => {
     const groupedPrograms = useMemo(() => groupItems(filteredPrograms, p => p.split), [filteredPrograms]);
     const groupedLibraryWorkouts = useMemo(() => groupItems(libraryWorkouts, w => w.category), [libraryWorkouts]);
     const allCategories = ['All', ...Array.from(new Set([...ALL_PROGRAMS.map(p => p.split), ...workoutCategories, ...workouts.map(w => w.category)]))];
+
+    // Per-category count for the card grid. Counts a category as the
+    // sum of static programs whose split matches + workout-library
+    // entries whose category matches. So "Full Body" surfaces both
+    // the Full Body training programs and standalone Full Body
+    // workouts as one number — what the user expects to see.
+    const categoryCounts = useMemo(() => {
+        const counts: Record<string, number> = { All: ALL_PROGRAMS.length + workouts.length };
+        for (const cat of allCategories) {
+            if (cat === 'All') continue;
+            const programs = ALL_PROGRAMS.filter(p => p.split === cat).length;
+            const wks = workouts.filter(w => w.category === cat).length;
+            counts[cat] = programs + wks;
+        }
+        return counts;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [workouts, allCategories.join('|')]);
+
     const handleCategoryFilter = (cat: string) => {
         setCategoryFilter(cat);
         if (cat !== 'All') {
@@ -268,24 +286,35 @@ export const Workouts = () => {
 
             </div>
 
-            {/* ── Split / category filter (Programs + Custom views) ── */}
+            {/* ── Categories + Goal filter ─────────────────────
+                Category browsing replaces the old chip strip with a
+                card grid: same data, visual treatment that scans
+                faster and matches the collection-card pattern used
+                on the University page. Active card is gold-bordered;
+                count under each name is the combined programs +
+                library workouts for that split. */}
             <div className="bg-surface-container-low rounded-2xl p-6 ghost-border space-y-6">
                     <div>
-                        <span className="font-label text-[10px] font-bold uppercase tracking-widest text-on-surface/40 block mb-3">{t('filterByCategory')}</span>
-                        <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
-                            {allCategories.map(cat => (
+                        <div className="flex items-baseline justify-between gap-3 mb-4">
+                            <span className="font-label text-[10px] font-bold uppercase tracking-widest text-on-surface/40 block">{t('filterByCategory')}</span>
+                            {categoryFilter !== 'All' && (
                                 <button
-                                    key={cat}
-                                    onClick={() => handleCategoryFilter(cat)}
-                                    className={clsx(
-                                        'px-4 py-2 rounded-lg text-xs font-headline font-bold whitespace-nowrap transition-colors border',
-                                        categoryFilter === cat
-                                            ? 'bg-primary/10 text-primary border-primary/30'
-                                            : 'bg-surface-container-lowest text-on-surface/60 border-outline-variant/30 hover:bg-surface-container hover:text-on-surface'
-                                    )}
+                                    onClick={() => handleCategoryFilter('All')}
+                                    className="text-[10px] font-label font-bold uppercase tracking-widest text-primary hover:underline"
                                 >
-                                    {cat}
+                                    Show all
                                 </button>
+                            )}
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                            {allCategories.map(cat => (
+                                <CategoryBrowserCard
+                                    key={cat}
+                                    label={cat}
+                                    count={categoryCounts[cat] ?? 0}
+                                    active={categoryFilter === cat}
+                                    onClick={() => handleCategoryFilter(cat)}
+                                />
                             ))}
                         </div>
                     </div>
@@ -806,3 +835,82 @@ export const Workouts = () => {
         </div>
     );
 };
+
+// ─────────────────────────────────────────────────────────────────────
+// CategoryBrowserCard — compact card used in the workouts category
+// browser. Visually mirrors the University page's collection cards
+// but smaller because the category list can run to ~10 entries.
+// Active card is gold-bordered so the current filter reads at a
+// glance without a separate "Selected: Full Body" pill.
+// ─────────────────────────────────────────────────────────────────────
+function CategoryBrowserCard({
+    label,
+    count,
+    active,
+    onClick,
+}: {
+    label: string;
+    count: number;
+    active: boolean;
+    onClick: () => void;
+}) {
+    const isAll = label === 'All';
+    // Lightweight icon-by-name map. Falls back to the generic
+    // dumbbell when a category is custom (coach-added) and so doesn't
+    // match a known split. Keeps the visual interesting without
+    // requiring per-category illustration assets.
+    const iconFor = (name: string) => {
+        const n = name.toLowerCase();
+        if (n.includes('full body')) return <Activity size={16} />;
+        if (n.includes('upper') || n.includes('lower')) return <Repeat size={16} />;
+        if (n.includes('push') || n.includes('pull') || n.includes('legs') || n.includes('ppl')) return <Zap size={16} />;
+        if (n.includes('bro')) return <Award size={16} />;
+        if (n.includes('hiit') || n.includes('cardio')) return <Heart size={16} />;
+        if (n.includes('stretch') || n.includes('mobility') || n.includes('recovery')) return <Moon size={16} />;
+        if (n.includes('strength') || n.includes('power')) return <Shield size={16} />;
+        if (n.includes('endurance')) return <RotateCcw size={16} />;
+        return <Dumbbell size={16} />;
+    };
+
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            className={clsx(
+                'group relative overflow-hidden rounded-xl p-4 text-left transition-all duration-200 hover:-translate-y-0.5',
+                active
+                    ? 'bg-primary/10 border-2 border-primary shadow-[0_8px_20px_rgba(230,195,100,0.25)]'
+                    : 'bg-surface-container-lowest border border-outline-variant/30 hover:bg-surface-container hover:border-primary/30'
+            )}
+        >
+            <div className="flex items-center justify-between gap-2 mb-3">
+                <span
+                    className={clsx(
+                        'w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-colors',
+                        active
+                            ? 'bg-primary/20 text-primary'
+                            : 'bg-surface-container text-on-surface/60 group-hover:text-primary'
+                    )}
+                >
+                    {isAll ? <Target size={16} /> : iconFor(label)}
+                </span>
+                {active && (
+                    <span className="text-[9px] font-label font-bold uppercase tracking-widest text-primary">
+                        Active
+                    </span>
+                )}
+            </div>
+            <div>
+                <h3 className={clsx(
+                    'font-headline font-bold text-sm leading-tight transition-colors',
+                    active ? 'text-on-surface' : 'text-on-surface group-hover:text-primary'
+                )}>
+                    {label}
+                </h3>
+                <p className="text-[11px] text-on-surface/45 font-body mt-1">
+                    {count} {count === 1 ? 'workout' : 'workouts'}
+                </p>
+            </div>
+        </button>
+    );
+}

@@ -3,9 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import {
     Lock, Search, Plus, X,
     Link2, CheckCircle2, AlertCircle, Edit2, Trash2, FileText,
-    Download, Loader2, ArrowRight,
+    Download, Loader2, ArrowRight, ArrowLeft,
     Tv2, Tag, Settings2, GraduationCap,
-    PlayCircle,
+    PlayCircle, BookOpen, Award, Sparkles,
 } from 'lucide-react';
 import clsx from 'clsx';
 import VideoPlayer from '../components/VideoPlayer';
@@ -22,6 +22,10 @@ import type { Course, Lesson, LessonResource, LibraryCategory } from '../types';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type MainTab = 'academy' | 'lives' | 'topics' | 'videos' | 'manage';
+// Academy levels arranged as a sequential learning ladder, plus a
+// "topics" bucket for off-path content. Mirrors the 4-card collection
+// pattern the reference UI uses — user picks one and drills in.
+type AcademyLevel = 'beginner' | 'intermediate' | 'advanced' | 'topics';
 type LessonFormData = Omit<Lesson, 'id' | 'createdAt' | 'updatedAt' | 'createdBy'> & {
     resources?: LessonResource[];
 };
@@ -52,6 +56,11 @@ export const VideoLibrary = () => {
     const [topicFilter, setTopicFilter] = useState<string | null>(null);
     const [videoCategoryFilter, setVideoCategoryFilter] = useState('All');
     const [search, setSearch] = useState('');
+    // Academy level drill-down — null = show the 4 collection cards,
+    // else show the course grid for that level. Reset whenever the
+    // user leaves the academy tab so re-entering lands on the cards
+    // rather than the previously-opened level.
+    const [activeLevel, setActiveLevel] = useState<AcademyLevel | null>(null);
 
     // ── Modal state ───────────────────────────────────────────────────────────
     const [courseModal, setCourseModal] = useState<{ open: boolean; course: Course | null }>({ open: false, course: null });
@@ -85,16 +94,31 @@ export const VideoLibrary = () => {
         courses.filter(c => c.courseType === 'recorded_live').sort((a, b) => a.order - b.order),
         [courses]);
 
-    const allCourses = useMemo(() =>
-        courses.filter(c => c.courseType !== 'recorded_live').sort((a, b) => a.order - b.order),
-        [courses]);
-
     const topicCourses = useMemo(() => {
         let list = courses;
         if (topicFilter) list = list.filter(c => c.categoryIds.includes(topicFilter));
         if (search) list = list.filter(c => c.title.toLowerCase().includes(search.toLowerCase()));
         return list.sort((a, b) => a.order - b.order);
     }, [courses, topicFilter, search]);
+
+    // ── Academy ladder grouping ────────────────────────────────────────
+    // The new collection-card UX groups courses into four ordered
+    // buckets. "Topics" is anything OFF the structured Zero-to-Hero
+    // path — optional academy courses, live sessions, anything that's
+    // not part of the linear beginner→advanced progression.
+    const academyByLevel = useMemo(() => {
+        const beginner = academyCourses.filter(c => c.level === 'beginner' && c.isRequired);
+        const intermediate = academyCourses.filter(c => c.level === 'intermediate' && c.isRequired);
+        const advanced = academyCourses.filter(c => c.level === 'advanced' && c.isRequired);
+        const requiredIds = new Set([...beginner, ...intermediate, ...advanced].map(c => c.id));
+        // Topics = everything not in the linear ladder. Includes
+        // optional academy courses AND live sessions in one pool so
+        // the user has a single off-path landing.
+        const topics = courses
+            .filter(c => !requiredIds.has(c.id))
+            .sort((a, b) => a.order - b.order);
+        return { beginner, intermediate, advanced, topics };
+    }, [academyCourses, courses]);
 
     const visibleVideos = useMemo(() =>
         videos.filter(video => isCoach || !video.isLocked || user?.role === 'client'),
@@ -387,7 +411,7 @@ export const VideoLibrary = () => {
                     {TABS.map(tab => (
                         <button
                             key={tab.id}
-                            onClick={() => { setActiveTab(tab.id); setActiveCourseId(null); }}
+                            onClick={() => { setActiveTab(tab.id); setActiveCourseId(null); setActiveLevel(null); }}
                             className={clsx(
                                 'flex items-center gap-2 px-5 py-2.5 rounded-full text-xs font-bold uppercase tracking-widest font-headline transition-all duration-300 whitespace-nowrap',
                                 activeTab === tab.id
@@ -444,10 +468,11 @@ export const VideoLibrary = () => {
             {/* ── Academy Path Tab ─────────────────────────────────────────── */}
             {!activeCourse && activeTab === 'academy' && (
                 <div className="space-y-12">
-                    {/* Continue Learning banner — hero photo treatment matching
-                        the dashboard's start-learning surface so the visual
-                        identity carries across the app. */}
-                    {continueLearning && (
+                    {/* Continue Learning banner — only on the landing
+                        card-grid view. Once the user drills into a level
+                        the banner would just be redundant noise above the
+                        course grid. */}
+                    {continueLearning && !activeLevel && (
                         <div
                             className="bzt-hero-card relative overflow-hidden rounded-2xl"
                             style={{
@@ -501,67 +526,120 @@ export const VideoLibrary = () => {
                         </div>
                     )}
 
-                    {/* Required path */}
-                    {['beginner', 'intermediate', 'advanced'].map(lvl => {
-                        const group = academyCourses.filter(c => c.level === lvl && c.isRequired);
-                        if (group.length === 0) return null;
-                        return (
-                            <div key={lvl}>
-                                <div className="flex items-baseline gap-3 mb-6">
-                                    <h2 className="text-xl font-headline font-extrabold capitalize text-on-surface">{lvl}</h2>
-                                    <span className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">{group.length} courses</span>
-                                </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                    {group.map(course => (
-                                        <CourseCard
-                                            key={course.id}
-                                            course={course}
-                                            categories={libraryCategories}
-                                            progress={userProgress[course.id]}
-                                            lessonCount={course.lessonCount ?? lessons[course.id]?.length ?? 0}
-                                            canAccess={canAccessCourse(course)}
-                                            onSelect={() => handleCourseSelect(course)}
-                                        />
-                                    ))}
+                    {/* ── Landing: 4 numbered collection cards ───────────
+                        Communicates the linear progression: start with 1
+                        Beginner, finish all topics inside, then move to 2,
+                        then 3. Card 4 (Topics) is the off-path bucket. */}
+                    {!activeLevel && (
+                        <>
+                            <div>
+                                <h2 className="text-xl font-headline font-extrabold text-on-surface mb-1">Collections</h2>
+                                <p className="text-on-surface-variant text-sm font-body mb-6">
+                                    Follow the path in order — finish one level before moving to the next.
+                                </p>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                    <LevelCollectionCard
+                                        index={1}
+                                        title="Beginner"
+                                        subtitle={`${academyByLevel.beginner.length} ${academyByLevel.beginner.length === 1 ? 'course' : 'courses'}`}
+                                        accentColor="rgb(16 185 129)"   /* emerald */
+                                        accentTint="rgb(16 185 129 / 0.10)"
+                                        icon={<GraduationCap size={22} />}
+                                        onClick={() => setActiveLevel('beginner')}
+                                        disabled={academyByLevel.beginner.length === 0}
+                                    />
+                                    <LevelCollectionCard
+                                        index={2}
+                                        title="Intermediate"
+                                        subtitle={`${academyByLevel.intermediate.length} ${academyByLevel.intermediate.length === 1 ? 'course' : 'courses'}`}
+                                        accentColor="rgb(245 158 11)"   /* amber */
+                                        accentTint="rgb(245 158 11 / 0.10)"
+                                        icon={<BookOpen size={22} />}
+                                        onClick={() => setActiveLevel('intermediate')}
+                                        disabled={academyByLevel.intermediate.length === 0}
+                                    />
+                                    <LevelCollectionCard
+                                        index={3}
+                                        title="Advanced"
+                                        subtitle={`${academyByLevel.advanced.length} ${academyByLevel.advanced.length === 1 ? 'course' : 'courses'}`}
+                                        accentColor="rgb(244 63 94)"    /* rose */
+                                        accentTint="rgb(244 63 94 / 0.10)"
+                                        icon={<Award size={22} />}
+                                        onClick={() => setActiveLevel('advanced')}
+                                        disabled={academyByLevel.advanced.length === 0}
+                                    />
+                                    <LevelCollectionCard
+                                        index={4}
+                                        title="Topics"
+                                        subtitle={`${academyByLevel.topics.length} ${academyByLevel.topics.length === 1 ? 'course' : 'courses'} · off-path`}
+                                        accentColor="rgb(168 85 247)"   /* violet */
+                                        accentTint="rgb(168 85 247 / 0.10)"
+                                        icon={<Sparkles size={22} />}
+                                        onClick={() => setActiveLevel('topics')}
+                                        disabled={academyByLevel.topics.length === 0}
+                                    />
                                 </div>
                             </div>
-                        );
-                    })}
 
-                    {/* Optional bonus content in academy */}
-                    {(() => {
-                        const bonus = allCourses.filter(c => !c.isRequired);
-                        if (bonus.length === 0) return null;
-                        return (
-                            <details>
-                                <summary className="cursor-pointer list-none text-[10px] font-label font-bold uppercase tracking-widest text-on-surface-variant hover:text-primary transition-colors mb-6">
-                                    {t('bonusContent')} ({bonus.length})
-                                </summary>
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
-                                    {bonus.map(course => (
-                                        <CourseCard
-                                            key={course.id}
-                                            course={course}
-                                            categories={libraryCategories}
-                                            progress={userProgress[course.id]}
-                                            lessonCount={course.lessonCount ?? lessons[course.id]?.length ?? 0}
-                                            canAccess={canAccessCourse(course)}
-                                            onSelect={() => handleCourseSelect(course)}
-                                        />
-                                    ))}
+                            {academyCourses.length === 0 && !academyLoading && (
+                                <div className="glass-card rounded-2xl p-16 text-center text-on-surface/40">
+                                    <GraduationCap size={48} className="mx-auto mb-4 opacity-20" />
+                                    <p className="text-sm font-body">
+                                        {t('noAcademyCoursesYet')}{isCoach && ` ${t('noAcademyCoursesCoachHint')}`}
+                                    </p>
                                 </div>
-                            </details>
+                            )}
+                        </>
+                    )}
+
+                    {/* ── Drill-down: courses inside the selected level ─── */}
+                    {activeLevel && (() => {
+                        const group = academyByLevel[activeLevel];
+                        const titleMap: Record<AcademyLevel, string> = {
+                            beginner: 'Beginner',
+                            intermediate: 'Intermediate',
+                            advanced: 'Advanced',
+                            topics: 'Topics',
+                        };
+                        return (
+                            <div>
+                                <button
+                                    onClick={() => setActiveLevel(null)}
+                                    className="flex items-center gap-2 text-on-surface-variant hover:text-primary transition-colors mb-6 text-[10px] font-label font-bold uppercase tracking-widest"
+                                >
+                                    <ArrowLeft size={14} /> Back to collections
+                                </button>
+                                <div className="flex items-baseline gap-3 mb-6">
+                                    <h2 className="text-2xl font-headline font-extrabold text-on-surface">{titleMap[activeLevel]}</h2>
+                                    <span className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                                        {group.length} {group.length === 1 ? 'course' : 'courses'}
+                                    </span>
+                                </div>
+                                {group.length === 0 ? (
+                                    <div className="glass-card rounded-2xl p-16 text-center text-on-surface/40">
+                                        <BookOpen size={48} className="mx-auto mb-4 opacity-20" />
+                                        <p className="text-sm font-body">
+                                            No courses in this collection yet.{isCoach && ` Add one from the Manage tab.`}
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                        {group.map(course => (
+                                            <CourseCard
+                                                key={course.id}
+                                                course={course}
+                                                categories={libraryCategories}
+                                                progress={userProgress[course.id]}
+                                                lessonCount={course.lessonCount ?? lessons[course.id]?.length ?? 0}
+                                                canAccess={canAccessCourse(course)}
+                                                onSelect={() => handleCourseSelect(course)}
+                                            />
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
                         );
                     })()}
-
-                    {academyCourses.length === 0 && !academyLoading && (
-                        <div className="glass-card rounded-2xl p-16 text-center text-on-surface/40">
-                            <GraduationCap size={48} className="mx-auto mb-4 opacity-20" />
-                            <p className="text-sm font-body">
-                                {t('noAcademyCoursesYet')}{isCoach && ` ${t('noAcademyCoursesCoachHint')}`}
-                            </p>
-                        </div>
-                    )}
                 </div>
             )}
 
@@ -1007,3 +1085,98 @@ export const VideoLibrary = () => {
         </div>
     );
 };
+
+// ─────────────────────────────────────────────────────────────────────
+// LevelCollectionCard — one of the 4 ordered cards on the academy
+// landing. Mirrors the "online course" collection-card pattern from
+// the reference design: tinted background, big number badge, title,
+// course count, soft icon. Disabled state (count = 0) renders the
+// card muted so the user knows nothing's there yet without it
+// looking like a layout bug.
+// ─────────────────────────────────────────────────────────────────────
+function LevelCollectionCard({
+    index,
+    title,
+    subtitle,
+    accentColor,
+    accentTint,
+    icon,
+    onClick,
+    disabled,
+}: {
+    index: number;
+    title: string;
+    subtitle: string;
+    /** Solid color for the number badge + outline accents. */
+    accentColor: string;
+    /** Translucent tint for the card background fill. */
+    accentTint: string;
+    icon: React.ReactNode;
+    onClick: () => void;
+    disabled?: boolean;
+}) {
+    return (
+        <button
+            type="button"
+            onClick={disabled ? undefined : onClick}
+            disabled={disabled}
+            className="relative overflow-hidden rounded-2xl p-6 text-left transition-all duration-200 enabled:hover:-translate-y-0.5 enabled:active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{
+                background: `linear-gradient(135deg, ${accentTint}, rgb(255 255 255 / 0.02) 90%)`,
+                border: `1px solid ${accentColor.replace('rgb(', 'rgb(').replace(')', ' / 0.30)')}`,
+                boxShadow: '0 8px 24px rgba(0,0,0,0.20)',
+            }}
+        >
+            {/* Decorative big number — anchors the "follow the order"
+                message visually. Pushed to the corner so it doesn't
+                fight the title. */}
+            <span
+                aria-hidden
+                className="absolute -top-3 -right-2 font-display font-extrabold leading-none select-none pointer-events-none"
+                style={{
+                    fontSize: '8rem',
+                    color: accentColor,
+                    opacity: 0.10,
+                    letterSpacing: '-0.05em',
+                }}
+            >
+                {index}
+            </span>
+
+            <div className="relative flex flex-col gap-5 min-h-[120px]">
+                <div className="flex items-start justify-between gap-3">
+                    <span
+                        className="font-label text-[10px] font-bold uppercase tracking-[0.3em]"
+                        style={{ color: accentColor }}
+                    >
+                        Level {index}
+                    </span>
+                    <span
+                        className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+                        style={{
+                            background: accentTint,
+                            color: accentColor,
+                            border: `1px solid ${accentColor.replace(')', ' / 0.25)')}`,
+                        }}
+                    >
+                        {icon}
+                    </span>
+                </div>
+                <div>
+                    <h3 className="font-headline font-extrabold text-2xl text-on-surface tracking-tight">
+                        {title}
+                    </h3>
+                    <p className="text-sm text-on-surface-variant font-body mt-1">{subtitle}</p>
+                </div>
+                {!disabled && (
+                    <span
+                        className="inline-flex items-center gap-1.5 text-[10px] font-label font-bold uppercase tracking-widest mt-auto"
+                        style={{ color: accentColor }}
+                    >
+                        Open <ArrowRight size={12} />
+                    </span>
+                )}
+            </div>
+        </button>
+    );
+}
