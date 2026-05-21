@@ -5,6 +5,7 @@ import { LanguageProvider } from './context/LanguageContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { AppRoutes } from './AppRoutes';
 import { ErrorBoundary } from './components/shared/ErrorBoundary';
+import { NewVersionToast } from './components/shared/NewVersionToast';
 
 // Provider order matters:
 //   - LanguageProvider: no external deps; outermost
@@ -25,6 +26,10 @@ function App() {
                         <ErrorBoundary>
                             <DataProvider>
                                 <AppRoutes />
+                                {/* Global "App updated" toast. Lives outside
+                                    routes so it follows the user across
+                                    navigations after a deploy. */}
+                                <NewVersionToast />
                             </DataProvider>
                         </ErrorBoundary>
                     </ThemeProvider>
