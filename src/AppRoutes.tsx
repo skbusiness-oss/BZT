@@ -66,9 +66,16 @@ const FullScreenLoader = () => {
             style={{ background: '#060814' }}
         >
             {/* Wordmark — gold gradient text, anchors the brand even
-                before any real UI renders. */}
+                before any real UI renders. Text colors are explicit
+                rgba literals (NOT theme tokens) because this component
+                can render before ThemeProvider boots — using
+                text-on-surface here resolves to nothing, leaving the
+                label invisible / dark-on-dark. */}
             <div className="flex flex-col items-center gap-3">
-                <span className="font-label text-[10px] font-bold uppercase tracking-[0.4em] text-on-surface/40">
+                <span
+                    className="font-label text-[10px] font-bold uppercase tracking-[0.4em]"
+                    style={{ color: 'rgb(255 255 255 / 0.6)' }}
+                >
                     BioZackTeam
                 </span>
                 <h1
@@ -109,11 +116,14 @@ const FullScreenLoader = () => {
 
             {/* Rotating message. Fixed height so the layout doesn't jump
                 between messages of different widths. key forces a small
-                fade-in animation on each switch. */}
+                fade-in animation on each switch. Color is an explicit
+                rgba literal so it remains readable even if theme tokens
+                aren't yet applied. */}
             <div className="min-h-[1.5rem]">
                 <p
                     key={messageIndex}
-                    className="text-on-surface/65 font-body text-sm tracking-wide animate-in fade-in duration-500"
+                    className="font-body text-sm tracking-wide animate-in fade-in duration-500"
+                    style={{ color: 'rgb(255 255 255 / 0.85)' }}
                 >
                     {LOADER_MESSAGES[messageIndex]}…
                 </p>
@@ -172,7 +182,7 @@ const callSetUserRoleHeal = httpsCallable<
 >(functions, 'setUserRole');
 
 const AuthenticatedShell = () => {
-    const { user, freshUserDocLoaded } = useAuth();
+    const { user, freshUserDocLoaded, serverProfileConfirmed } = useAuth();
     const [tosAcceptedLocally, setTosAcceptedLocally] = useState(false);
     const [baselineCompletedLocally, setBaselineCompletedLocally] = useState(false);
 
@@ -213,13 +223,23 @@ const AuthenticatedShell = () => {
     // server field nor the local hint says it was accepted. This prevents
     // every spurious mount (post-foreground, after a route change) from
     // briefly rendering the modal while the snapshot is in-flight.
+    //
+    // serverProfileConfirmed gate matters: AuthContext now accepts the
+    // first cached snap so the dashboard renders fast on slow networks,
+    // but cached docs can be missing fields the server has
+    // (tosAcceptedAt / communityProfileStartedAt). Gating the gates on
+    // a server-confirmed snap means we never decide "show ToS" from
+    // stale cache — the modal only appears if the SERVER says the
+    // field is missing. Local hints still provide instant continuity
+    // for same-device returning users.
     const showTos =
         !!user
         && freshUserDocLoaded
+        && serverProfileConfirmed
         && !user.tosAcceptedAt
         && !localTosHint;
     const needsBaseline =
-        !!user && freshUserDocLoaded && !showTos
+        !!user && freshUserDocLoaded && serverProfileConfirmed && !showTos
         && user.role === 'community'
         && !user.communityProfileStartedAt
         && !localBaselineHint;

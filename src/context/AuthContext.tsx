@@ -80,7 +80,17 @@ const touchLastActive = () => {
 interface AuthContextType {
   user: User | null;
   loading: boolean;
+  /** True once we've processed AT LEAST one user-doc snapshot (cache
+   *  or server). Used to release the post-sign-in loader. */
   freshUserDocLoaded: boolean;
+  /** True only after a SERVER-confirmed (non-cache) snapshot. Use this
+   *  to gate decisions that must not be made from possibly-stale
+   *  cached data — onboarding gates (ToS, Week 0 baseline) in
+   *  particular. We don't gate `freshUserDocLoaded` on this anymore
+   *  because doing so was blocking sign-in indefinitely on slow
+   *  networks (cached snap arrives, server snap never confirms,
+   *  waitForProfileReady times out, user bounced back to login). */
+  serverProfileConfirmed: boolean;
   authError: string | null;
   clearAuthError: () => void;
   signIn: (email: string, password: string) => Promise<{ error?: string }>;
@@ -126,6 +136,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [freshUserDocLoaded, setFreshUserDocLoaded] = useState(false);
+  const [serverProfileConfirmed, setServerProfileConfirmed] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const userDocUnsubRef = useRef<Unsubscribe | null>(null);
   const userRef = useRef<User | null>(null);
@@ -248,6 +259,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         try { fcmForegroundUnsubRef.current(); } catch { /* ignore */ }
         fcmForegroundUnsubRef.current = null;
       }
+      // Reset server-confirmation flag — each auth user gets its own
+      // confirmation lifecycle.
+      setServerProfileConfirmed(false);
 
       if (!firebaseUser) {
         settleProfileWaiters(null, new Error('Signed out before the account profile loaded.'));
@@ -307,39 +321,46 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (!isCurrentRun()) return;
       userDocUnsubRef.current = onSnapshot(
         doc(db, 'users', firebaseUser.uid),
+        // includeMetadataChanges so we get a second fire when the
+        // server confirms a cached snapshot. We use the metadata flag
+        // to drive serverProfileConfirmed for onboarding gates.
+        { includeMetadataChanges: true },
         (snap) => {
           if (!isCurrentRun()) return;
           touchLastActive();
 
-          // Auth routing and onboarding gates must never decide from stale
-          // cached profile data. A cached user doc can be missing fields the
-          // server already has (tosAcceptedAt, communityProfileStartedAt),
-          // which is what caused the ToS / Week 0 blink after login.
-          if (snap.metadata.fromCache) {
-            return;
-          }
+          const isFromCache = snap.metadata.fromCache;
+
+          // CHANGED from the previous "if fromCache, return early" gate.
+          // That gate prevented the ToS / Week 0 blink for users whose
+          // local cache was missing those (newer) fields — but it also
+          // blocked sign-in indefinitely on slow networks: the cached
+          // snap arrived, we returned early, the server snap never
+          // confirmed (offline or 3G), waitForProfileReady timed out
+          // after 20s, signIn rejected, the user was kicked back to
+          // /login. That was the "login takes forever then bounces"
+          // bug reported live.
+          //
+          // New strategy: accept EVERY snap so the user object loads
+          // immediately from cache when available. Onboarding gates
+          // (which actually need server-confirmed data) read the
+          // separate `serverProfileConfirmed` flag we expose below,
+          // and stay closed until a non-cache snap lands.
 
           if (!snap.exists()) {
-            // Two cases where `!snap.exists()` fires:
-            //   1. Initial snapshot from local cache before the server
-            //      response arrives. metadata.fromCache === true. The doc
-            //      MAY exist on the server; we just don't know yet. Do
-            //      NOTHING and wait for the next snapshot.
-            //   2. Server-confirmed "doc doesn't exist" (was deleted by
-            //      deleteUser cascade, or never existed). metadata.
-            //      fromCache === false. Hard sign-out.
-            //
-            // The previous version skipped this distinction and fail-
-            // closed on every !exists snapshot, which caused a login-
-            // loop on FIRST sign-in: cache is empty → first snapshot
-            // says !exists → user signed out → kicked back to /login.
-            // Second attempt worked because cache had warmed up from
-            // the first attempt. Reported via Sentry as permission-
-            // denied / repeated /login hits.
+            if (isFromCache) {
+              // Cache doesn't know about this doc yet (first sign-in
+              // on this device, or cache was wiped). Wait for the
+              // server snap before deciding the account is gone.
+              return;
+            }
+            // Server-confirmed: the user doc is genuinely missing
+            // (deleted by deleteUser cascade, or never existed).
             setAuthError('Your account no longer exists. Please contact your coach.');
             firebaseSignOut(auth).catch(() => { /* ignore */ });
             settleProfileWaiters(firebaseUser.uid, new Error('Your account no longer exists. Please contact your coach.'));
             setSessionState(null, true, false);
+            setServerProfileConfirmed(true);
             return;
           }
 
@@ -381,6 +402,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           };
 
           setSessionState(nextUser, true, false);
+          // Only flip serverProfileConfirmed on a NON-cache snap. The
+          // onboarding gates in AppRoutes read this to decide whether
+          // it's safe to act on (potentially stale) tosAcceptedAt /
+          // communityProfileStartedAt values.
+          if (!isFromCache) {
+            setServerProfileConfirmed(true);
+          }
+          // Release any signIn() awaiter regardless of cache vs server —
+          // the user object is fully populated, the dashboard can render.
+          // (Without this, signIn awaits a server snap forever on slow
+          // networks; that was the bounce-back-to-login bug.)
           settleProfileWaiters(firebaseUser.uid);
 
           // Register this device for FCM push notifications. Fire-and-
@@ -598,6 +630,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         user,
         loading,
         freshUserDocLoaded,
+        serverProfileConfirmed,
         authError,
         clearAuthError,
         signIn,
