@@ -30,7 +30,7 @@ export const translations = {
     navDashboard: { en: 'Dashboard', ar: 'لوحة التحكم' },
     navCheckIns: { en: 'My Check-Ins', ar: 'تسجيلاتي' },
     navClients: { en: 'My Clients', ar: 'عملائي' },
-    navVideoLibrary: { en: 'Video Library', ar: 'مكتبة الفيديو' },
+    navVideoLibrary: { en: 'University', ar: 'الأكاديمية' },
     navWorkouts: { en: 'Workouts', ar: 'التمارين' },
     navProfile: { en: 'Update', ar: 'التحديث' },
 
@@ -129,8 +129,9 @@ export const translations = {
     markReviewed: { en: 'Mark as Reviewed', ar: 'تحديد كمراجع' },
     setInitialTargets: { en: 'Set Initial Targets', ar: 'تحديد الأهداف الأولية' },
 
-    // --- Video Library ---
-    videoLibraryTitle: { en: 'Video Library', ar: 'مكتبة الفيديو' },
+    // --- Video Library / Academy (branded "University" in the menu,
+    //     "BioZackTeam University" on the page) ---
+    videoLibraryTitle: { en: 'BioZackTeam University', ar: 'أكاديمية بيوزاك تيم' },
     videoLibrarySubtitle: { en: 'Exclusive training and nutrition content.', ar: 'محتوى حصري للتدريب والتغذية.' },
     searchVideos: { en: 'Search videos...', ar: 'بحث في الفيديو...' },
     addVideo: { en: 'Add Video', ar: 'إضافة فيديو' },
@@ -731,7 +732,7 @@ export const translations = {
     //     copy verbatim.
     // VideoLibrary
     zeroToHeroEyebrow: { en: 'Zero to Hero', ar: 'من الصفر إلى البطل' },
-    academyTitle: { en: 'Academy', ar: 'الأكاديمية' },
+    academyTitle: { en: 'BioZackTeam University', ar: 'أكاديمية بيوزاك تيم' },
     academyHeaderBlurb: {
         en: 'A structured path from fundamentals to elite mastery. Required courses build the foundation your coaching calls are built on.',
         ar: 'مسار منظّم من الأساسيات إلى الإتقان. الدروس الإلزامية تبني الأساس الذي تنطلق منه جلسات التدريب.',
