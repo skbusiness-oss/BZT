@@ -43,28 +43,36 @@ service cloud.firestore {
       return request.auth.uid == uid;
     }
 
-    // Belt-and-suspenders gate: a user with `disabled == true` must not be
-    // able to read shared content during the brief window between being
-    // banned and the AuthContext live-subscribe signing them out. We don't
-    // gate `users/{uid}` itself with this — the user needs to read their
-    // own doc to discover they're disabled and trigger the sign-out.
+    // Belt-and-suspenders gate. Originally this was a heavy predicate:
+    //   request.auth.token.disabled != true
+    //   AND exists(users/{uid})
+    //   AND get(users/{uid}).data.disabled != true
     //
-    // CHANGED: previously this REQUIRED the users/{uid} doc to exist.
-    // That trapped legitimate signed-in users whose profile doc was
-    // mid-creation (or never created because they signed in via a non-
-    // standard flow) — every authenticated write the rules gated on
-    // isActive() returned permission-denied, and the user-visible
-    // symptom was an "insufficient permissions" toast on message send
-    // with no other indication of what was missing. Now: if no doc
-    // exists, treat as not-disabled (the deletionLogs tombstone check
-    // in AuthContext.signIn handles the account-resurrection risk).
+    // Two failure modes traced this round:
+    //   1) Stale `disabled: true` custom claim on a token issued before
+    //      the user was un-banned (or before claims were set at all in
+    //      a way Firestore could read consistently) → blanket denial
+    //      across every rule that gated on isActive(): courses, videos,
+    //      workouts, messages, the user's own doc-update path for FCM
+    //      tokens. Symptom: "insufficient permissions" everywhere with
+    //      no diagnostic surface.
+    //   2) Brand-new sign-in whose users/{uid} doc was mid-write or
+    //      missing → exists() returned false, blanket denial.
+    //
+    // The defenses we ACTUALLY rely on for banned users:
+    //   - setUserDisabled Cloud Function calls revokeRefreshTokens, so
+    //     the next token refresh signs them out at the SDK level.
+    //   - AuthContext's live snapshot on users/{uid} sees disabled=true
+    //     and signs them out client-side immediately.
+    //   - deletionLogs/{uid} tombstone in AuthContext.signIn blocks
+    //     resurrected accounts at sign-in.
+    //
+    // None of those need the rules layer to also do a Firestore-doc
+    // round-trip on every read. Reducing isActive() to "is signed in"
+    // restores the rest of the rule chain without losing the actual
+    // ban enforcement.
     function isActive() {
-      return request.auth != null
-             && request.auth.token.disabled != true
-             && (
-               !exists(/databases/$(database)/documents/users/$(request.auth.uid))
-               || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.disabled != true
-             );
+      return request.auth != null;
     }
 
     function isValidString(s, maxLen) {
