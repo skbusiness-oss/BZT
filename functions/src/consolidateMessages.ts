@@ -1,34 +1,27 @@
 /**
- * consolidateMessagesToCoach — admin-only callable. One-shot data
- * migration that makes a single UID (`coachUid`) the sole receiver of
- * every message in the database that was historically addressed to
- * some other staff UID (`fromUid`, typically the legacy admin).
+ * consolidateMessagesToCoach - admin-only callable. One-shot data
+ * migration that makes a single UID (`coachUid`) the staff side of
+ * every message in the database that historically used another staff
+ * UID (`fromUid`, typically the legacy admin).
  *
  * Differs from forwardMessagesToCoach (sibling file) in one key way:
- * this MUTATES the original `receiverId` in place instead of creating
- * a duplicate. That makes the coach's read-status flow work correctly
- * post-migration — Firestore rules only let the receiver flip `read`,
- * so a coach reading an admin-addressed message can't mark it read
- * until the message is actually addressed to him.
+ * this MUTATES the original message in place instead of creating a
+ * duplicate. That makes the coach's read-status flow work correctly
+ * post-migration because Firestore rules only let the receiver flip
+ * `read`.
  *
  * What it does
  * ────────────
- * 1. Read every message with receiverId == fromUid. Skip any whose
- *    senderId == coachUid (those are coach's outbound — receiver is
- *    correct as-is; mutating would be wrong).
- * 2. Update each remaining message: receiverId → coachUid. Preserve
- *    the original in `originalReceiverId` for audit / rollback.
- * 3. Delete redundant forwarded duplicates: messages with
- *    receiverId == coachUid AND forwardedFromMessageId set, where the
- *    source message is now ALSO addressed to coachUid (i.e. step 2
- *    just migrated the original — keeping the forwarded copy would be
- *    a duplicate in the coach's thread). The forwarded copy carries
- *    no information the original doesn't.
+ * 1. Read every message with receiverId == fromUid or senderId == fromUid.
+ * 2. Update each remaining message: receiverId or senderId -> coachUid.
+ *    Preserve the original staff UID for audit / rollback.
+ * 3. Delete redundant forwarded duplicates whose source message now
+ *    uses coachUid on the staff side. Keeping both would duplicate the
+ *    coach's thread.
  * 4. Audit-log the run.
  *
- * Idempotency: re-running yields 0 mutations (all originals already
- * addressed to coach) and 0 deletions (forwarded duplicates already
- * removed on the first run).
+ * Idempotency: re-running yields 0 mutations after all originals already
+ * use coachUid, and 0 deletions after forwarded duplicates are removed.
  *
  * Why a separate function instead of expanding forwardMessagesToCoach:
  * forwardMessagesToCoach is a non-destructive operation (creates
@@ -55,6 +48,14 @@ async function callerIsAdmin(uid: string | undefined): Promise<boolean> {
     return snap.data()?.role === 'admin';
 }
 
+type ConsolidateDirection = 'received' | 'sent';
+
+interface SourceMessage {
+    id: string;
+    data: Record<string, unknown>;
+    direction: ConsolidateDirection;
+}
+
 export const consolidateMessagesToCoach = onCall(
     { region: 'us-central1', memory: '256MiB', invoker: 'public', timeoutSeconds: 300 },
     async (request) => {
@@ -78,21 +79,27 @@ export const consolidateMessagesToCoach = onCall(
 
         const db = getFirestore();
 
-        // 1. Read every message addressed to `fromUid`. Page through so
-        //    memory stays flat regardless of inbox size.
-        const sourceMessages: { id: string; data: Record<string, unknown> }[] = [];
-        {
+        // 1. Read every message where `fromUid` is the staff side. Page
+        //    through so memory stays flat regardless of inbox size.
+        const sourceMessagesById = new Map<string, SourceMessage>();
+        const readSources = async (field: 'receiverId' | 'senderId', direction: ConsolidateDirection) => {
             let cursor: FirebaseFirestore.QueryDocumentSnapshot | null = null;
             for (;;) {
-                let q = db.collection('messages').where('receiverId', '==', fromUid).limit(200);
+                let q = db.collection('messages').where(field, '==', fromUid).limit(200);
                 if (cursor) q = q.startAfter(cursor);
                 const snap = await q.get();
                 if (snap.empty) break;
-                for (const d of snap.docs) sourceMessages.push({ id: d.id, data: d.data() });
+                for (const d of snap.docs) {
+                    sourceMessagesById.set(d.id, { id: d.id, data: d.data(), direction });
+                }
                 if (snap.size < 200) break;
                 cursor = snap.docs[snap.docs.length - 1];
             }
-        }
+        };
+
+        await readSources('receiverId', 'received');
+        await readSources('senderId', 'sent');
+        const sourceMessages = Array.from(sourceMessagesById.values());
 
         // 2. Mutate originals in place — receiverId → coachUid. Skip any
         //    whose sender IS the coach (coach's outbound to fromUid; we
@@ -105,15 +112,26 @@ export const consolidateMessagesToCoach = onCall(
             const batch = db.batch();
             let dirty = false;
             for (const src of slice) {
-                if (src.data.senderId === coachUid) {
+                const wouldBecomeSelfConversation =
+                    (src.direction === 'received' && src.data.senderId === coachUid)
+                    || (src.direction === 'sent' && src.data.receiverId === coachUid);
+                if (wouldBecomeSelfConversation) {
                     skippedCoachOutbound++;
                     continue;
                 }
-                batch.update(db.collection('messages').doc(src.id), {
-                    receiverId: coachUid,
-                    originalReceiverId: fromUid,
-                    consolidatedAt: FieldValue.serverTimestamp(),
-                });
+                const updateData = src.direction === 'received'
+                    ? {
+                        receiverId: coachUid,
+                        originalReceiverId: fromUid,
+                        consolidatedAt: FieldValue.serverTimestamp(),
+                    }
+                    : {
+                        senderId: coachUid,
+                        senderName: 'Coach Zaki',
+                        originalSenderId: fromUid,
+                        consolidatedAt: FieldValue.serverTimestamp(),
+                    };
+                batch.update(db.collection('messages').doc(src.id), updateData);
                 migrated++;
                 dirty = true;
             }
@@ -126,33 +144,40 @@ export const consolidateMessagesToCoach = onCall(
         //    a now-migrated original is redundant — delete it.
         const migratedIds = new Set(
             sourceMessages
-                .filter(s => s.data.senderId !== coachUid)
+                .filter(s => !(
+                    (s.direction === 'received' && s.data.senderId === coachUid)
+                    || (s.direction === 'sent' && s.data.receiverId === coachUid)
+                ))
                 .map(s => s.id)
         );
         let deletedDuplicates = 0;
         {
-            // Read all messages addressed to coachUid that carry a
-            // forwardedFromMessageId. (Most coach-addressed messages do
-            // not have that field, so the in-memory filter is cheap.)
-            let cursor: FirebaseFirestore.QueryDocumentSnapshot | null = null;
-            const toDelete: string[] = [];
-            for (;;) {
-                let q = db.collection('messages').where('receiverId', '==', coachUid).limit(500);
-                if (cursor) q = q.startAfter(cursor);
-                const snap = await q.get();
-                if (snap.empty) break;
-                for (const d of snap.docs) {
-                    const data = d.data();
-                    const sourceId = data.forwardedFromMessageId;
-                    if (typeof sourceId === 'string' && migratedIds.has(sourceId)) {
-                        toDelete.push(d.id);
+            const toDelete = new Set<string>();
+            const collectForwardedDuplicates = async (field: 'receiverId' | 'senderId') => {
+                let cursor: FirebaseFirestore.QueryDocumentSnapshot | null = null;
+                for (;;) {
+                    let q = db.collection('messages').where(field, '==', coachUid).limit(500);
+                    if (cursor) q = q.startAfter(cursor);
+                    const snap = await q.get();
+                    if (snap.empty) break;
+                    for (const d of snap.docs) {
+                        const data = d.data();
+                        const sourceId = data.forwardedFromMessageId;
+                        if (typeof sourceId === 'string' && migratedIds.has(sourceId)) {
+                            toDelete.add(d.id);
+                        }
                     }
+                    if (snap.size < 500) break;
+                    cursor = snap.docs[snap.docs.length - 1];
                 }
-                if (snap.size < 500) break;
-                cursor = snap.docs[snap.docs.length - 1];
-            }
-            for (let i = 0; i < toDelete.length; i += BATCH) {
-                const slice = toDelete.slice(i, i + BATCH);
+            };
+
+            await collectForwardedDuplicates('receiverId');
+            await collectForwardedDuplicates('senderId');
+
+            const toDeleteIds = Array.from(toDelete);
+            for (let i = 0; i < toDeleteIds.length; i += BATCH) {
+                const slice = toDeleteIds.slice(i, i + BATCH);
                 const batch = db.batch();
                 for (const id of slice) batch.delete(db.collection('messages').doc(id));
                 await batch.commit();

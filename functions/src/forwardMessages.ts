@@ -1,13 +1,13 @@
 /**
- * forwardMessagesToCoach — admin-only callable. Forwards every message
- * whose receiver is `fromUid` to a duplicate addressed to `toUid`.
+ * forwardMessagesToCoach - admin-only callable. Forwards every message
+ * where `fromUid` is sender or receiver to a duplicate using `toUid`.
  *
  * Context: before the "team routing" fix landed, the client's coach
  * lookup used `limit(1)` on the `users` collection and arbitrarily
  * picked the admin. So historical client messages have
  * receiverId == admin.uid even though they were intended for the
- * coach. This function creates a parallel copy for the coach so they
- * can see the conversation history without losing the admin's copy.
+ * coach. This function creates parallel copies for the coach so they
+ * can see the full conversation history without losing the admin's copy.
  *
  * Idempotency: each forwarded message gets a `forwardedFromMessageId`
  * field equal to the source message id. On re-run, we skip messages
@@ -30,6 +30,14 @@ async function callerIsAdmin(uid: string | undefined): Promise<boolean> {
     if (claims?.role === 'admin') return true;
     const snap = await getFirestore().doc(`users/${uid}`).get();
     return snap.data()?.role === 'admin';
+}
+
+type ForwardDirection = 'received' | 'sent';
+
+interface SourceMessage {
+    id: string;
+    data: Record<string, unknown>;
+    direction: ForwardDirection;
 }
 
 export const forwardMessagesToCoach = onCall(
@@ -55,43 +63,59 @@ export const forwardMessagesToCoach = onCall(
 
         const db = getFirestore();
 
-        // 1. Read all messages whose receiver is `fromUid`. Page through
-        //    so memory stays flat regardless of inbox size.
-        const sourceMessages: { id: string; data: Record<string, unknown> }[] = [];
-        let cursor: FirebaseFirestore.QueryDocumentSnapshot | null = null;
-        for (;;) {
-            let q = db.collection('messages').where('receiverId', '==', fromUid).limit(200);
-            if (cursor) q = q.startAfter(cursor);
-            const snap = await q.get();
-            if (snap.empty) break;
-            for (const d of snap.docs) {
-                sourceMessages.push({ id: d.id, data: d.data() });
+        // 1. Read the whole historical admin conversation in both
+        //    directions. Older versions only copied messages received by
+        //    the admin, which left admin replies invisible to the coach.
+        const sourceMessagesById = new Map<string, SourceMessage>();
+        const readSources = async (field: 'receiverId' | 'senderId', direction: ForwardDirection) => {
+            let cursor: FirebaseFirestore.QueryDocumentSnapshot | null = null;
+            for (;;) {
+                let q = db.collection('messages').where(field, '==', fromUid).limit(200);
+                if (cursor) q = q.startAfter(cursor);
+                const snap = await q.get();
+                if (snap.empty) break;
+                for (const d of snap.docs) {
+                    sourceMessagesById.set(d.id, { id: d.id, data: d.data(), direction });
+                }
+                if (snap.size < 200) break;
+                cursor = snap.docs[snap.docs.length - 1];
             }
-            if (snap.size < 200) break;
-            cursor = snap.docs[snap.docs.length - 1];
-        }
+        };
+
+        await readSources('receiverId', 'received');
+        await readSources('senderId', 'sent');
+        const sourceMessages = Array.from(sourceMessagesById.values());
 
         if (sourceMessages.length === 0) {
             return { ok: true, forwardedCount: 0, skippedAlreadyForwardedCount: 0 };
         }
 
-        // 2. Find existing forwarded copies (idempotency). One query —
-        //    look for messages addressed to `toUid` with a
-        //    `forwardedFromMessageId` field. Build a Set of source ids
-        //    already covered.
+        // 2. Find existing forwarded copies (idempotency). Check both
+        //    coach-received and coach-sent copies because this function
+        //    now preserves the original conversation direction.
         const alreadyForwardedIds = new Set<string>();
-        const existingFwdSnap = await db
-            .collection('messages')
-            .where('receiverId', '==', toUid)
-            .get();
-        for (const d of existingFwdSnap.docs) {
-            const fromId = d.data().forwardedFromMessageId as string | undefined;
-            if (fromId) alreadyForwardedIds.add(fromId);
-        }
+        const readForwardedIds = async (field: 'receiverId' | 'senderId') => {
+            let cursor: FirebaseFirestore.QueryDocumentSnapshot | null = null;
+            for (;;) {
+                let q = db.collection('messages').where(field, '==', toUid).limit(500);
+                if (cursor) q = q.startAfter(cursor);
+                const snap = await q.get();
+                if (snap.empty) break;
+                for (const d of snap.docs) {
+                    const fromId = d.data().forwardedFromMessageId as string | undefined;
+                    if (fromId) alreadyForwardedIds.add(fromId);
+                }
+                if (snap.size < 500) break;
+                cursor = snap.docs[snap.docs.length - 1];
+            }
+        };
+
+        await readForwardedIds('receiverId');
+        await readForwardedIds('senderId');
 
         // 3. For each source message NOT yet forwarded, write a duplicate.
-        //    Preserve every original field; just swap receiverId and add
-        //    the forwarding marker. Batched in groups of 400 to stay
+        //    Preserve every original field; swap only the staff-side uid
+        //    and add forwarding markers. Batched in groups of 400 to stay
         //    under Firestore's 500-write batch limit.
         let forwarded = 0;
         let skipped = 0;
@@ -99,26 +123,29 @@ export const forwardMessagesToCoach = onCall(
         for (let i = 0; i < sourceMessages.length; i += BATCH) {
             const slice = sourceMessages.slice(i, i + BATCH);
             const batch = db.batch();
+            let writesInBatch = 0;
             for (const src of slice) {
                 if (alreadyForwardedIds.has(src.id)) {
                     skipped++;
                     continue;
                 }
                 const newRef = db.collection('messages').doc();
+                const directionalFields = src.direction === 'received'
+                    ? { receiverId: toUid, read: false }
+                    : { senderId: toUid, senderName: 'Coach Zaki' };
                 batch.set(newRef, {
                     ...src.data,
-                    receiverId: toUid,
+                    ...directionalFields,
                     forwardedFromMessageId: src.id,
                     forwardedFromUid: fromUid,
+                    forwardedToUid: toUid,
+                    forwardedDirection: src.direction,
                     forwardedAt: FieldValue.serverTimestamp(),
-                    // Force unread on the forwarded copy regardless of
-                    // whether the admin had marked the original as read.
-                    // The coach hasn't seen it.
-                    read: false,
                 });
                 forwarded++;
+                writesInBatch++;
             }
-            await batch.commit();
+            if (writesInBatch > 0) await batch.commit();
         }
 
         // 4. Audit log.

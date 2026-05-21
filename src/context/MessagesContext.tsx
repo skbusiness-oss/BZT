@@ -32,11 +32,12 @@ const MessagesContext = createContext<MessagesContextType | undefined>(undefined
 
 export const MessagesProvider = ({ children }: { children: ReactNode }) => {
   const { user } = useAuth();
+  const currentUserId = user?.id;
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!user) {
+    if (!currentUserId) {
       setMessages([]);
       setLoading(false);
       return;
@@ -47,18 +48,11 @@ export const MessagesProvider = ({ children }: { children: ReactNode }) => {
     const sortMessages = (msgs: Message[]) =>
       msgs.sort((a, b) => tsToMillis(a.timestamp) - tsToMillis(b.timestamp));
 
-    // Anchor staff status to the hardcoded coach UID as a safety net.
-    // If the Firestore role lookup hiccups, lags, or the user doc lost
-    // its `role` field for any reason, the coach still gets the
-    // unfiltered listener (the Firestore RULES decide what he can
-    // actually read — if his claim/role is wrong server-side, the
-    // listener will just receive an empty snapshot rather than
-    // silently degrading to a personal-messages-only view that hides
-    // every coaching thread).
     const HARDCODED_COACH_UID = 'Y9DlGI9kF6dPFPBh4cDvMnxbayB3';
-    const isStaff = user.role === 'coach'
-                 || user.role === 'admin'
-                 || user.id === HARDCODED_COACH_UID;
+    const isStaff = user?.role === 'coach'
+                 || user?.role === 'admin'
+                 || currentUserId === HARDCODED_COACH_UID;
+
     if (isStaff) {
       unsubs.push(onSnapshot(
         collection(db, 'messages'),
@@ -79,20 +73,20 @@ export const MessagesProvider = ({ children }: { children: ReactNode }) => {
     let listenersReady = 0;
     const checkReady = () => { if (++listenersReady >= 2) setLoading(false); };
 
-    const msgsAsSender = query(collection(db, 'messages'), where('senderId', '==', user.id));
-    const msgsAsReceiver = query(collection(db, 'messages'), where('receiverId', '==', user.id));
+    const msgsAsSender = query(collection(db, 'messages'), where('senderId', '==', currentUserId));
+    const msgsAsReceiver = query(collection(db, 'messages'), where('receiverId', '==', currentUserId));
 
     unsubs.push(onSnapshot(
       msgsAsSender,
       (snap) => {
         const sent = snap.docs.map((d) => docToObj<Message>(d));
         setMessages((prev) => {
-          const received = prev.filter((m) => m.receiverId === user.id);
+          const received = prev.filter((m) => m.receiverId === currentUserId);
           return sortMessages([...received, ...sent]);
         });
         checkReady();
       },
-      // Previously silent — a permission-denied here left `messages`
+      // Previously silent: a permission-denied here left `messages`
       // empty with zero console output, so the coach "saw no messages"
       // with no way to diagnose. Now logged with the Firestore error
       // code so it's actionable from DevTools.
@@ -108,7 +102,7 @@ export const MessagesProvider = ({ children }: { children: ReactNode }) => {
       (snap) => {
         const received = snap.docs.map((d) => docToObj<Message>(d));
         setMessages((prev) => {
-          const sent = prev.filter((m) => m.senderId === user.id);
+          const sent = prev.filter((m) => m.senderId === currentUserId);
           return sortMessages([...sent, ...received]);
         });
         checkReady();
@@ -121,7 +115,7 @@ export const MessagesProvider = ({ children }: { children: ReactNode }) => {
     ));
 
     return () => unsubs.forEach((u) => u());
-  }, [user?.id, user?.role]);
+  }, [currentUserId, user?.role]);
 
   // FCM and the service worker own background notifications. This
   // context only writes messages and unread state, so historical

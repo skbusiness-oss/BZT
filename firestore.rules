@@ -342,10 +342,10 @@ service cloud.firestore {
     }
 
     // ─── messages/{messageId} ─────────────────────────────────
-    // Coaching-tier only — community users cannot read, create, or
-    // update message docs. The coach's unfiltered inbox query needs
-    // the isCoach() branch so it doesn't fail per-doc when neither
-    // sender nor receiver is him.
+    // Coaching-tier only: community users cannot read, create, or
+    // update message docs. Coaches can load the full inbox so legacy
+    // admin-addressed history remains visible; clients stay scoped to
+    // conversations where they are sender or receiver.
     match /messages/{messageId} {
       allow read: if isCoachingTier()
                   && (isCoach()

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
@@ -24,9 +24,8 @@ export const Messages = () => {
     const chatEndRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // Hardcoded coach UID also forces isCoach=true as a defensive anchor —
-    // matches the MessagesContext fallback so the contact list and staff
-    // listener stay in sync even if the Firestore role lookup is stale.
+    // Hardcoded coach UID also forces isCoach=true as a defensive anchor
+    // so Coach Zaki sees the coach inbox even if the role lookup is stale.
     const HARDCODED_COACH_UID = 'Y9DlGI9kF6dPFPBh4cDvMnxbayB3';
     const isCoach = user?.role === 'coach'
                  || user?.role === 'admin'
@@ -51,11 +50,8 @@ export const Messages = () => {
     const COACH_NAME = 'Coach Zaki';
     // Treated as a single staff identity for thread aggregation. New
     // sends always go to COACH_UID; LEGACY_ADMIN_UID stays in the set so
-    // the coach can see (and clients can scroll back through) pre-fix
-    // history that landed in the admin inbox. After the
-    // consolidateMessagesToCoach data migration runs, LEGACY_ADMIN_UID
-    // will no longer appear as a receiver, but keeping it in the set
-    // makes the migration optional — UI works either way.
+    // clients can scroll back through pre-fix admin history. Coach Zaki's
+    // staff inbox can also see that history directly.
     const STAFF_UIDS = useMemo(() => new Set<string>([COACH_UID, LEGACY_ADMIN_UID]), []);
     const isStaffUid = (uid: string) => STAFF_UIDS.has(uid);
     interface TeamMember { uid: string; name: string; role: 'coach' | 'admin' }
@@ -65,9 +61,7 @@ export const Messages = () => {
 
     // Local thread filter, replacing the context's getConversation.
     // - Coach view: show every message where the OTHER party is `otherId`,
-    //   regardless of which staff UID was on the staff side. Captures
-    //   admin-addressed history without requiring the data migration to
-    //   have run yet.
+    //   including legacy admin-addressed history from the staff inbox.
     // - Client view (other === COACH_UID): show every message between the
     //   client and any staff member (coach or legacy admin).
     // - Default: original pairwise filter.
@@ -100,10 +94,8 @@ export const Messages = () => {
         if (!userId) return [];
         const ids = new Set<string>();
         if (isCoach) {
-            // Coach sees every message in the DB (staff query in
-            // MessagesContext loads all). Treat every non-staff, non-self
-            // party as a counterpart so the contact list surfaces a tile
-            // even when the historical receiverId was admin, not coach.
+            // Coach sees the staff inbox, so every non-staff party becomes
+            // a counterpart even when the old staff side was the admin UID.
             messages.forEach(message => {
                 if (message.senderId !== userId && !isStaffUid(message.senderId)) ids.add(message.senderId);
                 if (message.receiverId !== userId && !isStaffUid(message.receiverId)) ids.add(message.receiverId);
@@ -124,6 +116,15 @@ export const Messages = () => {
         return Array.from(ids);
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [messages, userId, isCoach]);
+
+    const markThreadRead = useCallback((selfId: string, otherId: string) => {
+        const senderIds = !isCoach && STAFF_UIDS.has(otherId)
+            ? Array.from(STAFF_UIDS)
+            : [otherId];
+        senderIds.forEach(senderId => {
+            void markMessagesRead(selfId, senderId);
+        });
+    }, [isCoach, markMessagesRead, STAFF_UIDS]);
 
     const latestCounterpartId = useMemo(() => {
         if (!userId) return null;
@@ -149,8 +150,8 @@ export const Messages = () => {
         if (isCoach || !user || selectedUserId) return;
         const targetId = latestCounterpartId ?? COACH_UID;
         setSelectedUserId(targetId);
-        markMessagesRead(user.id, targetId);
-    }, [isCoach, user, selectedUserId, latestCounterpartId, markMessagesRead]);
+        markThreadRead(user.id, targetId);
+    }, [isCoach, user, selectedUserId, latestCounterpartId, markThreadRead]);
     // Reference clientDoc to keep the type-checker quiet about an unused
     // computed value (kept because it's read by other features that may
     // need it; pulling it from useData here also warms the cache).
@@ -176,9 +177,9 @@ export const Messages = () => {
     // Mark messages read when conversation is opened
     useEffect(() => {
         if (user && selectedUserId) {
-            markMessagesRead(user.id, selectedUserId);
+            markThreadRead(user.id, selectedUserId);
         }
-    }, [selectedUserId, user, messages.length, markMessagesRead]);
+    }, [selectedUserId, user, messages.length, markThreadRead]);
 
     useEffect(() => {
         if (!selectedImage) {
@@ -191,13 +192,10 @@ export const Messages = () => {
     }, [selectedImage]);
 
     // Conversation contacts.
-    //   - Coach/admin: one contact per coaching client (existing behavior).
-    //   - Client/community: one contact per team member (coach + admin)
-    //     so they can choose who to message. Previously the contact list
-    //     was empty for non-coach users — they were silently auto-routed
-    //     to a single arbitrary recipient (the first admin/coach the
-    //     `users` query returned), which is what hid Coach Zack and
-    //     made messages appear lost.
+    //   - Coach/admin: one contact per coaching client.
+    //   - Client/community: one Coach Zaki contact.
+    //     Legacy admin history is folded into that same tile, but new
+    //     sends never target admin.
     const contacts = useMemo(() => {
         if (!user) return [];
 
@@ -348,10 +346,8 @@ export const Messages = () => {
         return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ', ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
     };
 
-    // Resolve the displayed name from the contact list (which now includes
-    // team members for non-coach users too — see contacts derivation
-    // above). Falls back to the legacy "Your coach" label only when the
-    // contact list lookup misses (e.g., team query still in flight).
+    // Resolve the displayed name from the contact list. Falls back to the
+    // legacy "Your coach" label only when the contact list lookup misses.
     const selectedName = contacts.find(c => c.userId === selectedUserId)?.name
         ?? (isCoach ? 'Unknown' : t('yourCoach'));
 
@@ -360,14 +356,9 @@ export const Messages = () => {
 
             {/* Contact List.
                 - Coach/admin: one tile per coaching client.
-                - Client/community: one tile per team member (coach + admin).
-                  Previously hidden for non-coach users, which forced the
-                  auto-select to a single arbitrary recipient. Now visible
-                  so the client can choose. The tile renderer below is
-                  shared between both modes — the `category` field on each
-                  contact carries either a coaching category (orange/blue/
-                  purple) for coaches' view, or the team-member role for
-                  clients' view.
+                - Client/community: one Coach Zaki tile. Legacy admin
+                  history is visible in that thread; new messages go to
+                  Coach Zaki only.
                 Hidden on mobile when a conversation is already open so
                 the chat takes the full screen. */}
             {contacts.length > 0 && (

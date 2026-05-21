@@ -35,6 +35,7 @@ import { db } from '../../lib/firebase';
 import { computeDietProfile, matchDiet } from '../../lib/dietCalculator';
 import { dietPlans } from '../../data/diets';
 import { tPlanName } from '../../lib/dietTranslations';
+import { markLocalCommunityBaseline } from '../../lib/onboardingStorage';
 import { PhoneInput } from '../shared/PhoneInput';
 import type {
     Sex, ActivityLevel, DietGoal, MealsPerDay, DietProfile,
@@ -96,7 +97,7 @@ export const CommunityBaselineForm = ({ onClose, initial }: Props) => {
     const { user } = useAuth();
     const { t, lang } = useLanguage();
 
-    const isInitial = initial?.age === undefined;
+    const isInitial = initial === undefined;
 
     // ── Step 1 inputs ─────────────────────────────────────────────────
     const [step, setStep] = useState<1 | 2>(1);
@@ -194,6 +195,9 @@ export const CommunityBaselineForm = ({ onClose, initial }: Props) => {
                     assignedAt: serverTimestamp(),
                 });
             }
+            if (isInitial) {
+                markLocalCommunityBaseline(user.id);
+            }
             onClose();
         } catch (e: any) {
             console.error('Failed to save baseline:', e);
@@ -227,12 +231,14 @@ export const CommunityBaselineForm = ({ onClose, initial }: Props) => {
                             </p>
                         )}
                     </div>
-                    <button
-                        onClick={onClose}
-                        className="p-2 rounded-xl hover:bg-surface-container text-on-surface/60 transition-colors"
-                    >
-                        <X size={20} />
-                    </button>
+                    {!isInitial && (
+                        <button
+                            onClick={onClose}
+                            className="p-2 rounded-xl hover:bg-surface-container text-on-surface/60 transition-colors"
+                        >
+                            <X size={20} />
+                        </button>
+                    )}
                 </div>
 
                 {step === 1 && (
@@ -401,13 +407,15 @@ export const CommunityBaselineForm = ({ onClose, initial }: Props) => {
                 <div className="flex gap-3 mt-7">
                     {step === 1 ? (
                         <>
-                            <button
-                                onClick={onClose}
-                                disabled={saving}
-                                className="flex-1 px-4 py-3 rounded-xl border border-outline-variant/30 text-on-surface font-label text-[10px] font-bold uppercase tracking-widest hover:bg-surface-container transition-colors"
-                            >
-                                {t('cancel')}
-                            </button>
+                            {!isInitial && (
+                                <button
+                                    onClick={onClose}
+                                    disabled={saving}
+                                    className="flex-1 px-4 py-3 rounded-xl border border-outline-variant/30 text-on-surface font-label text-[10px] font-bold uppercase tracking-widest hover:bg-surface-container transition-colors"
+                                >
+                                    {t('cancel')}
+                                </button>
+                            )}
                             <button
                                 onClick={() => setStep(2)}
                                 disabled={!step1Valid}

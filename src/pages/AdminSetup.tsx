@@ -249,10 +249,10 @@ function ForwardMessagesSection() {
             </span>
             <h2 className="text-2xl font-headline font-bold text-on-surface mb-2">Forward old admin messages to coach</h2>
             <p className="text-sm font-body text-on-surface/60 mb-5">
-                Re-routes every message whose receiver is the <code>FROM</code> UID, creating a
-                duplicate addressed to the <code>TO</code> UID. Used after the team-routing fix
-                so coach Zaki can see historical client conversations that landed in admin's
-                inbox by mistake. Idempotent — safe to re-run.
+                Copies every message where the <code>FROM</code> UID is sender or receiver, creating
+                duplicate coach-side messages for the <code>TO</code> UID. Used after the team-routing
+                fix so Coach Zaki can see full historical client conversations that landed in
+                admin's inbox by mistake. Idempotent - safe to re-run.
             </p>
 
             <div className="space-y-4 max-w-md">
@@ -360,14 +360,14 @@ function ConsolidateMessagesSection() {
             </span>
             <h2 className="text-2xl font-headline font-bold text-on-surface mb-2">Consolidate messages to coach</h2>
             <p className="text-sm font-body text-on-surface/60 mb-3">
-                Rewrites <code>receiverId</code> in place: every message addressed to <code>FROM</code> UID
-                (and not sent BY the coach) becomes addressed to <code>COACH</code> UID. Also deletes the
-                forwarded duplicates that <em>Forward messages</em> above created — once originals are
-                migrated, the duplicates are redundant. Idempotent.
+                Rewrites the staff-side UID in place: messages addressed to <code>FROM</code> UID become
+                addressed to <code>COACH</code> UID, and messages sent by <code>FROM</code> UID become sent by
+                <code>COACH</code> UID. Also deletes the forwarded duplicates that <em>Forward messages</em>
+                above created once originals are migrated. Idempotent.
             </p>
             <p className="text-xs font-body text-red-400/80 mb-6">
-                ⚠ Irreversible. Preserves the original receiver in <code>originalReceiverId</code> for audit,
-                but the active routing field is overwritten.
+                Irreversible. Preserves the original staff UID in <code>originalReceiverId</code> or
+                <code>originalSenderId</code> for audit, but the active routing field is overwritten.
             </p>
 
             <div className="space-y-4 max-w-md">

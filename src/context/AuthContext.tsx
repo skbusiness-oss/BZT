@@ -3,7 +3,7 @@
 // Key change: role now comes from Firestore users/{uid} instead of localStorage
 // Everything else (signIn, signOut, createUserAccount) stays the same API
 
-import { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, useCallback, ReactNode } from 'react';
 import { User, Role } from '../types';
 import { auth, db } from '../lib/firebase';
 import {
@@ -97,6 +97,13 @@ interface AuthContextType {
   isCoach: boolean;
 }
 
+type ProfileReadyWaiter = {
+  uid: string;
+  timeoutId: number;
+  resolve: () => void;
+  reject: (error: Error) => void;
+};
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // ─── Provider ────────────────────────────────────────────────────────────────
@@ -121,6 +128,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [freshUserDocLoaded, setFreshUserDocLoaded] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const userDocUnsubRef = useRef<Unsubscribe | null>(null);
+  const userRef = useRef<User | null>(null);
+  const freshUserDocLoadedRef = useRef(false);
+  const authRunRef = useRef(0);
+  const profileReadyWaitersRef = useRef<ProfileReadyWaiter[]>([]);
   /** Wall-clock ms when the most recent successful signIn() resolved.
    *  Used to gate the visibility-driven token refresh — see #3 fix. */
   const signedInAtRef = useRef<number>(0);
@@ -135,6 +146,41 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const fcmForegroundUnsubRef = useRef<(() => void) | null>(null);
 
   const clearAuthError = () => setAuthError(null);
+
+  const setSessionState = useCallback((nextUser: User | null, freshProfile: boolean, isLoading: boolean) => {
+    userRef.current = nextUser;
+    freshUserDocLoadedRef.current = freshProfile;
+    setUser(nextUser);
+    setFreshUserDocLoaded(freshProfile);
+    setLoading(isLoading);
+  }, []);
+
+  const settleProfileWaiters = useCallback((uid: string | null, error?: Error) => {
+    const remaining: ProfileReadyWaiter[] = [];
+    profileReadyWaitersRef.current.forEach((waiter) => {
+      if (uid && waiter.uid !== uid) {
+        remaining.push(waiter);
+        return;
+      }
+      window.clearTimeout(waiter.timeoutId);
+      if (error) waiter.reject(error);
+      else waiter.resolve();
+    });
+    profileReadyWaitersRef.current = remaining;
+  }, []);
+
+  const waitForProfileReady = useCallback((uid: string): Promise<void> => {
+    if (userRef.current?.id === uid && freshUserDocLoadedRef.current) {
+      return Promise.resolve();
+    }
+    return new Promise((resolve, reject) => {
+      const timeoutId = window.setTimeout(() => {
+        profileReadyWaitersRef.current = profileReadyWaitersRef.current.filter((waiter) => waiter.uid !== uid);
+        reject(new Error('Signed in, but the account profile did not finish loading. Please refresh and try again.'));
+      }, 20000);
+      profileReadyWaitersRef.current.push({ uid, timeoutId, resolve, reject });
+    });
+  }, []);
 
   // ── Idle timeout: check on mount, on visibility change, and on a 60s
   //    interval so a long-foregrounded tab still gets signed out at 30 min.
@@ -179,6 +225,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   // ── Main auth subscription ────────────────────────────────────────────────
   useEffect(() => {
+    let disposed = false;
+
     const cleanupUserDoc = () => {
       if (userDocUnsubRef.current) {
         userDocUnsubRef.current();
@@ -187,6 +235,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
 
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      const runId = ++authRunRef.current;
+      const isCurrentRun = () => !disposed && authRunRef.current === runId;
       // Tear down any previous user-doc listener whenever the auth user changes
       cleanupUserDoc();
       // Reset FCM registration guard so the next signed-in user
@@ -200,11 +250,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
 
       if (!firebaseUser) {
-        setUser(null);
-        setFreshUserDocLoaded(false);
-        setLoading(false);
+        settleProfileWaiters(null, new Error('Signed out before the account profile loaded.'));
+        setSessionState(null, false, false);
         return;
       }
+
+      setSessionState(null, false, true);
 
       // Tombstone gate: explicit positive check only. If a deletionLogs/{uid}
       // doc EXISTS, this account was deleted by a coach — refuse sign-in.
@@ -222,15 +273,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // permission-denied on /login.
       try {
         const tombstone = await getDoc(doc(db, 'deletionLogs', firebaseUser.uid));
+        if (!isCurrentRun()) return;
         if (tombstone.exists()) {
           setAuthError('This account has been removed. Please contact your coach.');
           await firebaseSignOut(auth).catch(() => { /* ignore */ });
-          setUser(null);
-          setFreshUserDocLoaded(true);
-          setLoading(false);
+          settleProfileWaiters(firebaseUser.uid, new Error('This account has been removed. Please contact your coach.'));
+          setSessionState(null, true, false);
           return;
         }
       } catch (err) {
+        if (!isCurrentRun()) return;
         // Fail-OPEN on read error. Log it (Sentry will pick up via
         // window.unhandledrejection if it bubbles), continue with sign-in,
         // and let the users/{uid} listener do the actual access check.
@@ -252,10 +304,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       // Now subscribe in real-time to users/{uid}. This catches role changes,
       // disabled flag flips, and tosAcceptedAt updates without a reload.
+      if (!isCurrentRun()) return;
       userDocUnsubRef.current = onSnapshot(
         doc(db, 'users', firebaseUser.uid),
         (snap) => {
+          if (!isCurrentRun()) return;
           touchLastActive();
+
+          // Auth routing and onboarding gates must never decide from stale
+          // cached profile data. A cached user doc can be missing fields the
+          // server already has (tosAcceptedAt, communityProfileStartedAt),
+          // which is what caused the ToS / Week 0 blink after login.
+          if (snap.metadata.fromCache) {
+            return;
+          }
 
           if (!snap.exists()) {
             // Two cases where `!snap.exists()` fires:
@@ -274,15 +336,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             // Second attempt worked because cache had warmed up from
             // the first attempt. Reported via Sentry as permission-
             // denied / repeated /login hits.
-            if (snap.metadata.fromCache) {
-              // Don't decide yet — keep waiting for server confirmation.
-              return;
-            }
             setAuthError('Your account no longer exists. Please contact your coach.');
             firebaseSignOut(auth).catch(() => { /* ignore */ });
-            setUser(null);
-            setFreshUserDocLoaded(true);
-            setLoading(false);
+            settleProfileWaiters(firebaseUser.uid, new Error('Your account no longer exists. Please contact your coach.'));
+            setSessionState(null, true, false);
             return;
           }
 
@@ -291,9 +348,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           if (data.disabled === true) {
             setAuthError('Your account has been disabled. Please contact your coach.');
             firebaseSignOut(auth).catch(() => { /* ignore */ });
-            setUser(null);
-            setFreshUserDocLoaded(true);
-            setLoading(false);
+            settleProfileWaiters(firebaseUser.uid, new Error('Your account has been disabled. Please contact your coach.'));
+            setSessionState(null, true, false);
             return;
           }
 
@@ -324,9 +380,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             communityProfileStartedAt: tsToIso(data.communityProfileStartedAt) ?? (typeof data.communityProfileStartedAt === 'string' ? data.communityProfileStartedAt : undefined),
           };
 
-          setUser(nextUser);
-          setFreshUserDocLoaded(true);
-          setLoading(false);
+          setSessionState(nextUser, true, false);
+          settleProfileWaiters(firebaseUser.uid);
 
           // Register this device for FCM push notifications. Fire-and-
           // forget — failures (unsupported browser, denied permission,
@@ -371,18 +426,28 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           // use the (faster, no-Firestore-read) claim path.
         },
         () => {
-          // Permission/network error — clear state so we don't render stale UI.
-          setFreshUserDocLoaded(true);
-          setLoading(false);
+          if (!isCurrentRun()) return;
+          // Permission/network error: clear state so we don't render stale UI.
+          const message = 'Could not load your account profile. Please refresh and try again.';
+          setAuthError(message);
+          settleProfileWaiters(firebaseUser.uid, new Error(message));
+          setSessionState(null, true, false);
         }
       );
     });
 
     return () => {
+      disposed = true;
+      authRunRef.current += 1;
       cleanupUserDoc();
+      if (fcmForegroundUnsubRef.current) {
+        try { fcmForegroundUnsubRef.current(); } catch { /* ignore */ }
+        fcmForegroundUnsubRef.current = null;
+      }
+      settleProfileWaiters(null, new Error('Auth provider unmounted before the account profile loaded.'));
       unsubscribe();
     };
-  }, []);
+  }, [setSessionState, settleProfileWaiters]);
 
   // ── visibilitychange: silent token refresh + idle-stamp on foreground ────
   // History notes:
@@ -428,26 +493,32 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         // the next user action will surface any actual problem.
         if (HARD_AUTH_ERROR_CODES.has(code)) {
           try { await firebaseSignOut(auth); } catch { /* ignore */ }
-          setUser(null);
+          settleProfileWaiters(null, new Error('Session expired before the account profile loaded.'));
+          setSessionState(null, false, false);
         }
       }
     };
 
     document.addEventListener('visibilitychange', onVisibilityChange);
     return () => document.removeEventListener('visibilitychange', onVisibilityChange);
-  }, []);
+  }, [setSessionState, settleProfileWaiters]);
 
   // ── Sign in ────────────────────────────────────────────────────────────────
   const signIn = async (email: string, password: string): Promise<{ error?: string }> => {
     try {
-      await signInWithEmailAndPassword(auth, email.toLowerCase().trim(), password);
+      setAuthError(null);
+      setSessionState(null, false, true);
+      const credential = await signInWithEmailAndPassword(auth, email.toLowerCase().trim(), password);
       touchLastActive();
       // Stamp the sign-in time so the visibility handler can skip its
       // force-refresh during the grace window — see #3 fix.
       signedInAtRef.current = Date.now();
+      await waitForProfileReady(credential.user.uid);
       return {};
     } catch (error: unknown) {
-      return { error: getFirebaseErrorMessage((error as { code?: string })?.code ?? '') };
+      setSessionState(null, false, false);
+      const code = (error as { code?: string })?.code;
+      return { error: code ? getFirebaseErrorMessage(code) : (error instanceof Error ? error.message : 'Could not sign in.') };
     }
   };
 
@@ -472,8 +543,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       await unregisterFcmToken(uid).catch(() => { /* ignore */ });
     }
     await firebaseSignOut(auth);
-    setUser(null);
-    setFreshUserDocLoaded(false);
+    settleProfileWaiters(null, new Error('Signed out before the account profile loaded.'));
+    setSessionState(null, false, false);
     try {
       localStorage.removeItem(LAST_ACTIVE_KEY);
     } catch {

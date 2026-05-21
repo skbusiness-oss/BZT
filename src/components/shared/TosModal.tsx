@@ -4,10 +4,9 @@
 //   - localStorage has no `bzt-tos-accepted-{uid}` flag for this device.
 //
 // On accept, writes BOTH:
-//   - users/{uid}.tosAcceptedAt as a client ISO string (immediate, no waiting
-//     for serverTimestamp() to resolve) plus tosAcceptedAtServer for analytics
-//   - localStorage flag, so the modal stays dismissed even if Firestore is
-//     slow on the next foreground / cross-device sync hasn't landed yet.
+//   - users/{uid}.tosAcceptedAt with serverTimestamp()
+//   - localStorage flag, so the modal stays dismissed on this device once the
+//     server write succeeds and the next snapshot is still in flight.
 // The AuthContext onSnapshot then reflows the user state and the modal
 // disappears.
 
@@ -17,11 +16,15 @@ import { doc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
+import { clearLocalTosAccepted, markLocalTosAccepted } from '../../lib/onboardingStorage';
 
 const TOS_VERSION = 'v1';
-export const tosAcceptedKey = (uid: string) => `bzt-tos-accepted-${uid}`;
 
-export const TosModal = () => {
+interface TosModalProps {
+    onAccepted?: () => void;
+}
+
+export const TosModal = ({ onAccepted }: TosModalProps) => {
     const { user } = useAuth();
     const { t, isRTL } = useLanguage();
     const [accepted, setAccepted] = useState(false);
@@ -32,11 +35,10 @@ export const TosModal = () => {
         if (!user || !accepted || submitting) return;
         setSubmitting(true);
         setError(null);
-        // Set the local hint FIRST so the modal cannot reappear on this device
-        // even if the Firestore write is slow / fails / rules reject. The
-        // legal acceptance is recorded server-side; the local flag is purely a
-        // "don't blink the dialog at this user again" hint.
-        try { localStorage.setItem(tosAcceptedKey(user.id), new Date().toISOString()); } catch { /* private mode */ }
+        // Set the local hint before invoking the callback so the overlay can
+        // close immediately after a successful write, without waiting for the
+        // next user-doc snapshot to round-trip.
+        markLocalTosAccepted(user.id);
         try {
             await updateDoc(doc(db, 'users', user.id), {
                 // serverTimestamp() — resolved to request.time on the
@@ -49,9 +51,9 @@ export const TosModal = () => {
                 tosAcceptedAt: serverTimestamp(),
                 tosVersion: TOS_VERSION,
             });
-            // The onSnapshot in AuthContext will pick up the change and
-            // unmount this modal. No local state update needed.
+            onAccepted?.();
         } catch (e: unknown) {
+            clearLocalTosAccepted(user.id);
             const msg = e instanceof Error ? e.message : String(e);
             setError(msg);
             setSubmitting(false);

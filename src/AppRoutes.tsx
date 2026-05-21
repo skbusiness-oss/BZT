@@ -24,11 +24,26 @@ import { Settings } from './pages/Settings';
 import { AdminSetup } from './pages/AdminSetup';
 import { Pricing } from './pages/Pricing';
 import { ErrorBoundary } from './components/shared/ErrorBoundary';
-import { TosModal, tosAcceptedKey } from './components/shared/TosModal';
+import { TosModal } from './components/shared/TosModal';
 import { CommunityBaselineForm } from './components/profile/CommunityBaselineForm';
+import { hasLocalCommunityBaseline, hasLocalTosAccepted } from './lib/onboardingStorage';
 import React, { useState, useEffect } from 'react';
 
 import { Loader2 } from 'lucide-react';
+
+const FullScreenLoader = () => (
+    <div className="min-h-screen flex items-center justify-center" style={{ background: '#060814' }}>
+        <Loader2 size={32} className="animate-spin text-gold-400" />
+    </div>
+);
+
+const LoginRoute = () => {
+    const { user, loading, freshUserDocLoaded } = useAuth();
+
+    if (loading || (user && !freshUserDocLoaded)) return <FullScreenLoader />;
+    if (user && freshUserDocLoaded) return <Navigate to="/" replace />;
+    return <Login />;
+};
 
 const ProtectedRoute = ({ children, allowedRoles }: { children: React.ReactNode, allowedRoles?: string[] }) => {
     const { user, isAuthenticated, loading, freshUserDocLoaded } = useAuth();
@@ -36,11 +51,7 @@ const ProtectedRoute = ({ children, allowedRoles }: { children: React.ReactNode,
     // Block render until we have *both* an auth resolution AND a fresh
     // Firestore user-doc snapshot. Prevents the cached app shell from
     // showing protected content before the live disabled/role check arrives.
-    if (loading || (isAuthenticated && !freshUserDocLoaded)) return (
-        <div className="min-h-screen flex items-center justify-center" style={{ background: '#060814' }}>
-            <Loader2 size={32} className="animate-spin text-gold-400" />
-        </div>
-    );
+    if (loading || (isAuthenticated && !freshUserDocLoaded)) return <FullScreenLoader />;
 
     if (!isAuthenticated) return <Navigate to="/login" replace />;
     if (allowedRoles && user && !allowedRoles.includes(user.role)) return <Navigate to="/" replace />;
@@ -77,6 +88,8 @@ const callSetUserRoleHeal = httpsCallable<
 
 const AuthenticatedShell = () => {
     const { user, freshUserDocLoaded } = useAuth();
+    const [tosAcceptedLocally, setTosAcceptedLocally] = useState(false);
+    const [baselineCompletedLocally, setBaselineCompletedLocally] = useState(false);
 
     useEffect(() => {
         if (!user || !freshUserDocLoaded) return;
@@ -100,14 +113,17 @@ const AuthenticatedShell = () => {
         })();
     }, [user, freshUserDocLoaded]);
 
+    useEffect(() => {
+        setTosAcceptedLocally(false);
+        setBaselineCompletedLocally(false);
+    }, [user?.id]);
+
 
     // Local-device hint, set by TosModal on accept. Belt-and-suspenders for
     // when Firestore hasn't replied yet on a returning device — the user has
     // already accepted, so we never want the modal to flash again here.
-    const localTosHint = !!user && (() => {
-        try { return !!localStorage.getItem(tosAcceptedKey(user.id)); }
-        catch { return false; }
-    })();
+    const localTosHint = !!user && (tosAcceptedLocally || hasLocalTosAccepted(user.id));
+    const localBaselineHint = !!user && (baselineCompletedLocally || hasLocalCommunityBaseline(user.id));
     // Only show ToS once we have a confirmed-fresh user doc AND neither the
     // server field nor the local hint says it was accepted. This prevents
     // every spurious mount (post-foreground, after a route change) from
@@ -118,9 +134,10 @@ const AuthenticatedShell = () => {
         && !user.tosAcceptedAt
         && !localTosHint;
     const needsBaseline =
-        !!user && !showTos
+        !!user && freshUserDocLoaded && !showTos
         && user.role === 'community'
-        && !user.communityProfileStartedAt;
+        && !user.communityProfileStartedAt
+        && !localBaselineHint;
 
     // Controlled by needsBaseline initially; once user submits, the user doc
     // updates → needsBaseline goes false → modal unmounts. We don't expose a
@@ -132,8 +149,15 @@ const AuthenticatedShell = () => {
     return (
         <>
             <Layout />
-            {showTos && <TosModal />}
-            {baselineOpen && <CommunityBaselineForm onClose={() => setBaselineOpen(false)} />}
+            {showTos && <TosModal onAccepted={() => setTosAcceptedLocally(true)} />}
+            {baselineOpen && (
+                <CommunityBaselineForm
+                    onClose={() => {
+                        setBaselineCompletedLocally(true);
+                        setBaselineOpen(false);
+                    }}
+                />
+            )}
         </>
     );
 };
@@ -141,7 +165,7 @@ const AuthenticatedShell = () => {
 export const AppRoutes = () => {
     return (
         <Routes>
-            <Route path="/login" element={<Login />} />
+            <Route path="/login" element={<LoginRoute />} />
             <Route path="/pricing" element={<ErrorBoundary><Pricing /></ErrorBoundary>} />
             <Route path="/admin/setup" element={<ProtectedRoute allowedRoles={['admin']}><AdminSetup /></ProtectedRoute>} />
             <Route element={<ProtectedRoute><AuthenticatedShell /></ProtectedRoute>}>
