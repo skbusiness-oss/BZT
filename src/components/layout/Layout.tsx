@@ -173,6 +173,16 @@ export const Layout = () => {
                         )}
 
                         <SidebarItem to="/library" icon={PlaySquare} label={t('navVideoLibrary')} onClick={closeSidebar} />
+
+                        {/* Upgrade — pinned directly under University per founder
+                            direction: surface the offer high in the sidebar so it
+                            sits next to the academy entry rather than buried near
+                            the footer. Community users only — clients + coaches
+                            never see this row. */}
+                        {user.role === 'community' && (
+                            <SidebarItem to="/upgrade" icon={Sparkles} label={t('navUpgrade') ?? 'Upgrade'} onClick={closeSidebar} />
+                        )}
+
                         <SidebarItem to="/workouts" icon={Dumbbell} label={t('navWorkouts')} onClick={closeSidebar} />
                         <SidebarItem to="/diets" icon={Utensils} label={t('navDiets')} onClick={closeSidebar} />
 
@@ -216,18 +226,6 @@ export const Layout = () => {
                         )}
                         <SidebarItem to="/update" icon={UserCircle} label={t('navProfile')} onClick={closeSidebar} />
                         <SidebarItem to="/settings" icon={Settings} label={t('navSettings')} onClick={closeSidebar} />
-
-                        {/* Subscribe / Upgrade — community users see this prominently.
-                            Hidden for already-paying clients and coaches. Routes to the
-                            dedicated /upgrade page so the sidebar's active-state
-                            highlight stays separate from /update (Profile). They used
-                            to share `/update` and BOTH items lit up at the same time,
-                            which read as a bug. The old /pricing route still exists
-                            for direct/guest access but is no longer the entry point
-                            from inside the app. */}
-                        {user.role === 'community' && (
-                            <SidebarItem to="/upgrade" icon={Sparkles} label={t('navUpgrade') ?? 'Upgrade'} onClick={closeSidebar} />
-                        )}
                     </nav>
                 </div>
 
