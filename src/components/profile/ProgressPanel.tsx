@@ -585,9 +585,70 @@ function WeeklyCheckIn({ existingLog, isWindowLocked, lastSubmittedDate, nextAva
                     )}
                 </div>
             )}
-            <div style={{ marginBottom: 16, marginTop: 16 }}>
+
+            {/* Don't-forget banner — surfaces only in the editable
+                (unlocked) state. Names the three fields that users
+                report having submitted blank in a hurry: weight,
+                cardio, and notes. The fields themselves get a soft
+                gold left-border accent below so the eye lands on
+                them in the same order the banner lists them. */}
+            {!isLocked && (
+                <div style={{
+                    marginTop: 8, marginBottom: 20,
+                    padding: '14px 16px',
+                    background: `${t.primary}0d`,   // ~5% gold tint
+                    border: `1px solid ${t.primary}33`,
+                    borderRadius: 14,
+                    display: 'flex', alignItems: 'flex-start', gap: 12,
+                }}>
+                    <span
+                        aria-hidden
+                        style={{
+                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                            width: 28, height: 28, borderRadius: 10,
+                            background: t.primary, color: t.onPrimaryFixed,
+                            fontFamily: t.display, fontSize: 16, fontWeight: 700,
+                            flexShrink: 0, lineHeight: 1,
+                        }}
+                    >
+                        !
+                    </span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{
+                            fontFamily: t.body, fontSize: 12, fontWeight: 700,
+                            letterSpacing: '0.16em', textTransform: 'uppercase',
+                            color: t.primary, marginBottom: 4,
+                        }}>
+                            Don&apos;t forget to log
+                        </div>
+                        <div style={{
+                            fontFamily: t.body, fontSize: 13, lineHeight: 1.55,
+                            color: t.onSurface,
+                        }}>
+                            Update your <strong>current weight</strong>, log <strong>cardio calories for the week</strong>, and add a quick <strong>note</strong> about how it went — these lock with the week.
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            <div style={{
+                marginBottom: 16, marginTop: 16,
+                // Soft gold left-rail when editable so the user's eye
+                // lands on the three fields named in the banner above.
+                paddingLeft: !isLocked ? 14 : 0,
+                borderLeft: !isLocked ? `3px solid ${t.primary}` : 'none',
+            }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
-                    <span style={{ fontFamily: t.body, fontSize: 13, color: t.onSurface, fontWeight: 500 }}>{tx('currentWeightLabel')}</span>
+                    <span style={{ fontFamily: t.body, fontSize: 13, color: t.onSurface, fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                        {tx('currentWeightLabel')}
+                        {!isLocked && (
+                            <span style={{
+                                fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase',
+                                color: t.primary, padding: '2px 6px', borderRadius: 999,
+                                background: `${t.primary}1f`, lineHeight: 1.4,
+                            }}>Required</span>
+                        )}
+                    </span>
                     <span style={{ fontFamily: t.body, fontSize: 11, color: t.onSurfaceMuted, letterSpacing: '0.08em' }}>kg</span>
                 </div>
                 <input
@@ -612,9 +673,25 @@ function WeeklyCheckIn({ existingLog, isWindowLocked, lastSubmittedDate, nextAva
                 <ProgressSlider label="Strength" value={strength} onChange={setStrength} disabled={isLocked} />
                 <ProgressSlider label="Hunger"   value={hunger}   onChange={setHunger}   disabled={isLocked} />
                 <ProgressSlider label="Energy"   value={energy}   onChange={setEnergy}   disabled={isLocked} />
-                <div>
+                <div style={{
+                    // Same gold left-rail as the weight block when
+                    // editable, so the cardio field reads as part of
+                    // the "don't forget" cluster.
+                    paddingLeft: !isLocked ? 14 : 0,
+                    borderLeft: !isLocked ? `3px solid ${t.primary}` : 'none',
+                    marginTop: 4,
+                }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
-                        <span style={{ fontFamily: t.body, fontSize: 13, color: t.onSurface, fontWeight: 500 }}>{tx('cardioCaloriesLabel')}</span>
+                        <span style={{ fontFamily: t.body, fontSize: 13, color: t.onSurface, fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                            {tx('cardioCaloriesLabel')}
+                            {!isLocked && (
+                                <span style={{
+                                    fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase',
+                                    color: t.primary, padding: '2px 6px', borderRadius: 999,
+                                    background: `${t.primary}1f`, lineHeight: 1.4,
+                                }}>Don&apos;t forget</span>
+                            )}
+                        </span>
                         <span style={{ fontFamily: t.body, fontSize: 11, color: t.onSurfaceMuted, letterSpacing: '0.08em' }}>0–2000 / week</span>
                     </div>
                     <input
@@ -634,9 +711,22 @@ function WeeklyCheckIn({ existingLog, isWindowLocked, lastSubmittedDate, nextAva
                 </div>
             </div>
 
-            <div style={{ marginBottom: 24 }}>
+            <div style={{
+                marginBottom: 24,
+                paddingLeft: !isLocked ? 14 : 0,
+                borderLeft: !isLocked ? `3px solid ${t.primary}` : 'none',
+            }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
-                    <span style={{ fontFamily: t.body, fontSize: 13, color: t.onSurface, fontWeight: 500 }}>{tx('notesWord')}</span>
+                    <span style={{ fontFamily: t.body, fontSize: 13, color: t.onSurface, fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                        {tx('notesWord')}
+                        {!isLocked && (
+                            <span style={{
+                                fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase',
+                                color: t.primary, padding: '2px 6px', borderRadius: 999,
+                                background: `${t.primary}1f`, lineHeight: 1.4,
+                            }}>Don&apos;t forget</span>
+                        )}
+                    </span>
                     <span style={{ fontFamily: t.body, fontSize: 11, color: t.onSurfaceMuted, letterSpacing: '0.08em' }}>{tx('notesOptional')}</span>
                 </div>
                 <textarea
@@ -647,7 +737,13 @@ function WeeklyCheckIn({ existingLog, isWindowLocked, lastSubmittedDate, nextAva
                         width: '100%', padding: '10px 12px',
                         fontFamily: t.body, fontSize: 13, color: t.onSurface,
                         background: t.surfaceContainerLow, borderRadius: 12,
-                        border: `1px solid ${t.outlineVariant}`,
+                        // Subtle gold border when editable, neutral when
+                        // locked — same gold-rail signal as the inputs
+                        // above, applied at the textarea level since the
+                        // textarea has its own visible border anyway.
+                        border: !isLocked
+                            ? `1px solid ${t.primary}55`
+                            : `1px solid ${t.outlineVariant}`,
                         outline: 'none', resize: 'vertical',
                     }}
                 />
