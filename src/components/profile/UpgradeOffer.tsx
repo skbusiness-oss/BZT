@@ -43,7 +43,7 @@
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import {
-    Sparkles, ArrowRight, MessageSquare, ClipboardCheck, Calendar, Zap,
+    Sparkles, ArrowRight, MessageSquare, ClipboardCheck, Calendar,
 } from 'lucide-react';
 
 // Same Stripe Payment Link the legacy /pricing page used. Kept in this
@@ -65,14 +65,15 @@ export function UpgradeOffer() {
     // is reusable, so we re-check.
     if (!user || user.role !== 'community') return null;
 
-    // Benefit rows that read like a course curriculum: each one names
-    // what the user UNLOCKS (not just what they get). Lucide icons
-    // chosen to match the value prop semantically.
+    // Three emotional benefits — each frames the unlock as a
+    // transformation, not a feature. The 4th "priority response"
+    // benefit was intentionally removed per founder direction so the
+    // pitch doesn't read as a list of perks but as an offer about
+    // who the user becomes once they accept it.
     const benefits = [
         { Icon: MessageSquare,  title: t('upgradeBenefit1Title'), sub: t('upgradeBenefit1Sub') },
         { Icon: ClipboardCheck, title: t('upgradeBenefit2Title'), sub: t('upgradeBenefit2Sub') },
         { Icon: Calendar,       title: t('upgradeBenefit3Title'), sub: t('upgradeBenefit3Sub') },
-        { Icon: Zap,            title: t('upgradeBenefit4Title'), sub: t('upgradeBenefit4Sub') },
     ];
 
     return (

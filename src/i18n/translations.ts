@@ -1124,30 +1124,35 @@ export const translations = {
 
     // ─── Inline upgrade offer (Profile page, community users) ──────
     upgradeYourPlanEyebrow:    { en: 'Your plan',                            ar: 'باقتك الحالية' },
-    upgradeOfferEyebrow:       { en: 'Ready for more?',                      ar: 'جاهز للخطوة التالية؟' },
-    upgradeOfferTitle:         { en: 'Get coached by Med, one-on-one.',      ar: 'تدرّب مع ميد بشكل فردي.' },
-    upgradeOfferSub:           { en: 'You\'re on the community plan — videos, programs, weekly logs. Coaching is everything you have now PLUS a direct line to Med, custom protocols, and weekly accountability built around YOUR body.',
-                                 ar: 'أنت حالياً على باقة المجتمع — فيديوهات وبرامج وسجلّات أسبوعية. التدريب الشخصي يشمل كل ما لديك الآن، بالإضافة إلى تواصل مباشر مع ميد، بروتوكولات مخصّصة، ومتابعة أسبوعية مبنيّة على جسمك أنت.' },
-    upgradeYouHave:            { en: 'What you have now',                    ar: 'ما لديك الآن' },
-    upgradeYouGet:             { en: 'What you unlock',                      ar: 'ما ستحصل عليه' },
-    upgradeBenefit1Title:      { en: 'A real coach in your DMs',             ar: 'كوتش حقيقي في رسائلك المباشرة' },
-    upgradeBenefit1Sub:        { en: 'Send Med your questions, photos, struggles — get answers from a person, not a chatbot.',
-                                 ar: 'أرسل لميد أسئلتك، صورك، تحدّياتك — وستحصل على إجابات من شخص حقيقي، لا روبوت.' },
-    upgradeBenefit2Title:      { en: 'Programs built for YOUR body',         ar: 'برامج مصمّمة لجسمك أنت' },
-    upgradeBenefit2Sub:        { en: 'Custom training + diet protocols based on your weekly check-ins. No more guessing.',
-                                 ar: 'برامج تدريب وحمية مخصّصة بناءً على متابعاتك الأسبوعية. لا مزيد من التخمين.' },
-    upgradeBenefit3Title:      { en: 'Weekly review of your check-ins',      ar: 'مراجعة أسبوعية لمتابعاتك' },
-    upgradeBenefit3Sub:        { en: 'Med reads every submission and replies with adjustments. You\'re never training alone.',
-                                 ar: 'يقرأ ميد كل متابعة ويرد بتعديلات. لن تتدرّب وحدك.' },
-    upgradeBenefit4Title:      { en: 'Priority response window',             ar: 'أولوية في الردود' },
-    upgradeBenefit4Sub:        { en: 'Coaching clients get same-day replies. No waiting in line behind the community feed.',
-                                 ar: 'عملاء التدريب يحصلون على ردّ في نفس اليوم. لا انتظار خلف منشورات المجتمع.' },
+    upgradeOfferEyebrow:       { en: 'Your next chapter',                    ar: 'فصلك التالي' },
+    upgradeOfferTitle:         { en: 'Stop training alone.',                 ar: 'كفى تدرّباً وحدك.' },
+    upgradeOfferSub:           { en: 'You\'ve watched the videos. You\'ve logged the weeks. You know what\'s missing — someone who sees YOUR body, knows YOUR plateaus, and builds the plan around YOU. That\'s coaching with Med.',
+                                 ar: 'شاهدت الفيديوهات. سجّلت أسابيعك. تعرف ما الذي ينقصك — شخص يرى جسمك أنت، يعرف ثبات وزنك أنت، ويبني الخطّة من حولك أنت. هذا هو التدريب مع ميد.' },
+    upgradeYouHave:            { en: 'On the community plan',                ar: 'في باقة المجتمع' },
+    upgradeYouGet:             { en: 'The day you upgrade',                  ar: 'يوم ترقّيك' },
+
+    // Three emotional benefits — each frames the unlock as
+    // transformation, not feature. (Priority response benefit dropped
+    // per founder direction: avoid "daily replies" framing.)
+    upgradeBenefit1Title:      { en: 'A coach who knows YOUR name',          ar: 'كوتش يعرف اسمك أنت' },
+    upgradeBenefit1Sub:        { en: 'Not a chatbot. Not a forum. Med reads what you write, remembers your check-ins, and replies to the human behind the screen.',
+                                 ar: 'ليس روبوتاً. وليس منتدى. ميد يقرأ ما تكتبه، يتذكّر متابعاتك، ويرد على الإنسان خلف الشاشة.' },
+    upgradeBenefit2Title:      { en: 'A plan made FOR your body',            ar: 'خطّة مصمَّمة لجسمك أنت' },
+    upgradeBenefit2Sub:        { en: 'No more cookie-cutter routines. Your training, your macros, your timing — all built around the numbers you log each week.',
+                                 ar: 'لا مزيد من البرامج العامة. تدريبك، ماكروزك، توقيتك — كل شيء مبني على الأرقام التي تسجّلها كل أسبوع.' },
+    upgradeBenefit3Title:      { en: 'Someone in your corner every week',    ar: 'شخص بجانبك في كل أسبوع' },
+    upgradeBenefit3Sub:        { en: 'Med opens every check-in. He adjusts what isn\'t working, doubles down on what is, and tells you the next move. You stop guessing.',
+                                 ar: 'ميد يفتح كل متابعة. يعدّل ما لا يعمل، يضاعف ما يعمل، ويخبرك بالخطوة التالية. لا تخمين بعد الآن.' },
+
     upgradePriceMonthly:       { en: '/ month',                              ar: '/ شهرياً' },
-    upgradeBilledNote:         { en: 'Cancel anytime. Includes all platform features at no extra cost.',
-                                 ar: 'يمكنك الإلغاء في أي وقت. تشمل الباقة جميع ميزات المنصّة دون رسوم إضافية.' },
+    // Replaces the old "Cancel anytime…" line — founder direction
+    // says avoid refund/cancellation framing entirely. This line
+    // closes on the emotional contrast instead.
+    upgradeBilledNote:         { en: 'Everything you have today — plus Med in your corner.',
+                                 ar: 'كل ما لديك اليوم — بالإضافة إلى ميد بجانبك.' },
     upgradeCta:                { en: 'Start coaching with Med',              ar: 'ابدأ التدريب مع ميد' },
-    upgradeProofLine:          { en: 'Already trusted by clients in 6 countries.',
-                                 ar: 'يثق به عملاء في 6 دول حول العالم.' },
+    upgradeProofLine:          { en: 'Trusted by people who finally got the body they were chasing.',
+                                 ar: 'يثق به أشخاص حصلوا أخيراً على الجسم الذي كانوا يلاحقونه.' },
 
     // ─── University level cards ────────────────────────────────────
     universityLevelLabel:      { en: 'Level',                                ar: 'المستوى' },
