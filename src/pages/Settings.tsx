@@ -305,6 +305,21 @@ function NotificationsDiagnostic({ uid }: { uid: string }) {
     const [testing, setTesting] = useState(false);
     const [testResult, setTestResult] = useState<string | null>(null);
     const [testOk, setTestOk] = useState<boolean | null>(null);
+    const [regResult, setRegResult] = useState<{ ok: boolean; detail: string } | null>(null);
+
+    // iOS PWA hint — on iPhone, web push only works when launched
+    // from a Home Screen-installed PWA (iOS 16.4+). Detect tab-on-iOS
+    // here so we can surface the install hint inline instead of
+    // letting the user mash "Register" with no chance of success.
+    const iosTabNotPwa = (() => {
+        if (typeof navigator === 'undefined' || typeof window === 'undefined') return false;
+        const ua = navigator.userAgent;
+        const isIOS = /iPhone|iPad|iPod/.test(ua) || (ua.includes('Mac') && 'ontouchend' in document);
+        if (!isIOS) return false;
+        const standalone = window.matchMedia?.('(display-mode: standalone)')?.matches
+            || (navigator as Navigator & { standalone?: boolean }).standalone === true;
+        return !standalone;
+    })();
 
     useEffect(() => {
         if (!('serviceWorker' in navigator)) {
@@ -330,14 +345,27 @@ function NotificationsDiagnostic({ uid }: { uid: string }) {
         return () => unsub();
     }, [uid]);
 
-    const handleRegister = async () => {
+    const doRegister = async (forceRefresh: boolean) => {
         setRegistering(true);
         setTestResult(null);
+        setTestOk(null);
         try {
-            const ok = await registerFcmToken(uid);
-            if (!ok) setTestResult('Registration failed — check DevTools console for [fcm] log lines.');
-            // tokenCount updates via the snapshot listener.
+            const result = await registerFcmToken(uid, { forceRefresh });
+            setRegResult({
+                ok: result.ok,
+                detail: result.ok
+                    ? `Token registered (${result.tokenPreview})`
+                    : `Step "${result.step}": ${result.detail ?? 'no detail'}`,
+            });
             if (typeof Notification !== 'undefined') setPermission(Notification.permission);
+            // Re-check SW registration status (it may have just registered).
+            if ('serviceWorker' in navigator) {
+                const reg = await navigator.serviceWorker.getRegistration('/firebase-messaging-sw.js').catch(() => null);
+                setSwRegistered(!!reg);
+            }
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            setRegResult({ ok: false, detail: `Unexpected error: ${msg}` });
         } finally {
             setRegistering(false);
         }
@@ -437,15 +465,34 @@ function NotificationsDiagnostic({ uid }: { uid: string }) {
                 )}
             </div>
 
+            {iosTabNotPwa && (
+                <div className="mx-6 mb-4 rounded-xl px-4 py-3 text-xs font-body leading-relaxed bg-amber-500/10 text-amber-300 border border-amber-500/30">
+                    <strong className="block font-headline font-bold mb-1">iPhone tab won't get push.</strong>
+                    iOS only delivers web push when the site is installed as a PWA. Tap the
+                    Share button in Safari, then "Add to Home Screen", then open BioZackTeam
+                    from your Home Screen icon and come back here.
+                </div>
+            )}
+
             <div className="px-6 pb-6 flex flex-wrap gap-3">
                 <button
                     type="button"
-                    onClick={handleRegister}
-                    disabled={registering || permission === 'denied' || permission === 'unsupported'}
+                    onClick={() => doRegister(false)}
+                    disabled={registering || permission === 'unsupported'}
                     className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-surface-container-highest text-on-surface text-sm font-label font-bold uppercase tracking-widest hover:bg-surface-bright disabled:opacity-40 disabled:cursor-not-allowed transition-all"
                 >
                     {registering ? <Loader2 size={14} className="animate-spin" /> : <Bell size={14} />}
                     {registering ? 'Registering…' : 'Register this device'}
+                </button>
+                <button
+                    type="button"
+                    onClick={() => doRegister(true)}
+                    disabled={registering || permission === 'unsupported'}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-surface-container-highest text-on-surface text-sm font-label font-bold uppercase tracking-widest hover:bg-surface-bright disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                    title="Delete this device's current token and mint a fresh one. Use when the device is stuck."
+                >
+                    {registering ? <Loader2 size={14} className="animate-spin" /> : <Bell size={14} />}
+                    Reset &amp; re-register
                 </button>
                 <button
                     type="button"
@@ -458,9 +505,18 @@ function NotificationsDiagnostic({ uid }: { uid: string }) {
                 </button>
             </div>
 
+            {regResult && (
+                <div className="px-6 pb-3">
+                    <div className={`rounded-xl px-4 py-3 text-xs font-mono leading-relaxed ${regResult.ok ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/30' : 'bg-amber-500/10 text-amber-300 border border-amber-500/30'}`}>
+                        <strong className="block mb-1">Register: {regResult.ok ? 'OK' : 'FAILED'}</strong>
+                        {regResult.detail}
+                    </div>
+                </div>
+            )}
             {testResult && (
                 <div className="px-6 pb-6">
                     <div className={`rounded-xl px-4 py-3 text-xs font-mono leading-relaxed ${testOk ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/30' : 'bg-amber-500/10 text-amber-300 border border-amber-500/30'}`}>
+                        <strong className="block mb-1">Test push: {testOk ? 'OK' : 'FAILED'}</strong>
                         {testResult}
                     </div>
                 </div>

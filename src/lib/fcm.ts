@@ -21,9 +21,32 @@
  * notifications entirely. We attempt registration regardless;
  * unsupported environments resolve to null.
  */
-import { getToken, onMessage } from 'firebase/messaging';
+import { getToken, onMessage, deleteToken } from 'firebase/messaging';
 import { doc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { db, getFcmMessaging } from './firebase';
+
+export interface FcmRegistrationResult {
+    ok: boolean;
+    /** Which step failed (or 'done' on success). Useful to render a
+     *  specific message in the diagnostic UI instead of "something
+     *  went wrong". */
+    step:
+        | 'done'
+        | 'no-vapid'
+        | 'unsupported-browser'
+        | 'no-notification-api'
+        | 'permission-denied'
+        | 'permission-default-rejected'
+        | 'permission-throw'
+        | 'sw-register-failed'
+        | 'get-token-threw'
+        | 'get-token-empty'
+        | 'persist-failed';
+    /** Human-readable detail, often the underlying error.message. */
+    detail?: string;
+    /** Truncated token on success, for display in the UI. */
+    tokenPreview?: string;
+}
 
 /**
  * VAPID public key from Firebase Console → Project Settings → Cloud
@@ -45,60 +68,80 @@ const VAPID_KEY =
 
 /**
  * Try to register this device for push notifications for the given uid.
- * Best-effort: returns false on any failure (unsupported browser,
- * denied permission, missing VAPID key, network error) without
- * throwing. The app keeps working without push.
  *
- *   await registerFcmToken(user.id);
+ *   await registerFcmToken(user.id);                  // best-effort, called from AuthContext on sign-in
+ *   await registerFcmToken(user.id, { forceRefresh: true });  // user-driven from Settings diagnostic
  *
- * Safe to call multiple times; arrayUnion dedups tokens on the user
- * doc.
+ * `forceRefresh` deletes any existing token on the device first so
+ * `getToken` mints a fresh one. Use when the user is troubleshooting
+ * and might be stuck with a stale / no-longer-valid token that FCM
+ * keeps returning from cache.
+ *
+ * Returns a structured result so the UI can render the specific
+ * failure step (permission vs sw vs token vs persist) instead of a
+ * blanket "didn't work".
+ *
+ * Idempotent persistence: arrayUnion dedups tokens on the user doc.
  */
-export async function registerFcmToken(uid: string): Promise<boolean> {
-    // Verbose logging — every step prints to console so the user can
-    // see exactly which step succeeded/failed when push isn't working.
-    // Remove or downgrade to debug once push is verified stable.
+export async function registerFcmToken(
+    uid: string,
+    opts: { forceRefresh?: boolean } = {},
+): Promise<FcmRegistrationResult> {
+    // Verbose console logging stays — useful when the user pastes
+    // DevTools output for further debugging.
     // eslint-disable-next-line no-console
     const log = (...args: unknown[]) => console.log('[fcm]', ...args);
 
     if (!VAPID_KEY) {
-        log('FAIL: VAPID_KEY missing — push disabled');
-        return false;
+        log('FAIL: VAPID_KEY missing');
+        return { ok: false, step: 'no-vapid', detail: 'No VAPID public key configured.' };
     }
     log('VAPID key present:', VAPID_KEY.slice(0, 12) + '…');
 
     const messaging = await getFcmMessaging();
     if (!messaging) {
-        log('FAIL: messaging unsupported in this browser (iOS Safari pre-16.4? in-app webview?)');
-        return false;
+        log('FAIL: messaging unsupported');
+        return {
+            ok: false,
+            step: 'unsupported-browser',
+            detail: 'Web push not supported here. On iPhone, install the site to your Home Screen (Share → Add to Home Screen) and open from there — iOS Safari tabs cannot receive push.',
+        };
     }
-    log('messaging supported, getFcmMessaging() OK');
+    log('messaging supported');
 
-    // Permission gate.
     if (typeof Notification === 'undefined') {
-        log('FAIL: Notification API not in window');
-        return false;
+        log('FAIL: Notification API missing');
+        return { ok: false, step: 'no-notification-api', detail: 'Notification API not available in this context (in-app webview / privacy mode).' };
     }
     log('Notification.permission =', Notification.permission);
     if (Notification.permission === 'denied') {
-        log('FAIL: notifications blocked. User must re-allow via browser site settings.');
-        return false;
+        log('FAIL: permission denied');
+        return {
+            ok: false,
+            step: 'permission-denied',
+            detail: 'Notifications blocked. Open browser site settings and re-allow notifications for this site, then tap Register again.',
+        };
     }
     if (Notification.permission === 'default') {
         try {
             log('requesting permission…');
             const perm = await Notification.requestPermission();
             log('permission result:', perm);
-            if (perm !== 'granted') return false;
+            if (perm !== 'granted') {
+                return {
+                    ok: false,
+                    step: 'permission-default-rejected',
+                    detail: 'You did not grant notification permission.',
+                };
+            }
         } catch (err) {
             log('FAIL: requestPermission threw:', err);
-            return false;
+            return { ok: false, step: 'permission-throw', detail: err instanceof Error ? err.message : String(err) };
         }
     }
 
-    // Explicitly register the SW first. Some browsers (notably iOS
-    // Safari) need the SW registration to be awaited before getToken
-    // will find it. Default scope is fine.
+    // Register the SW first. iOS Safari requires the registration to
+    // be awaited before getToken can find it.
     let swRegistration: ServiceWorkerRegistration | undefined;
     try {
         if ('serviceWorker' in navigator) {
@@ -107,7 +150,21 @@ export async function registerFcmToken(uid: string): Promise<boolean> {
         }
     } catch (err) {
         log('FAIL: SW registration threw:', err);
-        return false;
+        return { ok: false, step: 'sw-register-failed', detail: err instanceof Error ? err.message : String(err) };
+    }
+
+    // forceRefresh: kill any existing token on this device so getToken
+    // mints a brand-new one. Useful for recovering from stuck stale
+    // tokens (the legacy ones FCM keeps returning even after they've
+    // been invalidated server-side).
+    if (opts.forceRefresh) {
+        try {
+            log('forceRefresh: deleting existing token…');
+            await deleteToken(messaging);
+        } catch (err) {
+            // Non-fatal — there might not be an existing token to delete.
+            log('forceRefresh deleteToken non-fatal:', err);
+        }
     }
 
     let token: string;
@@ -118,14 +175,22 @@ export async function registerFcmToken(uid: string): Promise<boolean> {
             serviceWorkerRegistration: swRegistration,
         });
     } catch (err) {
-        // Common: messaging/permission-blocked, messaging/notifications-blocked,
-        // messaging/failed-service-worker-registration, AbortError
         log('FAIL: getToken threw:', err);
-        return false;
+        const msg = err instanceof Error ? err.message : String(err);
+        const code = (err as { code?: string })?.code;
+        return {
+            ok: false,
+            step: 'get-token-threw',
+            detail: code ? `[${code}] ${msg}` : msg,
+        };
     }
     if (!token) {
-        log('FAIL: getToken returned empty string');
-        return false;
+        log('FAIL: getToken returned empty');
+        return {
+            ok: false,
+            step: 'get-token-empty',
+            detail: 'getToken succeeded but returned an empty string — usually means a Firebase config mismatch between this page and the service worker. Confirm senderId/appId in /firebase-messaging-sw.js match VITE_FIREBASE_* env vars.',
+        };
     }
     log('got token:', token.slice(0, 20) + '…');
 
@@ -136,10 +201,17 @@ export async function registerFcmToken(uid: string): Promise<boolean> {
         });
         log('OK: token persisted to users/' + uid + '.fcmTokens');
     } catch (err) {
-        log('FAIL: failed to persist token to user doc:', err);
-        return false;
+        log('FAIL: persist failed:', err);
+        const msg = err instanceof Error ? err.message : String(err);
+        const code = (err as { code?: string })?.code;
+        return {
+            ok: false,
+            step: 'persist-failed',
+            detail: code ? `[${code}] ${msg}` : msg,
+            tokenPreview: token.slice(0, 20) + '…',
+        };
     }
-    return true;
+    return { ok: true, step: 'done', tokenPreview: token.slice(0, 20) + '…' };
 }
 
 /**
