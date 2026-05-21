@@ -12,7 +12,7 @@
  */
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Sparkles, Filter, Utensils, FileText, ChevronRight, CheckCircle2, Flame, Salad, Soup, Beef, Cookie } from 'lucide-react';
+import { Sparkles, Filter, Utensils, FileText, ChevronRight, CheckCircle2, Salad } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useAssignedDiet } from '../hooks/useAssignedDiet';
@@ -39,8 +39,25 @@ export const Diets = () => {
     const { t, lang } = useLanguage();
     const navigate = useNavigate();
     const [showWizard, setShowWizard] = useState(false);
-    const [bandFilter, setBandFilter] = useState<'all' | DietBand>('all');
-    const [mealFilter, setMealFilter] = useState<'all' | MealsPerDay>('all');
+    // Two-step picker: bandFilter / mealFilter start as null = "not
+    // picked yet". This drives the progressive-reveal flow — meal
+    // cards stay hidden until the user picks a calorie band, plan
+    // list stays hidden until they pick a meal count. "all" is a
+    // valid explicit pick (= "every tier" / "any cadence"), distinct
+    // from "not picked yet".
+    type BandPick = 'all' | DietBand | null;
+    type MealPick = 'all' | MealsPerDay | null;
+    const [bandFilter, setBandFilter] = useState<BandPick>(null);
+    const [mealFilter, setMealFilter] = useState<MealPick>(null);
+
+    // Reset the meals pick whenever the calorie band changes — old
+    // selection might not match the new band's plans, and the
+    // progressive UX wants the user to re-confirm the cadence after
+    // changing tiers.
+    const pickBand = (b: 'all' | DietBand) => {
+        setBandFilter(b);
+        setMealFilter(null);
+    };
 
     const profile = user?.dietProfile;
     const { assignedDietId, snapshot: assignedSnapshot } = useAssignedDiet();
@@ -50,6 +67,8 @@ export const Diets = () => {
     const activePlan = assignedDietId ? getDietById(assignedDietId) : undefined;
 
     const filtered = useMemo(() => {
+        // Skip the list entirely until BOTH steps have been picked.
+        if (bandFilter === null || mealFilter === null) return [];
         return dietPlans.filter(d => {
             if (bandFilter !== 'all' && dietBand(d.calories) !== bandFilter) return false;
             if (mealFilter !== 'all' && d.mealsPerDay !== mealFilter) return false;
@@ -57,36 +76,31 @@ export const Diets = () => {
         });
     }, [bandFilter, mealFilter]);
 
-    // Per-card counts so each filter tile can show how many plans live in
-    // that bucket given the OTHER filter's current state. Mirrors the
-    // Workouts category card UX — picking a tier should always show a
-    // non-zero card count if there's at least one matching plan.
+    // Calorie-band counts ignore mealFilter — the meal step doesn't
+    // exist yet when the user is looking at the band cards, so the
+    // count should reflect the full catalog for that tier.
     const bandCounts = useMemo(() => {
         const counts: Record<'all' | DietBand, number> = { all: 0, low: 0, mid: 0, high: 0, super: 0 };
         for (const d of dietPlans) {
-            if (mealFilter !== 'all' && d.mealsPerDay !== mealFilter) continue;
             counts.all++;
             const band = dietBand(d.calories);
             counts[band]++;
         }
         return counts;
-    }, [mealFilter]);
+    }, []);
 
+    // Meal counts respect the currently-picked band, since the meals
+    // step is only shown AFTER a band has been chosen.
     const mealCounts = useMemo(() => {
         const counts: Record<'all' | 3 | 4, number> = { all: 0, 3: 0, 4: 0 };
         for (const d of dietPlans) {
-            if (bandFilter !== 'all' && dietBand(d.calories) !== bandFilter) continue;
+            if (bandFilter !== null && bandFilter !== 'all' && dietBand(d.calories) !== bandFilter) continue;
             counts.all++;
             if (d.mealsPerDay === 3) counts[3]++;
             else if (d.mealsPerDay === 4) counts[4]++;
         }
         return counts;
     }, [bandFilter]);
-
-    // Founder direction (mirrors Workouts): don't render the long list of
-    // plans until the user picks at least one specific filter. The
-    // calorie / meals/day cards alone drive what shows up below.
-    const noFilterActive = bandFilter === 'all' && mealFilter === 'all';
 
     return (
         <div className="max-w-6xl mx-auto px-4 md:px-6 pt-6 pb-24 space-y-8">
@@ -232,69 +246,70 @@ export const Diets = () => {
                     </p>
                 )}
 
-                {/* Calorie band — card grid replaces the old chip strip.
-                    Active card is gold-bordered; per-card count reflects
-                    the current meals/day filter so the user can see
-                    "how many plans" before committing to a tier. */}
+                {/* STEP 1 — Big calorie-band cards with the same per-tier
+                    cover photos used on the plan thumbnails. Visible at
+                    all times. Picking one reveals the meals/day step
+                    below and resets any prior meal pick. */}
                 <div>
                     <div className="flex items-center justify-between gap-3 mb-3">
                         <div className="flex items-center gap-2 text-on-surface-variant text-[10px] font-label font-bold uppercase tracking-[0.18em]">
-                            <Filter size={12} /> {t('filterByCalories') ?? 'Calories'}
+                            <Filter size={12} /> Step 1 · {t('filterByCalories') ?? 'Calories'}
                         </div>
-                        {bandFilter !== 'all' && (
+                        {bandFilter !== null && (
                             <button
-                                onClick={() => setBandFilter('all')}
+                                onClick={() => { setBandFilter(null); setMealFilter(null); }}
                                 className="text-[10px] font-label font-bold uppercase tracking-widest text-primary hover:underline"
                             >
-                                Show all
+                                Reset
                             </button>
                         )}
                     </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                         {BANDS.map(b => (
-                            <CalorieBandCard
+                            <BigCalorieBandCard
                                 key={b}
                                 value={b}
                                 count={bandCounts[b]}
                                 active={bandFilter === b}
-                                onClick={() => setBandFilter(b)}
+                                onClick={() => pickBand(b)}
                             />
                         ))}
                     </div>
                 </div>
 
-                {/* Meals/day — same card pattern, smaller grid. */}
-                <div>
-                    <div className="flex items-center justify-between gap-3 mb-3">
-                        <div className="flex items-center gap-2 text-on-surface-variant text-[10px] font-label font-bold uppercase tracking-[0.18em]">
-                            <Utensils size={12} /> {t('mealsPerDay') ?? 'Meals/day'}
+                {/* STEP 2 — Meals/day. Only visible once a calorie band
+                    has been picked. Each pick reveals the plan list. */}
+                {bandFilter !== null && (
+                    <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+                        <div className="flex items-center justify-between gap-3 mb-3">
+                            <div className="flex items-center gap-2 text-on-surface-variant text-[10px] font-label font-bold uppercase tracking-[0.18em]">
+                                <Utensils size={12} /> Step 2 · {t('mealsPerDay') ?? 'Meals/day'}
+                            </div>
+                            {mealFilter !== null && (
+                                <button
+                                    onClick={() => setMealFilter(null)}
+                                    className="text-[10px] font-label font-bold uppercase tracking-widest text-primary hover:underline"
+                                >
+                                    Change
+                                </button>
+                            )}
                         </div>
-                        {mealFilter !== 'all' && (
-                            <button
-                                onClick={() => setMealFilter('all')}
-                                className="text-[10px] font-label font-bold uppercase tracking-widest text-primary hover:underline"
-                            >
-                                Show all
-                            </button>
-                        )}
+                        <div className="grid grid-cols-3 gap-3">
+                            {MEAL_COUNTS.map(m => (
+                                <MealCountCard
+                                    key={m}
+                                    value={m}
+                                    count={mealCounts[m]}
+                                    active={mealFilter === m}
+                                    onClick={() => setMealFilter(m)}
+                                />
+                            ))}
+                        </div>
                     </div>
-                    <div className="grid grid-cols-3 gap-3">
-                        {MEAL_COUNTS.map(m => (
-                            <MealCountCard
-                                key={m}
-                                value={m}
-                                count={mealCounts[m]}
-                                active={mealFilter === m}
-                                onClick={() => setMealFilter(m)}
-                            />
-                        ))}
-                    </div>
-                </div>
+                )}
 
-                {/* Empty-state hint when no filter is active. Founder
-                    direction: don't dump the full catalog on screen; let
-                    the user pick a tier first. */}
-                {noFilterActive ? (
+                {/* STEP 3 — Plan list. Only visible after both picks. */}
+                {bandFilter === null || mealFilter === null ? (
                     <div className="rounded-2xl bg-surface-container-low border border-outline-variant/30 p-10 md:p-14 text-center">
                         <div
                             className="w-12 h-12 mx-auto rounded-2xl flex items-center justify-center mb-4"
@@ -303,10 +318,12 @@ export const Diets = () => {
                             <Salad size={22} className="text-primary" />
                         </div>
                         <h3 className="font-headline font-bold text-[18px] text-on-surface mb-2">
-                            Pick a tier to see plans
+                            {bandFilter === null ? 'Pick a calorie tier' : 'Pick a meal cadence'}
                         </h3>
                         <p className="text-[13px] text-on-surface-variant font-body leading-relaxed max-w-md mx-auto">
-                            Tap one of the calorie cards above (or pick a meal count) — matching plans appear here.
+                            {bandFilter === null
+                                ? 'Tap one of the calorie cards above to begin. Meal cadence appears next.'
+                                : 'Choose 3 meals, 4 meals, or any cadence. Matching plans appear below.'}
                         </p>
                     </div>
                 ) : filtered.length === 0 ? (
@@ -396,21 +413,27 @@ export const Diets = () => {
 };
 
 // ─────────────────────────────────────────────────────────────────────
-// CalorieBandCard — one tile in the calorie filter grid. Picks an
-// icon per band so the user can visually associate the tier (Salad
-// for lowest, Beef for highest). The "All" tile gets a generic
-// Cookie icon. Active card is gold-bordered; count under the label
-// is "N plans" given the current meals/day filter.
+// BigCalorieBandCard — full-photo card, one per calorie tier. Uses
+// the same per-tier cover image the matching plan thumbnails use, so
+// the user sees the kind of food they'd be eating at that calorie
+// level before committing. Active card gets a gold border + Active
+// pill in the top corner.
+//
+// "All" tier gets the mid-balance cover as a representative.
 // ─────────────────────────────────────────────────────────────────────
-const BAND_ICON = (b: 'all' | DietBand) => {
-    if (b === 'low') return <Salad size={16} />;
-    if (b === 'mid') return <Soup size={16} />;
-    if (b === 'high') return <Flame size={16} />;
-    if (b === 'super') return <Beef size={16} />;
-    return <Cookie size={16} />;
+// Representative kcal per band — feeds coverUrl() which is keyed on
+// calories rather than band name. We pick a value squarely inside
+// each band so a future cover-tier shift doesn't accidentally fall
+// into a different bucket.
+const REPRESENTATIVE_KCAL: Record<'all' | DietBand, number> = {
+    all: 2000,    // balanced tier
+    low: 1500,    // lean
+    mid: 2200,    // highProtein
+    high: 2800,   // performance
+    super: 3400,  // athlete
 };
 
-function CalorieBandCard({
+function BigCalorieBandCard({
     value, count, active, onClick,
 }: {
     value: 'all' | DietBand;
@@ -418,39 +441,78 @@ function CalorieBandCard({
     active: boolean;
     onClick: () => void;
 }) {
-    const label = value === 'all' ? 'All' : BAND_RANGE[value];
-    const sub = value === 'all' ? 'every tier' : 'kcal';
+    const title = value === 'all' ? 'All tiers' : BAND_RANGE[value];
+    const cover = coverUrl(REPRESENTATIVE_KCAL[value]);
     return (
         <button
             type="button"
             onClick={onClick}
-            className="group relative overflow-hidden rounded-xl p-4 text-left transition-all duration-200 hover:-translate-y-0.5"
+            className="group relative overflow-hidden rounded-2xl text-left transition-all duration-200 hover:-translate-y-0.5"
             style={{
-                background: active ? 'rgb(var(--primary) / 0.10)' : 'rgb(var(--surface-container-lowest))',
+                aspectRatio: '16 / 10',
                 border: active ? '2px solid rgb(var(--primary))' : '1px solid rgb(var(--outline-variant) / 0.30)',
-                boxShadow: active ? '0 8px 20px rgb(var(--primary) / 0.20)' : undefined,
+                boxShadow: active
+                    ? '0 14px 32px rgb(var(--primary) / 0.30)'
+                    : '0 8px 24px rgba(0,0,0,0.20)',
             }}
         >
-            <div className="flex items-center justify-between gap-2 mb-3">
+            {/* Photo backdrop — same tier covers used on the plan cards. */}
+            <div
+                className="absolute inset-0 transition-transform duration-500 group-hover:scale-[1.04]"
+                style={{
+                    backgroundImage: `url(${cover})`,
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center',
+                }}
+            />
+            {/* Bottom darken so the title + count are legible regardless
+                of cover brightness. Slightly heavier when active so the
+                gold border has visual support. */}
+            <div
+                className="absolute inset-0"
+                style={{
+                    background: active
+                        ? 'linear-gradient(180deg, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.55) 55%, rgba(0,0,0,0.85) 100%)'
+                        : 'linear-gradient(180deg, rgba(0,0,0,0.10) 0%, rgba(0,0,0,0.45) 55%, rgba(0,0,0,0.80) 100%)',
+                }}
+            />
+
+            {/* Active pill — top-right when this tier is the current
+                selection. */}
+            {active && (
                 <span
-                    className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-colors"
+                    className="absolute top-3 right-3 inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[9px] font-label font-extrabold uppercase tracking-[0.18em]"
                     style={{
-                        background: active ? 'rgb(var(--primary) / 0.20)' : 'rgb(var(--surface-container))',
-                        color: active ? 'rgb(var(--primary))' : 'rgb(var(--on-surface) / 0.55)',
+                        background: 'linear-gradient(135deg, rgb(var(--primary)), rgb(var(--primary-container)))',
+                        color: 'rgb(var(--on-primary))',
+                        boxShadow: '0 6px 14px rgb(var(--primary) / 0.32)',
                     }}
                 >
-                    {BAND_ICON(value)}
+                    <CheckCircle2 size={11} strokeWidth={3} /> Active
                 </span>
-                {active && (
-                    <span className="text-[9px] font-label font-bold uppercase tracking-widest text-primary">Active</span>
-                )}
+            )}
+
+            {/* Title + meta — anchored to the bottom-left. */}
+            <div className="absolute inset-x-0 bottom-0 p-4 md:p-5">
+                <span
+                    className="text-[10px] font-label font-extrabold uppercase tracking-[0.22em] block mb-1.5"
+                    style={{ color: '#e6c364' }}
+                >
+                    {value === 'all' ? 'Browse everything' : `${value} tier`}
+                </span>
+                <h3
+                    className="font-headline font-extrabold text-2xl md:text-[26px] leading-none tracking-tight"
+                    style={{ color: '#fff', textShadow: '0 1px 8px rgba(0,0,0,0.5)' }}
+                >
+                    {title}
+                </h3>
+                <p
+                    className="text-xs font-body mt-2"
+                    style={{ color: 'rgb(255 255 255 / 0.78)' }}
+                >
+                    {count} {count === 1 ? 'plan' : 'plans'} · kcal
+                </p>
             </div>
-            <h3 className="font-headline font-bold text-sm leading-tight text-on-surface">
-                {label}
-            </h3>
-            <p className="text-[11px] text-on-surface/45 font-body mt-1">
-                {count} {count === 1 ? 'plan' : 'plans'} · {sub}
-            </p>
         </button>
     );
 }
