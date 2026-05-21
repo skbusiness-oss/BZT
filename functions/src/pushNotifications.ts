@@ -47,16 +47,28 @@ async function pushToUser(
     },
 ): Promise<number> {
     const db = getFirestore();
+    // eslint-disable-next-line no-console
+    const log = (...args: unknown[]) => console.log('[pushToUser]', uid.slice(0, 8), ...args);
+
     const userSnap = await db.doc(`users/${uid}`).get();
-    if (!userSnap.exists) return 0;
+    if (!userSnap.exists) {
+        log('SKIP: user doc does not exist');
+        return 0;
+    }
     const userData = (userSnap.data() ?? {}) as UserDoc;
     const tokens = userData.fcmTokens ?? [];
-    if (tokens.length === 0) return 0;
+    if (tokens.length === 0) {
+        log('SKIP: no fcmTokens on user doc');
+        return 0;
+    }
+    log(`sending to ${tokens.length} token(s)`);
 
     // sendEachForMulticast tells us which tokens failed individually.
     // We can then prune precisely without retrying-the-whole-batch on
     // partial failures.
-    const result = await getMessaging().sendEachForMulticast({
+    let result: Awaited<ReturnType<ReturnType<typeof getMessaging>['sendEachForMulticast']>>;
+    try {
+        result = await getMessaging().sendEachForMulticast({
         tokens,
         // Send a `notification` payload (title/body) so the browser
         // AUTO-DISPLAYS the OS notification when the app is closed —
@@ -100,13 +112,26 @@ async function pushToUser(
             payload: { aps: { sound: 'default' } },
             headers: { 'apns-priority': '10' },
         },
-    });
+        });
+    } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        const code = (err as { code?: string })?.code ?? '(no code)';
+        // eslint-disable-next-line no-console
+        console.error('[pushToUser]', uid.slice(0, 8), 'sendEachForMulticast THREW:', code, msg);
+        throw err;
+    }
 
-    // Prune stale tokens.
+    log(`result: success=${result.successCount}, failure=${result.failureCount}`);
+
+    // Prune stale tokens AND log every failure (not just the prune-worthy
+    // ones). Without this, IAM permission errors etc. were invisible.
     const staleTokens: string[] = [];
     result.responses.forEach((r, i) => {
         if (r.success) return;
-        const code = r.error?.code;
+        const code = r.error?.code ?? '(no code)';
+        const msg = r.error?.message ?? '(no message)';
+        // eslint-disable-next-line no-console
+        console.warn('[pushToUser]', uid.slice(0, 8), `token #${i} failed:`, code, msg);
         // The two codes that mean "this token is dead, stop trying"
         // per Firebase docs.
         if (
@@ -117,6 +142,7 @@ async function pushToUser(
         }
     });
     if (staleTokens.length > 0) {
+        log(`pruning ${staleTokens.length} stale token(s)`);
         await db.doc(`users/${uid}`).update({
             fcmTokens: FieldValue.arrayRemove(...staleTokens),
         });
@@ -133,14 +159,26 @@ async function pushToUser(
 export const onMessageCreated = onDocumentCreated(
     'messages/{messageId}',
     async (event) => {
+        // eslint-disable-next-line no-console
+        console.log('[onMessageCreated] fired for', event.params.messageId);
         const msg = event.data?.data();
-        if (!msg) return;
+        if (!msg) {
+            // eslint-disable-next-line no-console
+            console.warn('[onMessageCreated] no msg data, exiting');
+            return;
+        }
         const receiverId = msg.receiverId as string | undefined;
         const senderId = msg.senderId as string | undefined;
         const senderName = (msg.senderName as string | undefined) ?? 'Someone';
         const text = (msg.text as string | undefined) ?? '';
         const hasImage = typeof msg.imageUrl === 'string' && msg.imageUrl.length > 0;
-        if (!receiverId || !senderId || receiverId === senderId) return;
+        // eslint-disable-next-line no-console
+        console.log('[onMessageCreated] from', senderId?.slice(0, 8), '→', receiverId?.slice(0, 8));
+        if (!receiverId || !senderId || receiverId === senderId) {
+            // eslint-disable-next-line no-console
+            console.warn('[onMessageCreated] skip: invalid sender/receiver pair');
+            return;
+        }
         const body = text
             ? (text.length > 140 ? text.slice(0, 137) + '...' : text)
             : (hasImage ? 'Sent you a photo.' : 'Sent you a message.');
