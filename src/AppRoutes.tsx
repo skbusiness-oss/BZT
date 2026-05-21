@@ -18,6 +18,7 @@ import { WorkoutDayView } from './components/workouts/WorkoutDayView';
 import { ProgramBrowse } from './pages/ProgramBrowse';
 import { UserView } from './pages/UserView';
 import { Profile } from './pages/Profile';
+import { Upgrade } from './pages/Upgrade';
 import { Messages } from './pages/Messages';
 import { Community } from './pages/Community';
 import { Leaderboard } from './pages/Leaderboard';
@@ -354,6 +355,7 @@ export const AppRoutes = () => {
                 } />
                 <Route path="/profile" element={<ErrorBoundary><Profile /></ErrorBoundary>} />
                 <Route path="/update" element={<ErrorBoundary><Profile /></ErrorBoundary>} />
+                <Route path="/upgrade" element={<ErrorBoundary><Upgrade /></ErrorBoundary>} />
                 <Route path="/leaderboard" element={
                     <ProtectedRoute allowedRoles={['coach', 'admin']}>
                         <ErrorBoundary><Leaderboard /></ErrorBoundary>
