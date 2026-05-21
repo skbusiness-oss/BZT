@@ -1057,6 +1057,79 @@ export const translations = {
     // Footer fine print
     pricingFinePrint:          { en: 'Prices in USD. Stripe Tax automatically handles VAT for international buyers. Yearly subscribers can cancel anytime — access continues until the end of the paid period. Founding-member rate persists on every renewal as long as the subscription stays active.', ar: 'الأسعار بالدولار. ضريبة سترايب تتعامل تلقائياً مع ضريبة القيمة المضافة للمشترين الدوليين. يمكن للمشتركين السنويين الإلغاء في أي وقت — يستمر الوصول حتى نهاية الفترة المدفوعة. يبقى سعر العضو المؤسس عند كل تجديد ما دام الاشتراك فعّالاً.' },
 
+    // ─── Loader (full-screen, pre-render) ──────────────────────────
+    loaderLoading:             { en: 'Loading',                              ar: 'جاري التحميل' },
+    loaderPreparing:           { en: 'Preparing your training hub',          ar: 'نُجهّز مركز تدريبك' },
+    loaderProgress:            { en: 'Loading your progress',                ar: 'نُحمّل تقدّمك' },
+    loaderAlmost:              { en: 'Almost ready',                         ar: 'اقتربنا من الجاهزية' },
+    loaderSyncing:             { en: 'Syncing your latest data',             ar: 'نُحدّث آخر بياناتك' },
+    loaderTuning:              { en: 'Tuning your dashboard',                ar: 'نُهيّئ لوحتك' },
+
+    // ─── New-version toast (login screen only) ─────────────────────
+    newVersionTitle:           { en: 'App updated',                          ar: 'تم تحديث التطبيق' },
+    newVersionSub:             { en: 'Reload to see the latest version.',    ar: 'أعد التحميل لمشاهدة آخر نسخة.' },
+    newVersionReload:          { en: 'Reload',                               ar: 'إعادة التحميل' },
+    newVersionDismiss:         { en: 'Dismiss update banner',                ar: 'إخفاء إشعار التحديث' },
+
+    // ─── Dashboard chapters (Step 1 / 2 / 3 redesign) ──────────────
+    dashChapter:               { en: 'Chapter',                              ar: 'الفصل' },
+    dashChapterToday:          { en: 'Today',                                ar: 'اليوم' },
+    dashChapterTodaySub:       { en: 'Do these three things now — submit your check-in, train, eat.',
+                                 ar: 'افعل هذه الأمور الثلاثة الآن — سجّل متابعتك، تدرّب، وتناول وجباتك.' },
+    dashChapterTodayCommunitySub: { en: 'What to do right now — train, eat, repeat.',
+                                    ar: 'ما الذي تفعله الآن — تدرّب، تناول، وكرّر.' },
+    dashChapterProgress:       { en: 'Your progress',                        ar: 'تقدّمك' },
+    dashChapterProgressSub:    { en: 'Streak, weight trend, and where you rank — your numbers at a glance.',
+                                 ar: 'سلسلة المواظبة، تطوّر الوزن، وترتيبك — أرقامك في لمحة.' },
+    dashChapterGrow:           { en: 'Grow & connect',                       ar: 'تعلّم وتواصل' },
+    dashChapterGrowSub:        { en: 'Keep learning and see what the rest of the team is doing this week.',
+                                 ar: 'واصِل التعلّم وشاهد ما يفعله بقية الفريق هذا الأسبوع.' },
+
+    // ─── PurposeLine captions on dashboard cards ───────────────────
+    purposeAcademyEmpty:       { en: 'Bite-sized lessons from coach Zaki — structured by level.',
+                                 ar: 'دروس قصيرة من كوتش زاكي — مرتّبة حسب المستوى.' },
+    purposeAcademyContinueNew: { en: 'Start the next required course in your path.',
+                                 ar: 'ابدأ الدورة التالية المطلوبة في مسارك.' },
+    purposeAcademyContinue:    { en: 'Pick up where you left off in the curriculum.',
+                                 ar: 'تابع من حيث توقفت في المنهج.' },
+    purposeWorkoutEmpty:       { en: 'Browse 10-day rotations and pick the one matching your goal.',
+                                 ar: 'تصفّح برامج العشرة أيام واختر ما يناسب هدفك.' },
+    purposeWorkoutRest:        { en: 'Rest day — open it to see recovery notes and what comes next.',
+                                 ar: 'يوم راحة — افتحه لرؤية ملاحظات التعافي وما يليه.' },
+    purposeWorkoutActive:      { en: 'Open today\'s session to follow exercises, sets, and rest.',
+                                 ar: 'افتح حصة اليوم لمتابعة التمارين والمجموعات وفترات الراحة.' },
+    purposeDietEmpty:          { en: 'Quick calculator that picks the right calorie tier and macro split for you.',
+                                 ar: 'حاسبة سريعة تختار لك سعراتك المناسبة وتقسيم الماكروز.' },
+    purposeDietActive:         { en: 'Open your meal plan to see today\'s macros, food keys, and the day-by-day split.',
+                                 ar: 'افتح خطّتك الغذائية لرؤية ماكروز اليوم، ومفاتيح الأطعمة، والتقسيم اليومي.' },
+    purposeCommunity:          { en: 'What the rest of the team posted this week.',
+                                 ar: 'ما الذي نشره بقية الفريق هذا الأسبوع.' },
+    purposeProgress:           { en: 'Your weight trend, photos, and measurements over time.',
+                                 ar: 'تطوّر وزنك، وصورك، وقياساتك عبر الزمن.' },
+    checkinHeroReviewed:       { en: 'Read coach Zaki\'s feedback and start the next week.',
+                                 ar: 'اقرأ ملاحظات الكوتش زاكي وابدأ الأسبوع التالي.' },
+    checkinHeroSubmitted:      { en: 'Already submitted — sit tight while coach Zaki reviews it.',
+                                 ar: 'تم الإرسال — انتظر قليلاً بينما يراجعها الكوتش زاكي.' },
+    checkinHeroPending:        { en: 'Log weight, photos, and macros so coach Zaki can review your week.',
+                                 ar: 'سجّل وزنك، صورك، وماكروزك ليتمكّن الكوتش زاكي من مراجعة أسبوعك.' },
+
+    // ─── University level cards ────────────────────────────────────
+    universityLevelLabel:      { en: 'Level',                                ar: 'المستوى' },
+    universityOpenLabel:       { en: 'Open',                                 ar: 'افتح' },
+    universityBeginner:        { en: 'Beginner',                             ar: 'مبتدئ' },
+    universityIntermediate:    { en: 'Intermediate',                         ar: 'متوسط' },
+    universityAdvanced:        { en: 'Advanced',                             ar: 'متقدم' },
+    universityTopics:          { en: 'Topics',                               ar: 'مواضيع' },
+    universityBeginnerTag:     { en: 'Starting the journey',                 ar: 'بداية الرحلة' },
+    universityIntermediateTag: { en: 'Building skills & growing',            ar: 'بناء المهارات والنمو' },
+    universityAdvancedTag:     { en: 'Teaching & leading others',            ar: 'التدريس وقيادة الآخرين' },
+    universityTopicsTag:       { en: 'Off-path',                             ar: 'خارج المسار' },
+    universityCourseSingular:  { en: 'course',                               ar: 'دورة' },
+    universityCoursePlural:    { en: 'courses',                              ar: 'دورات' },
+    universityFollowOrder:     { en: 'Follow the path in order — finish one level before moving to the next.',
+                                 ar: 'اتبع المسار بالترتيب — أكمل كل مستوى قبل الانتقال للتالي.' },
+    universityCollections:     { en: 'Collections',                          ar: 'المجموعات' },
+
 } as const;
 
 export type TranslationKey = keyof typeof translations;

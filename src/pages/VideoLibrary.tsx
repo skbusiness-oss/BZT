@@ -422,15 +422,15 @@ export const VideoLibrary = () => {
                     {!activeLevel && (
                         <>
                             <div>
-                                <h2 className="text-xl font-headline font-extrabold text-on-surface mb-1">Collections</h2>
+                                <h2 className="text-xl font-headline font-extrabold text-on-surface mb-1">{t('universityCollections')}</h2>
                                 <p className="text-on-surface-variant text-sm font-body mb-6">
-                                    Follow the path in order — finish one level before moving to the next.
+                                    {t('universityFollowOrder')}
                                 </p>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                                     <LevelCollectionCard
                                         index={1}
-                                        title="Beginner"
-                                        subtitle={`${academyByLevel.beginner.length} ${academyByLevel.beginner.length === 1 ? 'course' : 'courses'} · Starting the journey`}
+                                        title={t('universityBeginner')}
+                                        subtitle={`${academyByLevel.beginner.length} ${academyByLevel.beginner.length === 1 ? t('universityCourseSingular') : t('universityCoursePlural')} · ${t('universityBeginnerTag')}`}
                                         accentColor="rgb(16 185 129)"   /* emerald */
                                         accentTint="rgb(16 185 129 / 0.10)"
                                         icon={<GraduationCap size={22} />}
@@ -440,8 +440,8 @@ export const VideoLibrary = () => {
                                     />
                                     <LevelCollectionCard
                                         index={2}
-                                        title="Intermediate"
-                                        subtitle={`${academyByLevel.intermediate.length} ${academyByLevel.intermediate.length === 1 ? 'course' : 'courses'} · Building skills & growing`}
+                                        title={t('universityIntermediate')}
+                                        subtitle={`${academyByLevel.intermediate.length} ${academyByLevel.intermediate.length === 1 ? t('universityCourseSingular') : t('universityCoursePlural')} · ${t('universityIntermediateTag')}`}
                                         accentColor="rgb(245 158 11)"   /* amber */
                                         accentTint="rgb(245 158 11 / 0.10)"
                                         icon={<BookOpen size={22} />}
@@ -451,8 +451,8 @@ export const VideoLibrary = () => {
                                     />
                                     <LevelCollectionCard
                                         index={3}
-                                        title="Advanced"
-                                        subtitle={`${academyByLevel.advanced.length} ${academyByLevel.advanced.length === 1 ? 'course' : 'courses'} · Teaching & leading others`}
+                                        title={t('universityAdvanced')}
+                                        subtitle={`${academyByLevel.advanced.length} ${academyByLevel.advanced.length === 1 ? t('universityCourseSingular') : t('universityCoursePlural')} · ${t('universityAdvancedTag')}`}
                                         accentColor="rgb(244 63 94)"    /* rose */
                                         accentTint="rgb(244 63 94 / 0.10)"
                                         icon={<Award size={22} />}
@@ -462,8 +462,8 @@ export const VideoLibrary = () => {
                                     />
                                     <LevelCollectionCard
                                         index={4}
-                                        title="Topics"
-                                        subtitle={`${academyByLevel.topics.length} ${academyByLevel.topics.length === 1 ? 'course' : 'courses'} · off-path`}
+                                        title={t('universityTopics')}
+                                        subtitle={`${academyByLevel.topics.length} ${academyByLevel.topics.length === 1 ? t('universityCourseSingular') : t('universityCoursePlural')} · ${t('universityTopicsTag')}`}
                                         accentColor="rgb(168 85 247)"   /* violet */
                                         accentTint="rgb(168 85 247 / 0.10)"
                                         icon={<Sparkles size={22} />}
@@ -793,6 +793,10 @@ function LevelCollectionCard({
         darken). When omitted, falls back to the tinted-icon style. */
     coverUrl?: string;
 }) {
+    // Translated labels for the "Level N" pill and "Open" CTA.
+    // Numerals stay LTR even in Arabic so a future "Level 10" doesn't
+    // get reordered to "01".
+    const { t: tr } = useLanguage();
     // Photo-backdrop mode — branded thumbnail with dark legibility
     // gradient anchored to the bottom-left text block.
     if (coverUrl) {
@@ -842,7 +846,7 @@ function LevelCollectionCard({
                         WebkitBackdropFilter: 'blur(6px)',
                     }}
                 >
-                    Level {index}
+                    <span dir="ltr">{tr('universityLevelLabel')} {index}</span>
                 </span>
 
                 {/* Title + meta — bottom-left, full white over the
@@ -865,7 +869,7 @@ function LevelCollectionCard({
                             className="inline-flex items-center gap-1.5 text-[10px] font-label font-extrabold uppercase tracking-widest mt-3"
                             style={{ color: accentColor }}
                         >
-                            Open <ArrowRight size={12} />
+                            {tr('universityOpenLabel')} <ArrowRight size={12} />
                         </span>
                     )}
                 </div>
@@ -933,7 +937,7 @@ function LevelCollectionCard({
                         className="inline-flex items-center gap-1.5 text-[10px] font-label font-bold uppercase tracking-widest mt-auto"
                         style={{ color: accentColor }}
                     >
-                        Open <ArrowRight size={12} />
+                        {tr('universityOpenLabel')} <ArrowRight size={12} />
                     </span>
                 )}
             </div>

@@ -810,8 +810,8 @@ export const ClientDashboard = () => {
             ════════════════════════════════════════════════ */}
             <DashboardChapter
                 index={1}
-                title="Today"
-                subtitle="Do these three things now — submit your check-in, train, eat."
+                title={tStrict('dashChapterToday')}
+                subtitle={tStrict('dashChapterTodaySub')}
             />
 
             {/* Weekly check-in hero — consolidates the prior dual cards
@@ -899,10 +899,10 @@ export const ClientDashboard = () => {
                                 margin: '0 0 8px', lineHeight: 1.45,
                             }}>
                                 {currentWeekData.status === 'reviewed'
-                                    ? 'Read coach Zaki’s feedback and start the next week.'
+                                    ? tStrict('checkinHeroReviewed')
                                     : currentWeekData.status === 'submitted'
-                                        ? 'Already submitted — sit tight while coach Zaki reviews it.'
-                                        : 'Log weight, photos, and macros so coach Zaki can review your week.'}
+                                        ? tStrict('checkinHeroSubmitted')
+                                        : tStrict('checkinHeroPending')}
                             </p>
                             {/* Subtitle drops the duplicate "Weekly check-in" wording for the
                                 pending state — the eyebrow already announces the section. */}
@@ -1002,8 +1002,8 @@ export const ClientDashboard = () => {
             ════════════════════════════════════════════════ */}
             <DashboardChapter
                 index={2}
-                title="Your progress"
-                subtitle="Streak, weight trend, and where you rank — your numbers at a glance."
+                title={tStrict('dashChapterProgress')}
+                subtitle={tStrict('dashChapterProgressSub')}
             />
 
             {/* Combined week status panel — calendar + streak ring + level + rank. */}
@@ -1036,8 +1036,8 @@ export const ClientDashboard = () => {
             ════════════════════════════════════════════════ */}
             <DashboardChapter
                 index={3}
-                title="Grow & connect"
-                subtitle="Keep learning and see what the rest of the team is doing this week."
+                title={tStrict('dashChapterGrow')}
+                subtitle={tStrict('dashChapterGrowSub')}
             />
 
             <div style={{ marginBottom: 16 }}>

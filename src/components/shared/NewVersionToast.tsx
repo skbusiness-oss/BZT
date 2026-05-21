@@ -60,9 +60,11 @@
 import { useEffect, useState } from 'react';
 import { RefreshCw, X } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { useLanguage } from '../../context/LanguageContext';
 
 export const NewVersionToast = () => {
     const { isAuthenticated } = useAuth();
+    const { t } = useLanguage();
     const [show, setShow] = useState(false);
     const [dismissed, setDismissed] = useState(false);
 
@@ -148,13 +150,13 @@ export const NewVersionToast = () => {
                         className="text-sm font-headline font-bold leading-tight"
                         style={{ color: 'rgb(255 255 255 / 0.96)' }}
                     >
-                        App updated
+                        {t('newVersionTitle')}
                     </p>
                     <p
                         className="text-xs font-body mt-0.5"
                         style={{ color: 'rgb(255 255 255 / 0.65)' }}
                     >
-                        Reload to see the latest version.
+                        {t('newVersionSub')}
                     </p>
                 </div>
                 <button
@@ -166,12 +168,12 @@ export const NewVersionToast = () => {
                         boxShadow: '0 4px 12px rgb(230 195 100 / 0.25)',
                     }}
                 >
-                    Reload
+                    {t('newVersionReload')}
                 </button>
                 <button
                     type="button"
                     onClick={() => setDismissed(true)}
-                    aria-label="Dismiss update banner"
+                    aria-label={t('newVersionDismiss')}
                     className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-colors"
                     style={{ color: 'rgb(255 255 255 / 0.50)' }}
                 >

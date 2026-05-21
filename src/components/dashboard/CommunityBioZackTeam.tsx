@@ -335,8 +335,8 @@ export const CommunityBioZackTeam = () => {
             ════════════════════════════════════════════════ */}
             <DashboardChapter
                 index={1}
-                title="Today"
-                subtitle="What to do right now — train, eat, repeat."
+                title={tx('dashChapterToday')}
+                subtitle={tx('dashChapterTodayCommunitySub')}
             />
 
             <div style={{ marginBottom: 16 }}>
@@ -363,8 +363,8 @@ export const CommunityBioZackTeam = () => {
             ════════════════════════════════════════════════ */}
             <DashboardChapter
                 index={2}
-                title="Your progress"
-                subtitle="Streak, weight trend, and where you rank — your numbers at a glance."
+                title={tx('dashChapterProgress')}
+                subtitle={tx('dashChapterProgressSub')}
             />
 
             <div style={{ marginBottom: 16 }}>
@@ -394,8 +394,8 @@ export const CommunityBioZackTeam = () => {
             ════════════════════════════════════════════════ */}
             <DashboardChapter
                 index={3}
-                title="Grow & connect"
-                subtitle="Keep learning and see what the rest of the team is doing this week."
+                title={tx('dashChapterGrow')}
+                subtitle={tx('dashChapterGrowSub')}
             />
 
             <div style={{ marginBottom: 16 }}>

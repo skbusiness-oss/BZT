@@ -10,6 +10,9 @@ import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestor
 import { db } from '../../../lib/firebase';
 import { levelFromScore, levelProgress } from '../../../lib/activityScore';
 import { useLanguage } from '../../../context/LanguageContext';
+// Re-export so consumers (e.g. ClientDashboard.tsx) can hand the same
+// translate fn to props without re-importing LanguageContext.
+export { useLanguage };
 import { tPlanName } from '../../../lib/dietTranslations';
 import { coverUrl } from '../../../data/diets/covers';
 import type { Course, Lesson, UserCourseProgress, Post, UserActiveProgram, ProgramDay, DietProfile } from '../../../types';
@@ -161,7 +164,15 @@ export function DashboardChapter({ index, title, subtitle }: {
     title: string;
     subtitle: string;
 }) {
+    const { t: tr, isRTL } = useLanguage();
     const numeral = String(index).padStart(2, '0');
+    // In RTL the hairline rule sits to the LEFT of the eyebrow (since
+    // the eyebrow is on the right). The gradient direction has to
+    // flip too — otherwise the gold-to-transparent fade runs the wrong
+    // way and the rule appears to "vanish" at the wrong edge.
+    const rule = isRTL
+        ? `linear-gradient(270deg, ${t.primary} 0%, rgb(var(--primary) / 0) 100%)`
+        : `linear-gradient(90deg,  ${t.primary} 0%, rgb(var(--primary) / 0) 100%)`;
     return (
         <div
             className="bzt-rise-in"
@@ -171,29 +182,35 @@ export function DashboardChapter({ index, title, subtitle }: {
             }}
         >
             {/* Top row: chapter eyebrow + gold hairline. The hairline
-                tapers from gold on the left to transparent on the
-                right so it reads as an "in progress" stroke rather
-                than a hard divider. */}
+                tapers from gold on the eyebrow side toward transparent
+                so it reads as an "in progress" stroke rather than a
+                hard divider. The flex container respects document
+                direction, so in Arabic the eyebrow sits to the right
+                and the rule extends leftward. */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
                 <span style={{
                     fontFamily: t.body, fontSize: 10, fontWeight: 800,
-                    letterSpacing: '0.32em', textTransform: 'uppercase',
+                    letterSpacing: isRTL ? '0' : '0.32em',
+                    textTransform: 'uppercase',
                     color: t.primary,
+                    whiteSpace: 'nowrap',
                 }}>
-                    Chapter {numeral}
+                    {tr('dashChapter')} {numeral}
                 </span>
                 <span aria-hidden style={{
-                    flex: 1, height: 1,
-                    background: `linear-gradient(90deg, ${t.primary} 0%, rgb(var(--primary) / 0) 100%)`,
+                    flex: 1, height: 1, background: rule,
                 }} />
             </div>
 
             {/* Title row: huge gradient numeral + title block. The
                 numeral is a non-semantic decoration (aria-hidden) so
-                AT readers hear "Today" first, not "zero one Today". */}
+                AT readers hear the translated title first. Numerals
+                stay LTR even in Arabic — we wrap them in `dir=ltr` so
+                a future "Chapter 10" doesn't reorder to "01". */}
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 18 }}>
                 <span
                     aria-hidden
+                    dir="ltr"
                     style={{
                         fontFamily: t.display, fontWeight: 800,
                         fontSize: 72, lineHeight: 0.85, letterSpacing: '-0.04em',
@@ -299,7 +316,7 @@ export function ContinueAcademyCard({ courses, userProgress, lessons, loadLesson
                 }}>
                     {tx('academyEmptyTitle')}
                 </h2>
-                <PurposeLine>Bite-sized lessons from coach Zaki — structured by level.</PurposeLine>
+                <PurposeLine>{tx('purposeAcademyEmpty')}</PurposeLine>
                 <p style={{ fontFamily: t.body, fontSize: 12, color: 'rgba(255,255,255,0.82)', margin: '0 0 14px' }}>
                     {tx('academyEmptySub')}
                 </p>
@@ -358,7 +375,7 @@ export function ContinueAcademyCard({ courses, userProgress, lessons, loadLesson
                     textShadow: '0 1px 3px rgba(0,0,0,0.45)',
                 }}>{next.title}</h2>
                 <PurposeLine>
-                    {isNew ? 'Start the next required course in your path.' : 'Pick up where you left off in the curriculum.'}
+                    {isNew ? tx('purposeAcademyContinueNew') : tx('purposeAcademyContinue')}
                 </PurposeLine>
                 <p style={{
                     fontFamily: t.body, fontSize: 12, color: 'rgba(255,255,255,0.82)',
@@ -447,7 +464,7 @@ export function TodayWorkoutCard({ activeProgram, getTodaysDay, todaysDayNumber,
                     color: '#fff', margin: '0 0 4px', letterSpacing: '-0.02em',
                     textShadow: '0 1px 3px rgba(0,0,0,0.45)',
                 }}>{tx('noProgramYet')}</h2>
-                <PurposeLine>Browse 10-day rotations and pick the one matching your goal.</PurposeLine>
+                <PurposeLine>{tx('purposeWorkoutEmpty')}</PurposeLine>
                 <p style={{ fontFamily: t.body, fontSize: 12, color: 'rgba(255,255,255,0.82)', margin: '0 0 14px' }}>
                     {tx('chooseProgramSub')}
                 </p>
@@ -532,9 +549,7 @@ export function TodayWorkoutCard({ activeProgram, getTodaysDay, todaysDayNumber,
                         {isRest ? tx('restDayLabel') : (today?.label ?? activeProgram.programName)}
                     </h2>
                     <PurposeLine>
-                        {isRest
-                            ? 'No lifts today — let the body rebuild what you trained.'
-                            : 'Open today’s session to follow exercises, sets, and rest.'}
+                        {isRest ? tx('purposeWorkoutRest') : tx('purposeWorkoutActive')}
                     </PurposeLine>
                     <p style={{ fontFamily: t.body, fontSize: 12, color: 'rgba(255,255,255,0.82)', margin: '0 0 14px' }}>
                         {isRest
@@ -608,7 +623,7 @@ export function TodayDietCard({
                     color: '#fff', margin: '0 0 4px', letterSpacing: '-0.02em',
                     textShadow: '0 1px 3px rgba(0,0,0,0.45)',
                 }}>{tx('startMyPlan') ?? 'Start my plan'}</h2>
-                <PurposeLine>Quick calculator that picks the right calorie tier and macro split for you.</PurposeLine>
+                <PurposeLine>{tx('purposeDietEmpty')}</PurposeLine>
                 <p style={{ fontFamily: t.body, fontSize: 12, color: 'rgba(255,255,255,0.82)', margin: '0 0 14px' }}>
                     {tx('dietCalculateBlurb') ?? 'Sex, age, weight, height, activity, goal. We do the math, match the plan.'}
                 </p>
@@ -695,7 +710,7 @@ export function TodayDietCard({
                     <p style={{ fontFamily: t.body, fontSize: 12, color: 'rgba(255,255,255,0.82)', margin: '0 0 4px' }}>
                         {headlineProtein}P · {headlineCarbs}C · {headlineFat}F · {headlineMeals} {tx('mealsPerDay') ?? 'meals'}
                     </p>
-                    <PurposeLine>Open your meal plan to see today’s macros, food keys, and the day-by-day split.</PurposeLine>
+                    <PurposeLine>{tx('purposeDietActive')}</PurposeLine>
                     <span style={{
                         display: 'inline-block',
                         padding: pillPad, borderRadius: 999,
@@ -758,7 +773,7 @@ export function CommunityActivityCard({ posts, onNavigate }: {
                             color: '#fff', margin: '0 0 4px', letterSpacing: '-0.02em',
                             textShadow: '0 1px 3px rgba(0,0,0,0.45)',
                         }}>{tx('whatsHappening')}</h2>
-                        <PurposeLine>What the rest of the team posted this week.</PurposeLine>
+                        <PurposeLine>{tx('purposeCommunity')}</PurposeLine>
                     </div>
                     <button onClick={() => onNavigate('/community')} style={{
                         padding: pillPad, borderRadius: 999,
@@ -1220,7 +1235,7 @@ export function ProgressCTA({ onNavigate, weightHistory }: {
                 }}>
                     {tx('viewProgressCta')}
                 </h2>
-                <PurposeLine>Your weight trend, photos, and measurements over time.</PurposeLine>
+                <PurposeLine>{tx('purposeProgress')}</PurposeLine>
                 <p style={{
                     fontFamily: t.body, fontSize: 12, color: 'rgba(255,255,255,0.82)',
                     margin: '0 0 14px',

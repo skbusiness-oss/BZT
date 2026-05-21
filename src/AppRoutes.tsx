@@ -3,6 +3,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from './lib/firebase';
 import { useAuth } from './context/AuthContext';
+import { useLanguage } from './context/LanguageContext';
 import { Layout } from './components/layout/Layout';
 import { Login } from './pages/Login';
 import { Dashboard } from './pages/Dashboard';
@@ -43,22 +44,35 @@ import React, { useState, useEffect } from 'react';
 // The wordmark is text-based (no logo asset) so this works offline.
 // Message cycles every 1.6s; first one shows immediately so the user
 // always sees text, not just a blank tagline area.
-const LOADER_MESSAGES = [
-    'Preparing your training hub',
-    'Loading your progress',
-    'Almost ready',
-    'Syncing your latest data',
-    'Tuning your dashboard',
+//
+// Translation keys (rotated through useLanguage().t) so Arabic users
+// see Arabic copy here too. Falls back to English literal if a key is
+// somehow missing.
+const LOADER_MESSAGE_KEYS = [
+    'loaderPreparing',
+    'loaderProgress',
+    'loaderAlmost',
+    'loaderSyncing',
+    'loaderTuning',
 ] as const;
 
 const FullScreenLoader = () => {
+    // useLanguage() is safe here — AppRoutes is always rendered inside
+    // <LanguageProvider> (see App.tsx). Translation falls through to
+    // the English value automatically if a key happens to be missing.
+    const { t: translate } = useLanguage();
+
     const [messageIndex, setMessageIndex] = useState(0);
     useEffect(() => {
         const id = window.setInterval(() => {
-            setMessageIndex((i) => (i + 1) % LOADER_MESSAGES.length);
+            setMessageIndex((i) => (i + 1) % LOADER_MESSAGE_KEYS.length);
         }, 1600);
         return () => window.clearInterval(id);
     }, []);
+
+    const messageKey = LOADER_MESSAGE_KEYS[messageIndex];
+    const currentMessage = translate(messageKey);
+    const loadingHeadline = translate('loaderLoading');
 
     return (
         <div
@@ -118,7 +132,7 @@ const FullScreenLoader = () => {
                         backgroundClip: 'text',
                     }}
                 >
-                    Loading
+                    {loadingHeadline}
                 </h1>
             </div>
 
@@ -156,7 +170,7 @@ const FullScreenLoader = () => {
                     className="font-body text-sm tracking-wide animate-in fade-in duration-500"
                     style={{ color: 'rgb(255 255 255 / 0.85)' }}
                 >
-                    {LOADER_MESSAGES[messageIndex]}…
+                    {currentMessage}…
                 </p>
             </div>
         </div>
