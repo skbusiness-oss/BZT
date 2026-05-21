@@ -130,48 +130,96 @@ export const MessagesProvider = ({ children }: { children: ReactNode }) => {
   //   - Permission denied → silently skip (no popup ever)
   //   - On /messages page already → suppress (live thread already paints)
   //
-  // Implementation notes:
-  //   - We track seen message IDs across renders via a ref. Initial
-  //     hydration populates the set without firing, so historical
-  //     messages don't replay as popups on sign-in.
-  //   - Per-message tag (msg.id) so duplicate snapshot fires (e.g., from
-  //     pending → server write) don't double-pop.
-  //   - We use the SW registration if available so click handling is
-  //     identical to FCM-delivered pushes; fall back to page-level
-  //     Notification otherwise.
-  const seenMessageIdsRef = useRef<Set<string> | null>(null);
+  // Anti-replay design (the critical bit):
+  //   The earlier version had a "first-snapshot guard" — it populated
+  //   the seen-id set on the first effect run and assumed historical
+  //   messages were thereby silenced. That was wrong: the listener
+  //   hydrates asynchronously, so the first effect run could fire
+  //   with messages=[] (seen-set empty), and THEN the listener would
+  //   land 50 historical messages → all 50 looked "fresh" and replayed
+  //   as notifications on every page refresh.
+  //
+  //   Fix: TWO gates layered.
+  //     a) `loading` from MessagesContext stays true until BOTH per-user
+  //        listeners are ready (staff listener also flips it false on
+  //        first snapshot). We don't notify at all while loading=true,
+  //        and we mark hydrationCompletedAtRef the moment loading
+  //        flips false. This silences all messages loaded during
+  //        initial hydration.
+  //     b) Recency window: only notify if `timestamp` is within the
+  //        last 60 seconds. This handles the edge case where a stale
+  //        snapshot delta arrives after hydration (a reconnect refill,
+  //        a queue replay) — historical messages have old timestamps
+  //        and get filtered. Genuine new messages from "right now"
+  //        have current timestamps and fire normally.
+  //
+  //   The seen-id set still exists as a third layer to dedup repeat
+  //   snapshot fires of the SAME message id (e.g., pending → server-
+  //   stamped write of the same doc), with per-message tag at the OS
+  //   level as a fourth safety net.
+  const seenMessageIdsRef = useRef<Set<string>>(new Set());
+  const hydrationCompletedAtRef = useRef<number | null>(null);
+  const prevLoadingRef = useRef<boolean>(true);
   useEffect(() => {
+    // Reset on user change or sign-out.
     if (!currentUserId) {
-      seenMessageIdsRef.current = null;
+      seenMessageIdsRef.current = new Set();
+      hydrationCompletedAtRef.current = null;
+      prevLoadingRef.current = true;
       return;
     }
-    // First snapshot: populate the seen set silently.
-    if (seenMessageIdsRef.current === null) {
+
+    // Track the loading→ready transition. The first time loading flips
+    // from true to false, hydration just finished — snapshot the
+    // current message IDs into seen and stamp the wall clock. Don't
+    // fire notifications on this transition.
+    if (prevLoadingRef.current && !loading) {
       seenMessageIdsRef.current = new Set(messages.map((m) => m.id));
+      hydrationCompletedAtRef.current = Date.now();
+      prevLoadingRef.current = false;
       return;
     }
+    prevLoadingRef.current = loading;
+
+    // Never notify while still hydrating. The transition handler above
+    // will populate the seen set as soon as hydration completes.
+    if (loading || hydrationCompletedAtRef.current === null) return;
+
     const seen = seenMessageIdsRef.current;
     const fresh = messages.filter((m) => !seen.has(m.id));
     if (fresh.length === 0) return;
     fresh.forEach((m) => seen.add(m.id));
 
-    // Only notify for messages INTO this user (not for their own sends).
-    const incoming = fresh.filter((m) => m.receiverId === currentUserId && m.senderId !== currentUserId);
+    // Only notify for messages INTO this user (not their own sends).
+    const now = Date.now();
+    const incoming = fresh.filter((m) => {
+      if (m.receiverId !== currentUserId) return false;
+      if (m.senderId === currentUserId) return false;
+      // Recency filter: skip anything older than 60 seconds. Catches
+      // the case where a reconnect / cache refill lands a batch of
+      // already-read or already-seen messages that bypassed the
+      // hydration gate (e.g., the user has the tab open during a
+      // network blip and Firestore replays on recovery).
+      const ts = tsToMillis(m.timestamp);
+      if (!ts) return false;
+      if (now - ts > 60_000) return false;
+      return true;
+    });
     if (incoming.length === 0) return;
 
     // Permission gate.
     if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
 
-    // Suppress if user is already looking at /messages — the live
-    // thread is already rendering the message, no popup needed.
+    // Suppress if user is already on /messages — the live thread is
+    // already rendering, no popup needed.
     try {
       if (window.location.pathname.startsWith('/messages')) return;
     } catch {
       // SSR / worker context — proceed.
     }
 
-    // Best-effort SW lookup for consistent click handling. Falls back to
-    // page-level Notification if the SW isn't ready yet.
+    // SW path for consistent click handling; page-level fallback if SW
+    // isn't registered yet.
     const showLocal = async () => {
       let swRegistration: ServiceWorkerRegistration | undefined;
       try {
@@ -201,14 +249,13 @@ export const MessagesProvider = ({ children }: { children: ReactNode }) => {
             new Notification(title, options);
           }
         } catch {
-          // Some browsers throw if too many notifications are shown
-          // quickly; degrade silently.
+          // Some browsers throw if too many notifications stack quickly.
         }
       }
     };
     void showLocal();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messages, currentUserId]);
+  }, [messages, currentUserId, loading]);
 
   // FCM and the service worker own BACKGROUND notifications (app closed).
   // The effect above handles foreground delivery as a defense-in-depth

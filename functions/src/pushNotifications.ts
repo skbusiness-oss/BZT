@@ -101,16 +101,38 @@ async function pushToUser(
                 badge: '/icon-192.png',
                 requireInteraction: payload.data?.requireInteraction === 'true',
             },
+            // TTL in seconds — see android.ttl note below. Web push
+            // (VAPID) reads this header per RFC 8030.
+            headers: {
+                TTL: '600',
+                Urgency: 'high',
+            },
         },
         // High priority on Android: Google delivers within seconds
         // instead of batching for power-saving. Reasonable for chat
         // and coach-feedback events.
-        android: { priority: 'high' },
+        //
+        // TTL = 10 minutes. If the device is offline longer than this,
+        // FCM drops the message instead of queueing — prevents the
+        // "5 old notifications fire when phone comes back online" UX
+        // we were seeing. A new-message ping that's >10 min stale is
+        // worse than no ping at all; the user will see the unread
+        // count in the app when they next open it.
+        android: {
+            priority: 'high',
+            ttl: 600_000, // milliseconds in the admin SDK
+        },
         // APNS priority 10 = immediate. Apple uses these for sound/
-        // badge updates; matches Android high priority.
+        // badge updates; matches Android high priority. apns-expiration
+        // = epoch seconds; using 0 would mean "drop if not deliverable
+        // immediately". 10 minutes matches the Android/web TTL so all
+        // three transports have the same staleness window.
         apns: {
             payload: { aps: { sound: 'default' } },
-            headers: { 'apns-priority': '10' },
+            headers: {
+                'apns-priority': '10',
+                'apns-expiration': String(Math.floor(Date.now() / 1000) + 600),
+            },
         },
         });
     } catch (err) {
