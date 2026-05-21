@@ -29,13 +29,98 @@ import { CommunityBaselineForm } from './components/profile/CommunityBaselineFor
 import { hasLocalCommunityBaseline, hasLocalTosAccepted } from './lib/onboardingStorage';
 import React, { useState, useEffect } from 'react';
 
-import { Loader2 } from 'lucide-react';
+// Branded full-screen loader. Replaces the old `text-gold-400` spinner
+// (which fell back to a default blue color because gold-400 isn't a
+// defined Tailwind token — `text-primary` is the right gold class).
+//
+// Two reasons to bother with the polish here:
+//   1. This is the very first thing every signed-in user sees on every
+//      load — a bare spinner reads as "the app is broken / slow".
+//   2. The auth flow legitimately takes ~500ms-2s while the deletion-
+//      log + users/{uid} server snapshot resolve. A rotating message
+//      makes that feel intentional.
+//
+// The wordmark is text-based (no logo asset) so this works offline.
+// Message cycles every 1.6s; first one shows immediately so the user
+// always sees text, not just a blank tagline area.
+const LOADER_MESSAGES = [
+    'Preparing your training hub',
+    'Loading your progress',
+    'Almost ready',
+    'Syncing your latest data',
+    'Tuning your dashboard',
+] as const;
 
-const FullScreenLoader = () => (
-    <div className="min-h-screen flex items-center justify-center" style={{ background: '#060814' }}>
-        <Loader2 size={32} className="animate-spin text-gold-400" />
-    </div>
-);
+const FullScreenLoader = () => {
+    const [messageIndex, setMessageIndex] = useState(0);
+    useEffect(() => {
+        const id = window.setInterval(() => {
+            setMessageIndex((i) => (i + 1) % LOADER_MESSAGES.length);
+        }, 1600);
+        return () => window.clearInterval(id);
+    }, []);
+
+    return (
+        <div
+            className="min-h-screen flex flex-col items-center justify-center gap-8 px-6 text-center"
+            style={{ background: '#060814' }}
+        >
+            {/* Wordmark — gold gradient text, anchors the brand even
+                before any real UI renders. */}
+            <div className="flex flex-col items-center gap-3">
+                <span className="font-label text-[10px] font-bold uppercase tracking-[0.4em] text-on-surface/40">
+                    BioZackTeam
+                </span>
+                <h1
+                    className="font-display font-extrabold text-3xl md:text-4xl tracking-tighter"
+                    style={{
+                        background: 'linear-gradient(135deg, rgb(255 224 143), rgb(230 195 100) 60%, rgb(201 168 76))',
+                        WebkitBackgroundClip: 'text',
+                        WebkitTextFillColor: 'transparent',
+                        backgroundClip: 'text',
+                    }}
+                >
+                    Loading
+                </h1>
+            </div>
+
+            {/* Ring spinner — two concentric arcs in primary gold, sized
+                so it reads as "in progress" not "frozen". The outer ring
+                is a slow spin, the inner one a faster counter-spin for
+                a more deliberate, kinetic feel. */}
+            <div className="relative w-16 h-16">
+                <div
+                    className="absolute inset-0 rounded-full border-2 border-transparent animate-spin"
+                    style={{
+                        borderTopColor: 'rgb(230 195 100)',
+                        borderRightColor: 'rgb(230 195 100 / 0.4)',
+                        animationDuration: '1.4s',
+                    }}
+                />
+                <div
+                    className="absolute inset-2 rounded-full border-2 border-transparent animate-spin"
+                    style={{
+                        borderBottomColor: 'rgb(255 224 143)',
+                        animationDuration: '0.9s',
+                        animationDirection: 'reverse',
+                    }}
+                />
+            </div>
+
+            {/* Rotating message. Fixed height so the layout doesn't jump
+                between messages of different widths. key forces a small
+                fade-in animation on each switch. */}
+            <div className="min-h-[1.5rem]">
+                <p
+                    key={messageIndex}
+                    className="text-on-surface/65 font-body text-sm tracking-wide animate-in fade-in duration-500"
+                >
+                    {LOADER_MESSAGES[messageIndex]}…
+                </p>
+            </div>
+        </div>
+    );
+};
 
 const LoginRoute = () => {
     const { user, loading, freshUserDocLoaded } = useAuth();

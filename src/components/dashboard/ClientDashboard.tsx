@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { doc, updateDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { useAuth } from '../../context/AuthContext';
-import { useData } from '../../context/DataContext';
+import { useData, useCoaching } from '../../context/DataContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { useActiveProgram } from '../../hooks/useActiveProgram';
 import { useAcademy } from '../../context/AcademyContext';
@@ -196,6 +196,12 @@ export const ClientDashboard = () => {
     const { t: tStrict, lang } = useLanguage();
     const t = tStrict as unknown as (k: string) => string | undefined;
     const { clients, getClientWeeks, completeOnboarding, createProgram, uploadPhoto } = useData();
+    // Direct read of CoachingContext.loading so we can distinguish
+    // "client doc genuinely doesn't exist for this uid" from "listener
+    // is still hydrating after sign-in". Without this gate, the
+    // dashboard flashes "Client record not found" for ~500ms on every
+    // load before the snapshot lands and the real dashboard renders.
+    const { loading: coachingLoading } = useCoaching();
     const navigate = useNavigate();
     const { activeProgram, getTodaysDay, todaysDayNumber } = useActiveProgram();
     const { assignedDietId, snapshot: assignedDietSnapshot } = useAssignedDiet();
@@ -368,6 +374,17 @@ export const ClientDashboard = () => {
     };
 
     if (!client) {
+        // Hydration window: CoachingContext listener hasn't fired yet.
+        // Show a soft spinner instead of the "Client record not found"
+        // error so the user doesn't see a flash of failure text before
+        // the snapshot arrives.
+        if (coachingLoading) {
+            return (
+                <div className="flex items-center justify-center min-h-[60vh]">
+                    <Loader2 size={28} className="animate-spin text-primary" />
+                </div>
+            );
+        }
         return <div className="text-on-surface">{t('clientRecord')}</div>;
     }
 

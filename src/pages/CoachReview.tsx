@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { doc, deleteDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { useData } from '../context/DataContext';
+import { useData, useCoaching } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { DailyTrackingTable } from '../components/checkin/DailyTrackingTable';
@@ -43,6 +43,10 @@ export const CoachReview = () => {
     const { clientId } = useParams<{ clientId: string }>();
     const navigate = useNavigate();
     const { clients, getClientWeeks, updateWeek, updateClient, cascadeTargets, createProgram, advanceWeek, extendProgram, sendMessage } = useData();
+    // Same hydration-flash guard as ClientDashboard: distinguish
+    // "listener still hydrating" from "client really not found" so the
+    // coach doesn't see "Client not found." flash on every navigation.
+    const { loading: coachingLoading } = useCoaching();
     const { user } = useAuth();
     const { t, lang } = useLanguage();
 
@@ -146,6 +150,13 @@ export const CoachReview = () => {
     };
 
     if (!client) {
+        if (coachingLoading) {
+            return (
+                <div className="flex items-center justify-center min-h-[60vh]">
+                    <Loader2 size={28} className="animate-spin text-primary" />
+                </div>
+            );
+        }
         return <div className="text-on-surface p-8 font-body">{t('clientNotFound')}</div>;
     }
 
