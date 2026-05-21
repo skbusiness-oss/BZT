@@ -56,6 +56,48 @@ function getGreetingKey(): 'goodMorning' | 'goodAfternoon' | 'goodEvening' {
     return 'goodEvening';
 }
 
+// ─── Section header ────────────────────────────────────────────────
+// Used to group the dashboard cards into a few clear buckets so the
+// user reads the page as "do this now → see your progress → grow."
+// Each header carries a one-line subtitle that names the section's
+// purpose in plain English (founder direction: every card should
+// explain itself at a glance).
+function SectionHeader({ eyebrow, title, subtitle }: {
+    eyebrow: string;
+    title: string;
+    subtitle: string;
+}) {
+    return (
+        <div style={{ margin: '8px 0 14px' }}>
+            <div style={{
+                fontFamily: '"Inter", ui-sans-serif, system-ui, sans-serif',
+                fontSize: 10, fontWeight: 700,
+                letterSpacing: '0.22em', textTransform: 'uppercase',
+                color: 'rgb(var(--primary))',
+                marginBottom: 4,
+            }}>
+                {eyebrow}
+            </div>
+            <h2 style={{
+                fontFamily: '"Manrope", ui-sans-serif, system-ui, sans-serif',
+                fontSize: 22, fontWeight: 700,
+                color: 'rgb(var(--on-surface))',
+                margin: 0, letterSpacing: '-0.02em', lineHeight: 1.2,
+            }}>
+                {title}
+            </h2>
+            <p style={{
+                fontFamily: '"Inter", ui-sans-serif, system-ui, sans-serif',
+                fontSize: 13, lineHeight: 1.5,
+                color: 'rgb(var(--on-surface) / 0.62)',
+                margin: '4px 0 0',
+            }}>
+                {subtitle}
+            </p>
+        </div>
+    );
+}
+
 function ClientWelcomeHeader({
     firstName, initials, weekNumber, programLength, weekStreak, weekStatus,
 }: {
@@ -749,9 +791,7 @@ export const ClientDashboard = () => {
 
     return (
         <div style={{ fontFamily: bzt.body, color: bzt.onSurface, padding: '8px 0 40px' }}>
-            {/* 1. Editorial welcome header — time-of-day greeting, big name,
-                   status chip showing week N · status. Same shape as the
-                   community dashboard so the brand reads consistently. */}
+            {/* Welcome header — time-of-day greeting + week status. */}
             <ClientWelcomeHeader
                 firstName={firstName}
                 initials={initials}
@@ -761,25 +801,10 @@ export const ClientDashboard = () => {
                 weekStatus={currentWeekData.status}
             />
 
-            {/* 3. Combined week status panel — calendar + streak ring + level + rank.
-                   For coaching clients, the calendar dots fire on days where a daily
-                   entry was filled within the current week (currentWeekData.dailyEntries). */}
+            {/* Submission-window notice — stays at the top because it's
+                a TIMING notice (Friday submit / Saturday review), not a
+                routine card. Surfaces every week, not section-specific. */}
             <div style={{ marginBottom: 24 }}>
-                <WeekStatusPanel
-                    uid={user?.id}
-                    score={xp}
-                    currentStreak={dailyStreak}
-                    bestStreak={bestStreak}
-                    logCount={weeks.filter(w => w.status === 'submitted' || w.status === 'reviewed').length}
-                    loggedDates={loggedDates}
-                    onNavigate={navigate}
-                />
-            </div>
-
-            {/* Submission-window notice — explains the Friday-submit /
-                   Saturday-review cadence so clients don't submit on
-                   the wrong day and wonder why no feedback arrives. */}
-            <div style={{ marginBottom: 16 }}>
                 <div
                     style={{
                         display: 'flex', gap: 12, alignItems: 'flex-start',
@@ -814,7 +839,17 @@ export const ClientDashboard = () => {
                 </div>
             </div>
 
-            {/* 4. Weekly check-in hero — consolidates the prior dual cards
+            {/* ═══════════════════════════════════════════════
+                SECTION 1 — TODAY'S ACTIONS
+                The three things the client should do today.
+            ════════════════════════════════════════════════ */}
+            <SectionHeader
+                eyebrow="Step 1"
+                title="Today"
+                subtitle="Do these three things now — submit your check-in, train, eat."
+            />
+
+            {/* Weekly check-in hero — consolidates the prior dual cards
                    (status row + coach-feedback banner) into one image-backed card.
                    States: pending / submitted (awaiting review) / reviewed (with quote). */}
             <div style={{ marginBottom: 24 }}>
@@ -960,13 +995,8 @@ export const ClientDashboard = () => {
                 </div>
             </div>
 
-            {/* 5. Continue Academy */}
-            <div style={{ marginBottom: 24 }}>
-                <ContinueAcademyCard courses={courses} userProgress={userProgress} lessons={lessons} loadLessons={loadLessons} onNavigate={navigate} />
-            </div>
-
-            {/* 6. Today's Workout */}
-            <div style={{ marginBottom: 24 }}>
+            {/* Today's Workout — what to train today. */}
+            <div style={{ marginBottom: 16 }}>
                 <TodayWorkoutCard
                     activeProgram={activeProgram}
                     getTodaysDay={getTodaysDay}
@@ -975,8 +1005,8 @@ export const ClientDashboard = () => {
                 />
             </div>
 
-            {/* 7. Today's Diet — deep-links to /diets/plan/:id when assigned. */}
-            <div style={{ marginBottom: 24 }}>
+            {/* Today's Diet — what to eat today. */}
+            <div style={{ marginBottom: 32 }}>
                 <TodayDietCard
                     dietProfile={user?.dietProfile}
                     assignedDietId={assignedDietId}
@@ -985,8 +1015,31 @@ export const ClientDashboard = () => {
                 />
             </div>
 
-            {/* 8. Progress CTA — chart + caveman "what's inside" preview. */}
-            <div style={{ marginBottom: 24 }}>
+            {/* ═══════════════════════════════════════════════
+                SECTION 2 — YOUR PROGRESS
+                See how the work is paying off.
+            ════════════════════════════════════════════════ */}
+            <SectionHeader
+                eyebrow="Step 2"
+                title="Your progress"
+                subtitle="Streak, weight trend, and where you rank — your numbers at a glance."
+            />
+
+            {/* Combined week status panel — calendar + streak ring + level + rank. */}
+            <div style={{ marginBottom: 16 }}>
+                <WeekStatusPanel
+                    uid={user?.id}
+                    score={xp}
+                    currentStreak={dailyStreak}
+                    bestStreak={bestStreak}
+                    logCount={weeks.filter(w => w.status === 'submitted' || w.status === 'reviewed').length}
+                    loggedDates={loggedDates}
+                    onNavigate={navigate}
+                />
+            </div>
+
+            {/* Progress CTA — chart + caveman "what's inside" preview. */}
+            <div style={{ marginBottom: 32 }}>
                 <ProgressCTA
                     onNavigate={navigate}
                     weightHistory={weeks
@@ -995,8 +1048,21 @@ export const ClientDashboard = () => {
                 />
             </div>
 
-            {/* 9. Community Activity — last, so the social pull doesn't
-                 distract from the user's own program/plan/progress. */}
+            {/* ═══════════════════════════════════════════════
+                SECTION 3 — GROW & CONNECT
+                Education + the community feed, last so they
+                don't distract from the user's own program first.
+            ════════════════════════════════════════════════ */}
+            <SectionHeader
+                eyebrow="Step 3"
+                title="Grow & connect"
+                subtitle="Keep learning and see what the rest of the team is doing this week."
+            />
+
+            <div style={{ marginBottom: 16 }}>
+                <ContinueAcademyCard courses={courses} userProgress={userProgress} lessons={lessons} loadLessons={loadLessons} onNavigate={navigate} />
+            </div>
+
             <CommunityActivityCard posts={posts.slice(0, 3)} onNavigate={navigate} />
         </div>
     );

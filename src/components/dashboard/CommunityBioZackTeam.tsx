@@ -317,6 +317,8 @@ export const CommunityBioZackTeam = () => {
                 goalWeight={goalWeight}
             />
 
+            {/* Weekly-update reminder — stays at the top because it's
+                a TIMING notice, not a routine card. */}
             <div style={{ marginBottom: 24 }}>
                 <WeeklyUpdateReminderCard
                     locked={updateLocked}
@@ -326,9 +328,45 @@ export const CommunityBioZackTeam = () => {
                 />
             </div>
 
-            {/* 2. Combined week status panel — calendar + streak ring + level + rank.
-                   Replaces the old 3 separate metric cards + standalone standing card. */}
-            <div style={{ marginBottom: 24 }}>
+            {/* ═══════════════════════════════════════════════
+                SECTION 1 — TODAY'S ACTIONS
+                The training + nutrition the user does today.
+            ════════════════════════════════════════════════ */}
+            <DashboardSectionHeader
+                eyebrow="Step 1"
+                title="Today"
+                subtitle="What to do right now — train, eat, repeat."
+            />
+
+            <div style={{ marginBottom: 16 }}>
+                <TodayWorkoutCard
+                    activeProgram={activeProgram}
+                    getTodaysDay={getTodaysDay}
+                    todaysDayNumber={todaysDayNumber}
+                    onNavigate={navigate}
+                />
+            </div>
+
+            <div style={{ marginBottom: 32 }}>
+                <TodayDietCard
+                    dietProfile={user?.dietProfile}
+                    assignedDietId={assignedDietId}
+                    assignedSnapshot={assignedDietSnapshot}
+                    onNavigate={navigate}
+                />
+            </div>
+
+            {/* ═══════════════════════════════════════════════
+                SECTION 2 — YOUR PROGRESS
+                Streak, weight trend, where you rank.
+            ════════════════════════════════════════════════ */}
+            <DashboardSectionHeader
+                eyebrow="Step 2"
+                title="Your progress"
+                subtitle="Streak, weight trend, and where you rank — your numbers at a glance."
+            />
+
+            <div style={{ marginBottom: 16 }}>
                 <WeekStatusPanel
                     uid={user?.id}
                     score={xp}
@@ -341,42 +379,72 @@ export const CommunityBioZackTeam = () => {
                 />
             </div>
 
-            {/* 3. Continue Academy */}
-            <div style={{ marginBottom: 24 }}>
-                <ContinueAcademyCard courses={courses} userProgress={userProgress} lessons={lessons} loadLessons={loadLessons} onNavigate={navigate} />
-            </div>
-
-            {/* 4. Today's Workout */}
-            <div style={{ marginBottom: 24 }}>
-                <TodayWorkoutCard
-                    activeProgram={activeProgram}
-                    getTodaysDay={getTodaysDay}
-                    todaysDayNumber={todaysDayNumber}
-                    onNavigate={navigate}
-                />
-            </div>
-
-            {/* 5. Today's Diet — deep-links to /diets/plan/:id when assigned. */}
-            <div style={{ marginBottom: 24 }}>
-                <TodayDietCard
-                    dietProfile={user?.dietProfile}
-                    assignedDietId={assignedDietId}
-                    assignedSnapshot={assignedDietSnapshot}
-                    onNavigate={navigate}
-                />
-            </div>
-
-            {/* 6. Progress CTA — chart + caveman "what's inside" preview. */}
-            <div style={{ marginBottom: 24 }}>
+            <div style={{ marginBottom: 32 }}>
                 <ProgressCTA
                     onNavigate={navigate}
                     weightHistory={weightHistory.map(w => w.weight)}
                 />
             </div>
 
-            {/* 7. Community Activity — last, so the social pull doesn't
-                 distract from the user's own program/plan/progress. */}
+            {/* ═══════════════════════════════════════════════
+                SECTION 3 — GROW & CONNECT
+                Education + the community feed, last so they
+                don't distract from the user's own program first.
+            ════════════════════════════════════════════════ */}
+            <DashboardSectionHeader
+                eyebrow="Step 3"
+                title="Grow & connect"
+                subtitle="Keep learning and see what the rest of the team is doing this week."
+            />
+
+            <div style={{ marginBottom: 16 }}>
+                <ContinueAcademyCard courses={courses} userProgress={userProgress} lessons={lessons} loadLessons={loadLessons} onNavigate={navigate} />
+            </div>
+
             <CommunityActivityCard posts={posts.slice(0, 3)} onNavigate={navigate} />
         </div>
     );
 };
+
+// ─── Section header ────────────────────────────────────────────────
+// Groups the dashboard cards into a few clear buckets so the user
+// reads the page as "do this now → see your progress → grow." Each
+// header carries a one-line subtitle that names the section's purpose
+// in plain English — founder direction is that the dashboard should
+// explain itself at a glance, not require pattern-matching across
+// half-anonymous tiles.
+function DashboardSectionHeader({ eyebrow, title, subtitle }: {
+    eyebrow: string;
+    title: string;
+    subtitle: string;
+}) {
+    return (
+        <div style={{ margin: '8px 0 14px' }}>
+            <div style={{
+                fontFamily: '"Inter", ui-sans-serif, system-ui, sans-serif',
+                fontSize: 10, fontWeight: 700,
+                letterSpacing: '0.22em', textTransform: 'uppercase',
+                color: 'rgb(var(--primary))',
+                marginBottom: 4,
+            }}>
+                {eyebrow}
+            </div>
+            <h2 style={{
+                fontFamily: '"Manrope", ui-sans-serif, system-ui, sans-serif',
+                fontSize: 22, fontWeight: 700,
+                color: 'rgb(var(--on-surface))',
+                margin: 0, letterSpacing: '-0.02em', lineHeight: 1.2,
+            }}>
+                {title}
+            </h2>
+            <p style={{
+                fontFamily: '"Inter", ui-sans-serif, system-ui, sans-serif',
+                fontSize: 13, lineHeight: 1.5,
+                color: 'rgb(var(--on-surface) / 0.62)',
+                margin: '4px 0 0',
+            }}>
+                {subtitle}
+            </p>
+        </div>
+    );
+}
