@@ -168,22 +168,83 @@ export async function unregisterFcmToken(uid: string): Promise<void> {
 }
 
 /**
- * Foreground push handler. FCM only auto-shows notifications when the
- * app is in the background (per browser/SW spec). When the user is
- * actively on the page, we get the payload via this callback and
- * decide whether to surface it (toast, inline indicator, etc.).
+ * Foreground push handler. FCM only auto-shows OS-level notifications
+ * when the app is in the BACKGROUND (browser/SW spec). When the user
+ * is actively on the page, the payload arrives via `onMessage` here
+ * and the SW does NOT display it — so without this hook, the coach
+ * or client gets *zero* feedback for incoming messages while the app
+ * tab is open. Bug surface: "I'm staring at the app and didn't see
+ * the new message until I refreshed."
  *
- * We intentionally do NOT show a duplicate browser Notification for
- * foreground events — the MessagesContext already triggers an in-app
- * Notification for new incoming messages, and showing both is noisy.
- * The hook simply logs for now; surface via a toast if you wire one.
+ * Behavior:
+ *   - Surface an OS-level Notification via the SW registration so it
+ *     looks identical to a background push. We deliberately route
+ *     through the same SW (not the page's `new Notification(...)`)
+ *     because: (a) consistent click-handling — the SW's
+ *     `notificationclick` handler runs in both cases, and (b) iOS
+ *     PWAs treat SW-registered notifications as system events.
+ *   - Tag-dedup by messageId so a re-delivered FCM push (queued
+ *     during offline) replaces rather than stacks.
+ *   - Skip if the user already has the conversation OPEN in
+ *     foreground — that thread is rendered live by the messages
+ *     listener and a notification on top would be noisy.
+ *
+ * Idempotent: returns an `unsub` even when messaging is unsupported.
  */
 export async function attachFcmForegroundHandler(): Promise<() => void> {
     const messaging = await getFcmMessaging();
     if (!messaging) return () => {};
+
+    const swRegistration =
+        ('serviceWorker' in navigator)
+            ? await navigator.serviceWorker.getRegistration('/firebase-messaging-sw.js').catch(() => undefined)
+            : undefined;
+
     const unsub = onMessage(messaging, (payload) => {
         // eslint-disable-next-line no-console
         console.log('[fcm] foreground push:', payload);
+
+        const title = payload.notification?.title || payload.data?.title || 'BioZackTeam';
+        const body = payload.notification?.body || payload.data?.body || '';
+        const url = (payload.data?.url as string | undefined) || '/';
+        const tag = (payload.data?.messageId as string | undefined)
+                 || (payload.data?.checkInId as string | undefined)
+                 || undefined;
+
+        // Skip if the user is already looking at the destination route —
+        // they've got the live data, no need for a popup. Best-effort
+        // path-prefix match; deep links like `/messages?to=…` are still
+        // considered "on the messages page".
+        try {
+            const here = window.location.pathname;
+            if (url.startsWith('/messages') && here.startsWith('/messages')) return;
+        } catch {
+            // window may be unavailable in unusual contexts (workers, SSR).
+        }
+
+        // Prefer routing through the SW so click-handling is identical
+        // to background pushes (the SW's `notificationclick` listener
+        // focuses the existing tab and navigates to `data.url`).
+        const options: NotificationOptions = {
+            body,
+            icon: '/icon-192.png',
+            badge: '/icon-192.png',
+            tag,
+            data: { url },
+        };
+
+        if (swRegistration && 'showNotification' in swRegistration) {
+            swRegistration.showNotification(title, options).catch(() => {
+                // Fallback to page-level Notification if SW path fails.
+                try {
+                    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+                        new Notification(title, options);
+                    }
+                } catch { /* ignore */ }
+            });
+        } else if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+            try { new Notification(title, options); } catch { /* ignore */ }
+        }
     });
     return unsub;
 }

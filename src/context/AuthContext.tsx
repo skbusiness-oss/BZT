@@ -25,7 +25,7 @@ import {
 } from 'firebase/firestore';
 import { initializeApp as initializeSecondaryApp } from 'firebase/app';
 import { DEFAULT_TARGETS } from '../lib/constants';
-import { registerFcmToken, unregisterFcmToken } from '../lib/fcm';
+import { registerFcmToken, unregisterFcmToken, attachFcmForegroundHandler } from '../lib/fcm';
 
 // ─── Secondary Firebase app for creating client accounts ───────────────────
 // When you call createUserWithEmailAndPassword on the main app,
@@ -130,6 +130,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
    *  ref, every such tick would arrayUnion the same token again.
    *  Reset to false on auth change so a re-login re-registers cleanly. */
   const fcmRegisteredRef = useRef<boolean>(false);
+  /** Foreground-message unsubscribe, stashed so we can release the FCM
+   *  onMessage listener on sign-out (or re-attach on user change). */
+  const fcmForegroundUnsubRef = useRef<(() => void) | null>(null);
 
   const clearAuthError = () => setAuthError(null);
 
@@ -189,6 +192,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // Reset FCM registration guard so the next signed-in user
       // (could be a different account) re-registers their device.
       fcmRegisteredRef.current = false;
+      // Release the foreground push listener so the next user gets a
+      // fresh one (and we don't get duplicate fires per auth change).
+      if (fcmForegroundUnsubRef.current) {
+        try { fcmForegroundUnsubRef.current(); } catch { /* ignore */ }
+        fcmForegroundUnsubRef.current = null;
+      }
 
       if (!firebaseUser) {
         setUser(null);
@@ -326,9 +335,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           // user doc) so re-registering on every snapshot is safe but
           // wasteful; we only run it once per snapshot listener
           // lifetime via the ref below.
+          //
+          // ALSO attach the foreground push handler. Without this, the
+          // user gets ZERO feedback while the app tab is open — FCM
+          // only auto-renders OS notifications for background pushes,
+          // so the coach staring at his inbox would miss every fresh
+          // incoming message until he refreshed. The handler renders
+          // foreground pushes via the SW (consistent with background
+          // click-handling) and skips the popup when the user is
+          // already on the /messages page.
           if (!fcmRegisteredRef.current) {
             fcmRegisteredRef.current = true;
             registerFcmToken(firebaseUser.uid).catch(() => { /* silent */ });
+            attachFcmForegroundHandler()
+              .then((unsub) => { fcmForegroundUnsubRef.current = unsub; })
+              .catch(() => { /* silent */ });
           }
 
           // Custom-claim bootstrap REMOVED — it caused a login-loop.
