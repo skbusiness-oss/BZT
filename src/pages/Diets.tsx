@@ -12,7 +12,7 @@
  */
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Sparkles, Filter, Utensils, FileText, ChevronRight, CheckCircle2 } from 'lucide-react';
+import { Sparkles, Filter, Utensils, FileText, ChevronRight, CheckCircle2, Flame, Salad, Soup, Beef, Cookie } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useAssignedDiet } from '../hooks/useAssignedDiet';
@@ -56,6 +56,37 @@ export const Diets = () => {
             return true;
         });
     }, [bandFilter, mealFilter]);
+
+    // Per-card counts so each filter tile can show how many plans live in
+    // that bucket given the OTHER filter's current state. Mirrors the
+    // Workouts category card UX — picking a tier should always show a
+    // non-zero card count if there's at least one matching plan.
+    const bandCounts = useMemo(() => {
+        const counts: Record<'all' | DietBand, number> = { all: 0, low: 0, mid: 0, high: 0, super: 0 };
+        for (const d of dietPlans) {
+            if (mealFilter !== 'all' && d.mealsPerDay !== mealFilter) continue;
+            counts.all++;
+            const band = dietBand(d.calories);
+            counts[band]++;
+        }
+        return counts;
+    }, [mealFilter]);
+
+    const mealCounts = useMemo(() => {
+        const counts: Record<'all' | 3 | 4, number> = { all: 0, 3: 0, 4: 0 };
+        for (const d of dietPlans) {
+            if (bandFilter !== 'all' && dietBand(d.calories) !== bandFilter) continue;
+            counts.all++;
+            if (d.mealsPerDay === 3) counts[3]++;
+            else if (d.mealsPerDay === 4) counts[4]++;
+        }
+        return counts;
+    }, [bandFilter]);
+
+    // Founder direction (mirrors Workouts): don't render the long list of
+    // plans until the user picks at least one specific filter. The
+    // calorie / meals/day cards alone drive what shows up below.
+    const noFilterActive = bandFilter === 'all' && mealFilter === 'all';
 
     return (
         <div className="max-w-6xl mx-auto px-4 md:px-6 pt-6 pb-24 space-y-8">
@@ -194,38 +225,91 @@ export const Diets = () => {
             )}
 
             {/* Browse — filters + plan grid (or empty-state when catalog is empty) */}
-            <section className="space-y-4">
+            <section className="space-y-5">
                 {assignedDietId && (
                     <p className="text-[12px] text-on-surface-variant font-body italic">
                         {t('switchPlanHint') ?? 'Want a different tier? Pick another plan below — switching replaces your current plan.'}
                     </p>
                 )}
-                <div className="flex items-center gap-3 flex-wrap">
-                    <div className="flex items-center gap-2 text-on-surface-variant text-[10px] font-label font-bold uppercase tracking-[0.18em]">
-                        <Filter size={12} /> {t('filterByCalories') ?? 'Calories'}
+
+                {/* Calorie band — card grid replaces the old chip strip.
+                    Active card is gold-bordered; per-card count reflects
+                    the current meals/day filter so the user can see
+                    "how many plans" before committing to a tier. */}
+                <div>
+                    <div className="flex items-center justify-between gap-3 mb-3">
+                        <div className="flex items-center gap-2 text-on-surface-variant text-[10px] font-label font-bold uppercase tracking-[0.18em]">
+                            <Filter size={12} /> {t('filterByCalories') ?? 'Calories'}
+                        </div>
+                        {bandFilter !== 'all' && (
+                            <button
+                                onClick={() => setBandFilter('all')}
+                                className="text-[10px] font-label font-bold uppercase tracking-widest text-primary hover:underline"
+                            >
+                                Show all
+                            </button>
+                        )}
                     </div>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                         {BANDS.map(b => (
-                            <FilterChip key={b} active={bandFilter === b} onClick={() => setBandFilter(b)}>
-                                {b === 'all' ? (t('all') ?? 'All') : BAND_RANGE[b]}
-                            </FilterChip>
-                        ))}
-                    </div>
-                </div>
-                <div className="flex items-center gap-3 flex-wrap">
-                    <div className="flex items-center gap-2 text-on-surface-variant text-[10px] font-label font-bold uppercase tracking-[0.18em]">
-                        <Utensils size={12} /> {t('mealsPerDay') ?? 'Meals/day'}
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                        {MEAL_COUNTS.map(m => (
-                            <FilterChip key={m} active={mealFilter === m} onClick={() => setMealFilter(m)}>
-                                {m === 'all' ? (t('all') ?? 'All') : `${m}`}
-                            </FilterChip>
+                            <CalorieBandCard
+                                key={b}
+                                value={b}
+                                count={bandCounts[b]}
+                                active={bandFilter === b}
+                                onClick={() => setBandFilter(b)}
+                            />
                         ))}
                     </div>
                 </div>
 
-                {filtered.length === 0 ? (
+                {/* Meals/day — same card pattern, smaller grid. */}
+                <div>
+                    <div className="flex items-center justify-between gap-3 mb-3">
+                        <div className="flex items-center gap-2 text-on-surface-variant text-[10px] font-label font-bold uppercase tracking-[0.18em]">
+                            <Utensils size={12} /> {t('mealsPerDay') ?? 'Meals/day'}
+                        </div>
+                        {mealFilter !== 'all' && (
+                            <button
+                                onClick={() => setMealFilter('all')}
+                                className="text-[10px] font-label font-bold uppercase tracking-widest text-primary hover:underline"
+                            >
+                                Show all
+                            </button>
+                        )}
+                    </div>
+                    <div className="grid grid-cols-3 gap-3">
+                        {MEAL_COUNTS.map(m => (
+                            <MealCountCard
+                                key={m}
+                                value={m}
+                                count={mealCounts[m]}
+                                active={mealFilter === m}
+                                onClick={() => setMealFilter(m)}
+                            />
+                        ))}
+                    </div>
+                </div>
+
+                {/* Empty-state hint when no filter is active. Founder
+                    direction: don't dump the full catalog on screen; let
+                    the user pick a tier first. */}
+                {noFilterActive ? (
+                    <div className="rounded-2xl bg-surface-container-low border border-outline-variant/30 p-10 md:p-14 text-center">
+                        <div
+                            className="w-12 h-12 mx-auto rounded-2xl flex items-center justify-center mb-4"
+                            style={{ background: 'rgb(var(--primary) / 0.10)' }}
+                        >
+                            <Salad size={22} className="text-primary" />
+                        </div>
+                        <h3 className="font-headline font-bold text-[18px] text-on-surface mb-2">
+                            Pick a tier to see plans
+                        </h3>
+                        <p className="text-[13px] text-on-surface-variant font-body leading-relaxed max-w-md mx-auto">
+                            Tap one of the calorie cards above (or pick a meal count) — matching plans appear here.
+                        </p>
+                    </div>
+                ) : filtered.length === 0 ? (
                     <div className="rounded-2xl bg-surface-container-low border border-outline-variant/30 p-8 text-center">
                         <div
                             className="w-12 h-12 mx-auto rounded-2xl flex items-center justify-center mb-4"
@@ -311,18 +395,111 @@ export const Diets = () => {
     );
 };
 
-function FilterChip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+// ─────────────────────────────────────────────────────────────────────
+// CalorieBandCard — one tile in the calorie filter grid. Picks an
+// icon per band so the user can visually associate the tier (Salad
+// for lowest, Beef for highest). The "All" tile gets a generic
+// Cookie icon. Active card is gold-bordered; count under the label
+// is "N plans" given the current meals/day filter.
+// ─────────────────────────────────────────────────────────────────────
+const BAND_ICON = (b: 'all' | DietBand) => {
+    if (b === 'low') return <Salad size={16} />;
+    if (b === 'mid') return <Soup size={16} />;
+    if (b === 'high') return <Flame size={16} />;
+    if (b === 'super') return <Beef size={16} />;
+    return <Cookie size={16} />;
+};
+
+function CalorieBandCard({
+    value, count, active, onClick,
+}: {
+    value: 'all' | DietBand;
+    count: number;
+    active: boolean;
+    onClick: () => void;
+}) {
+    const label = value === 'all' ? 'All' : BAND_RANGE[value];
+    const sub = value === 'all' ? 'every tier' : 'kcal';
     return (
         <button
+            type="button"
             onClick={onClick}
-            className="bzt-press text-[12px] font-body font-semibold px-3.5 py-1.5 rounded-full transition-all"
+            className="group relative overflow-hidden rounded-xl p-4 text-left transition-all duration-200 hover:-translate-y-0.5"
             style={{
-                background: active ? 'rgb(var(--primary) / 0.12)' : 'rgb(var(--surface-container-low))',
-                border: active ? '1px solid rgb(var(--primary) / 0.55)' : '1px solid rgb(var(--outline-variant) / 0.30)',
-                color: active ? 'rgb(var(--primary))' : 'rgb(var(--on-surface) / 0.75)',
+                background: active ? 'rgb(var(--primary) / 0.10)' : 'rgb(var(--surface-container-lowest))',
+                border: active ? '2px solid rgb(var(--primary))' : '1px solid rgb(var(--outline-variant) / 0.30)',
+                boxShadow: active ? '0 8px 20px rgb(var(--primary) / 0.20)' : undefined,
             }}
         >
-            {children}
+            <div className="flex items-center justify-between gap-2 mb-3">
+                <span
+                    className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-colors"
+                    style={{
+                        background: active ? 'rgb(var(--primary) / 0.20)' : 'rgb(var(--surface-container))',
+                        color: active ? 'rgb(var(--primary))' : 'rgb(var(--on-surface) / 0.55)',
+                    }}
+                >
+                    {BAND_ICON(value)}
+                </span>
+                {active && (
+                    <span className="text-[9px] font-label font-bold uppercase tracking-widest text-primary">Active</span>
+                )}
+            </div>
+            <h3 className="font-headline font-bold text-sm leading-tight text-on-surface">
+                {label}
+            </h3>
+            <p className="text-[11px] text-on-surface/45 font-body mt-1">
+                {count} {count === 1 ? 'plan' : 'plans'} · {sub}
+            </p>
+        </button>
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// MealCountCard — same pattern, tiny grid (3 tiles). Big number is
+// the meal count so the user reads "3" / "4" at a glance.
+// ─────────────────────────────────────────────────────────────────────
+function MealCountCard({
+    value, count, active, onClick,
+}: {
+    value: 'all' | 3 | 4;
+    count: number;
+    active: boolean;
+    onClick: () => void;
+}) {
+    const label = value === 'all' ? 'All' : String(value);
+    const sub = value === 'all' ? 'any cadence' : 'meals / day';
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            className="group relative overflow-hidden rounded-xl p-4 text-left transition-all duration-200 hover:-translate-y-0.5"
+            style={{
+                background: active ? 'rgb(var(--primary) / 0.10)' : 'rgb(var(--surface-container-lowest))',
+                border: active ? '2px solid rgb(var(--primary))' : '1px solid rgb(var(--outline-variant) / 0.30)',
+                boxShadow: active ? '0 8px 20px rgb(var(--primary) / 0.20)' : undefined,
+            }}
+        >
+            <div className="flex items-center justify-between gap-2 mb-2">
+                <span
+                    className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                    style={{
+                        background: active ? 'rgb(var(--primary) / 0.20)' : 'rgb(var(--surface-container))',
+                        color: active ? 'rgb(var(--primary))' : 'rgb(var(--on-surface) / 0.55)',
+                    }}
+                >
+                    <Utensils size={16} />
+                </span>
+                {active && (
+                    <span className="text-[9px] font-label font-bold uppercase tracking-widest text-primary">Active</span>
+                )}
+            </div>
+            <h3 className="font-headline font-extrabold text-2xl leading-none text-on-surface">
+                {label}
+            </h3>
+            <p className="text-[11px] text-on-surface/45 font-body mt-2">
+                {count} {count === 1 ? 'plan' : 'plans'} · {sub}
+            </p>
         </button>
     );
 }
