@@ -47,11 +47,22 @@
  * `installedAtMountRef` guard handles that: if there was no
  * controller when the component mounted, this is the install, not an
  * update.
+ *
+ * Only renders on the login screen
+ * ────────────────────────────────
+ * Founder direction: a "reload to update" banner interrupting a
+ * signed-in user mid-task is bad UX — they're already deep in a
+ * workout / chat / check-in. Now we gate visibility on the user
+ * being logged OUT, so the banner only appears on the Login route.
+ * Users see new-version prompts the moment they open the app to
+ * sign in, never while they're working inside it.
  */
 import { useEffect, useState } from 'react';
 import { RefreshCw, X } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 
 export const NewVersionToast = () => {
+    const { isAuthenticated } = useAuth();
     const [show, setShow] = useState(false);
     const [dismissed, setDismissed] = useState(false);
 
@@ -101,6 +112,10 @@ export const NewVersionToast = () => {
         };
     }, []);
 
+    // Only ever surface this banner pre-auth. Mid-task interrupts are
+    // hostile — users get the update prompt the next time they land
+    // on the sign-in screen.
+    if (isAuthenticated) return null;
     if (!show || dismissed) return null;
 
     return (

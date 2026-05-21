@@ -131,6 +131,102 @@ function PurposeLine({ children, tone = 'dark' }: {
     );
 }
 
+// ─── DashboardChapter ───────────────────────────────────────────────────
+// Big "chapter" intro shown above each dashboard section. Replaces the
+// older small "Step 1 / Today / one-liner" header treatment which the
+// founder flagged as undersized and easy to skim past.
+//
+// Visual language
+//   - A large gradient-gold numeral (01 / 02 / 03) sits left as the
+//     primary visual anchor — the user immediately reads "Chapter 1".
+//   - A thin gold hairline rule extends across the row, signalling
+//     "this is a fresh section, not just another card."
+//   - The title is full Manrope extrabold at ~30px so it reads as a
+//     proper heading, not a label.
+//   - The subtitle uses 15px body so it's legible on phones without
+//     having to lean in.
+//   - The whole block fades-and-rises on mount with a staggered delay
+//     keyed off `index` so chapters introduce themselves sequentially
+//     instead of all popping in at once.
+//
+// Accessibility: the numeral is `aria-hidden` so screen readers
+// announce the title and subtitle in natural order. The `<h2>` keeps
+// the proper landmark hierarchy.
+//
+// Reused by both ClientDashboard and CommunityBioZackTeam so the
+// "step" framing reads consistently across audiences.
+export function DashboardChapter({ index, title, subtitle }: {
+    /** 1-based chapter number — drives the big "01" / "02" numeral. */
+    index: number;
+    title: string;
+    subtitle: string;
+}) {
+    const numeral = String(index).padStart(2, '0');
+    return (
+        <div
+            className="bzt-rise-in"
+            style={{
+                margin: '4px 0 18px',
+                animationDelay: `${(index - 1) * 80}ms`,
+            }}
+        >
+            {/* Top row: chapter eyebrow + gold hairline. The hairline
+                tapers from gold on the left to transparent on the
+                right so it reads as an "in progress" stroke rather
+                than a hard divider. */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
+                <span style={{
+                    fontFamily: t.body, fontSize: 10, fontWeight: 800,
+                    letterSpacing: '0.32em', textTransform: 'uppercase',
+                    color: t.primary,
+                }}>
+                    Chapter {numeral}
+                </span>
+                <span aria-hidden style={{
+                    flex: 1, height: 1,
+                    background: `linear-gradient(90deg, ${t.primary} 0%, rgb(var(--primary) / 0) 100%)`,
+                }} />
+            </div>
+
+            {/* Title row: huge gradient numeral + title block. The
+                numeral is a non-semantic decoration (aria-hidden) so
+                AT readers hear "Today" first, not "zero one Today". */}
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 18 }}>
+                <span
+                    aria-hidden
+                    style={{
+                        fontFamily: t.display, fontWeight: 800,
+                        fontSize: 72, lineHeight: 0.85, letterSpacing: '-0.04em',
+                        background: goldGradient,
+                        WebkitBackgroundClip: 'text', backgroundClip: 'text',
+                        WebkitTextFillColor: 'transparent',
+                        flexShrink: 0,
+                    }}
+                >
+                    {numeral}
+                </span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                    <h2 style={{
+                        fontFamily: t.display, fontSize: 30, fontWeight: 800,
+                        color: t.onSurface, margin: 0,
+                        letterSpacing: '-0.02em', lineHeight: 1.05,
+                    }}>
+                        {title}
+                    </h2>
+                    <p style={{
+                        fontFamily: t.body, fontSize: 15, lineHeight: 1.55,
+                        color: t.onSurfaceVariant,
+                        margin: '6px 0 0',
+                        maxWidth: 520,
+                    }}>
+                        {subtitle}
+                    </p>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 // ─── Continue Academy ───────────────────────────────────────────────────
 // iOS-style hero: course cover image as the background, dark gradient overlay,
 // eyebrow + title + progress overlaid. Falls back to a gold gradient when no

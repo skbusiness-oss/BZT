@@ -34,6 +34,7 @@ import {
     t as bzt, goldGradient,
     WeekStatusPanel,
     ContinueAcademyCard, TodayWorkoutCard, TodayDietCard, CommunityActivityCard, ProgressCTA,
+    DashboardChapter,
 } from './biozackteam/shared';
 import {
     Calendar,
@@ -56,47 +57,11 @@ function getGreetingKey(): 'goodMorning' | 'goodAfternoon' | 'goodEvening' {
     return 'goodEvening';
 }
 
-// ─── Section header ────────────────────────────────────────────────
-// Used to group the dashboard cards into a few clear buckets so the
-// user reads the page as "do this now → see your progress → grow."
-// Each header carries a one-line subtitle that names the section's
-// purpose in plain English (founder direction: every card should
-// explain itself at a glance).
-function SectionHeader({ eyebrow, title, subtitle }: {
-    eyebrow: string;
-    title: string;
-    subtitle: string;
-}) {
-    return (
-        <div style={{ margin: '8px 0 14px' }}>
-            <div style={{
-                fontFamily: '"Inter", ui-sans-serif, system-ui, sans-serif',
-                fontSize: 10, fontWeight: 700,
-                letterSpacing: '0.22em', textTransform: 'uppercase',
-                color: 'rgb(var(--primary))',
-                marginBottom: 4,
-            }}>
-                {eyebrow}
-            </div>
-            <h2 style={{
-                fontFamily: '"Manrope", ui-sans-serif, system-ui, sans-serif',
-                fontSize: 22, fontWeight: 700,
-                color: 'rgb(var(--on-surface))',
-                margin: 0, letterSpacing: '-0.02em', lineHeight: 1.2,
-            }}>
-                {title}
-            </h2>
-            <p style={{
-                fontFamily: '"Inter", ui-sans-serif, system-ui, sans-serif',
-                fontSize: 13, lineHeight: 1.5,
-                color: 'rgb(var(--on-surface) / 0.62)',
-                margin: '4px 0 0',
-            }}>
-                {subtitle}
-            </p>
-        </div>
-    );
-}
+// ─── Section header — moved to shared.tsx as `DashboardChapter` ────
+// The old local SectionHeader used 10/22/13 px and an eyebrow line;
+// the founder flagged it as undersized and asked for a more visually
+// "chapter"-like treatment. The new component lives in shared.tsx so
+// CommunityBioZackTeam reuses the same treatment without drift.
 
 function ClientWelcomeHeader({
     firstName, initials, weekNumber, programLength, weekStreak, weekStatus,
@@ -843,8 +808,8 @@ export const ClientDashboard = () => {
                 SECTION 1 — TODAY'S ACTIONS
                 The three things the client should do today.
             ════════════════════════════════════════════════ */}
-            <SectionHeader
-                eyebrow="Step 1"
+            <DashboardChapter
+                index={1}
                 title="Today"
                 subtitle="Do these three things now — submit your check-in, train, eat."
             />
@@ -1035,8 +1000,8 @@ export const ClientDashboard = () => {
                 SECTION 2 — YOUR PROGRESS
                 See how the work is paying off.
             ════════════════════════════════════════════════ */}
-            <SectionHeader
-                eyebrow="Step 2"
+            <DashboardChapter
+                index={2}
                 title="Your progress"
                 subtitle="Streak, weight trend, and where you rank — your numbers at a glance."
             />
@@ -1069,8 +1034,8 @@ export const ClientDashboard = () => {
                 Education + the community feed, last so they
                 don't distract from the user's own program first.
             ════════════════════════════════════════════════ */}
-            <SectionHeader
-                eyebrow="Step 3"
+            <DashboardChapter
+                index={3}
                 title="Grow & connect"
                 subtitle="Keep learning and see what the rest of the team is doing this week."
             />

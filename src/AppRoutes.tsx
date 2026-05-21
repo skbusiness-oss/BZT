@@ -62,9 +62,40 @@ const FullScreenLoader = () => {
 
     return (
         <div
-            className="min-h-screen flex flex-col items-center justify-center gap-8 px-6 text-center"
-            style={{ background: '#060814' }}
+            className="relative min-h-screen flex flex-col items-center justify-center gap-8 px-6 text-center overflow-hidden"
+            style={{ background: '#000000' }}
         >
+            {/* Gold ambient halos — give the loader an unmistakable
+                brand presence from frame 1. Previously the background
+                was #060814 (slightly blue-tinted navy) which read as
+                "blue" against the brand black + gold the user expects.
+                A pair of soft gold radial glows behind the wordmark
+                fixes that without needing any image asset. They're
+                non-interactive and behind everything else. */}
+            <div
+                aria-hidden
+                className="bzt-halo-drift pointer-events-none absolute"
+                style={{
+                    top: '20%', left: '50%', transform: 'translateX(-50%)',
+                    width: 480, height: 480,
+                    background: 'radial-gradient(circle, rgb(230 195 100 / 0.20) 0%, rgb(230 195 100 / 0) 65%)',
+                    filter: 'blur(40px)',
+                    animationDuration: '24s',
+                }}
+            />
+            <div
+                aria-hidden
+                className="bzt-halo-drift pointer-events-none absolute"
+                style={{
+                    bottom: '10%', left: '50%', transform: 'translateX(-50%)',
+                    width: 320, height: 320,
+                    background: 'radial-gradient(circle, rgb(255 224 143 / 0.10) 0%, rgb(255 224 143 / 0) 70%)',
+                    filter: 'blur(50px)',
+                    animationDuration: '28s',
+                    animationDirection: 'reverse',
+                }}
+            />
+
             {/* Wordmark — gold gradient text, anchors the brand even
                 before any real UI renders. Text colors are explicit
                 rgba literals (NOT theme tokens) because this component

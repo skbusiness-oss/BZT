@@ -12,6 +12,7 @@ import {
     t, goldGradient,
     WeekStatusPanel,
     ContinueAcademyCard, TodayWorkoutCard, TodayDietCard, CommunityActivityCard, ProgressCTA,
+    DashboardChapter,
 } from './biozackteam/shared';
 import { CalendarCheck, Flame } from 'lucide-react';
 
@@ -332,8 +333,8 @@ export const CommunityBioZackTeam = () => {
                 SECTION 1 — TODAY'S ACTIONS
                 The training + nutrition the user does today.
             ════════════════════════════════════════════════ */}
-            <DashboardSectionHeader
-                eyebrow="Step 1"
+            <DashboardChapter
+                index={1}
                 title="Today"
                 subtitle="What to do right now — train, eat, repeat."
             />
@@ -360,8 +361,8 @@ export const CommunityBioZackTeam = () => {
                 SECTION 2 — YOUR PROGRESS
                 Streak, weight trend, where you rank.
             ════════════════════════════════════════════════ */}
-            <DashboardSectionHeader
-                eyebrow="Step 2"
+            <DashboardChapter
+                index={2}
                 title="Your progress"
                 subtitle="Streak, weight trend, and where you rank — your numbers at a glance."
             />
@@ -391,8 +392,8 @@ export const CommunityBioZackTeam = () => {
                 Education + the community feed, last so they
                 don't distract from the user's own program first.
             ════════════════════════════════════════════════ */}
-            <DashboardSectionHeader
-                eyebrow="Step 3"
+            <DashboardChapter
+                index={3}
                 title="Grow & connect"
                 subtitle="Keep learning and see what the rest of the team is doing this week."
             />
@@ -413,38 +414,6 @@ export const CommunityBioZackTeam = () => {
 // in plain English — founder direction is that the dashboard should
 // explain itself at a glance, not require pattern-matching across
 // half-anonymous tiles.
-function DashboardSectionHeader({ eyebrow, title, subtitle }: {
-    eyebrow: string;
-    title: string;
-    subtitle: string;
-}) {
-    return (
-        <div style={{ margin: '8px 0 14px' }}>
-            <div style={{
-                fontFamily: '"Inter", ui-sans-serif, system-ui, sans-serif',
-                fontSize: 10, fontWeight: 700,
-                letterSpacing: '0.22em', textTransform: 'uppercase',
-                color: 'rgb(var(--primary))',
-                marginBottom: 4,
-            }}>
-                {eyebrow}
-            </div>
-            <h2 style={{
-                fontFamily: '"Manrope", ui-sans-serif, system-ui, sans-serif',
-                fontSize: 22, fontWeight: 700,
-                color: 'rgb(var(--on-surface))',
-                margin: 0, letterSpacing: '-0.02em', lineHeight: 1.2,
-            }}>
-                {title}
-            </h2>
-            <p style={{
-                fontFamily: '"Inter", ui-sans-serif, system-ui, sans-serif',
-                fontSize: 13, lineHeight: 1.5,
-                color: 'rgb(var(--on-surface) / 0.62)',
-                margin: '4px 0 0',
-            }}>
-                {subtitle}
-            </p>
-        </div>
-    );
-}
+// DashboardSectionHeader — moved to shared.tsx as `DashboardChapter`.
+// See the comment in shared.tsx for the redesign rationale (founder
+// asked for a bigger, more "chapter intro" treatment).
