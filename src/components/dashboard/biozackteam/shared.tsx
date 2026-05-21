@@ -178,7 +178,7 @@ export function ContinueAcademyCard({ courses, userProgress, lessons, loadLesson
             {/* Layered background: editorial study photo, goal-tinted gradient, dark fade for legibility. */}
             <div className="bzt-hero-photo" style={{
                 position: 'absolute', inset: 0,
-                backgroundImage: 'url(/dashboard-covers/continue-learning.png)',
+                backgroundImage: 'url(/dashboard-covers/continue-learning.jpg)',
                 backgroundSize: 'cover',
                 backgroundPosition: 'center',
             }} />
@@ -239,7 +239,7 @@ export function ContinueAcademyCard({ courses, userProgress, lessons, loadLesson
                 className="bzt-hero-photo"
                 style={{
                     position: 'absolute', inset: 0,
-                    background: `url(/dashboard-covers/continue-learning.png) center/cover no-repeat`,
+                    background: `url(/dashboard-covers/continue-learning.jpg) center/cover no-repeat`,
                 }}
             />
             <div

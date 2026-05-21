@@ -374,7 +374,7 @@ export const VideoLibrary = () => {
                                 className="bzt-hero-photo"
                                 style={{
                                     position: 'absolute', inset: 0,
-                                    backgroundImage: 'url(/dashboard-covers/continue-learning.png)',
+                                    backgroundImage: 'url(/dashboard-covers/continue-learning.jpg)',
                                     backgroundSize: 'cover',
                                     backgroundPosition: 'center',
                                 }}
