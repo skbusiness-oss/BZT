@@ -353,9 +353,29 @@ export const Workouts = () => {
                 </div>
 
             {/* ═══════════════════════════════════════════════
+                EMPTY STATE — when no category is picked, the list
+                area stays quiet on purpose. Founder direction:
+                user should see only their active program + the
+                category cards. Picking a card opens the matching
+                list (programs / library / custom) below.
+            ════════════════════════════════════════════════ */}
+            {categoryFilter === 'All' && (
+                <div className="bg-surface-container-low rounded-2xl p-10 md:p-16 text-center ghost-border">
+                    <Dumbbell size={36} className="mx-auto mb-4 text-on-surface/30" />
+                    <h3 className="font-headline font-extrabold text-lg text-on-surface mb-2">
+                        Pick a category to browse
+                    </h3>
+                    <p className="text-on-surface/55 font-body text-sm max-w-md mx-auto">
+                        Tap one of the cards above (Full Body, PPL, Stretching, …) to see the
+                        programs and workouts in that category.
+                    </p>
+                </div>
+            )}
+
+            {/* ═══════════════════════════════════════════════
                 TRAINING PROGRAMS VIEW
             ════════════════════════════════════════════════ */}
-            {viewMode === 'programs' && (
+            {viewMode === 'programs' && categoryFilter !== 'All' && (
                 <div className="space-y-8">
                     {groupedPrograms.map(([split, programs]) => (
                         <section key={split} className="space-y-4">
@@ -546,7 +566,7 @@ export const Workouts = () => {
             {/* ═══════════════════════════════════════════════
                 CUSTOM WORKOUTS VIEW  (coach only)
             ════════════════════════════════════════════════ */}
-            {viewMode === 'workouts' && (
+            {viewMode === 'workouts' && categoryFilter !== 'All' && (
                 <div className="space-y-8">
                     {groupedLibraryWorkouts.map(([category, items]) => (
                         <section key={category} className="space-y-4">
@@ -631,7 +651,7 @@ export const Workouts = () => {
                 </div>
             )}
 
-            {viewMode === 'custom' && (
+            {viewMode === 'custom' && categoryFilter !== 'All' && (
                 <div className="grid grid-cols-1 gap-6">
                     {customWorkouts.map(workout => {
                         const isExpanded = expandedWorkout === workout.id;
