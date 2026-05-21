@@ -5,7 +5,7 @@ import {
     Link2, CheckCircle2, AlertCircle, Edit2, Trash2, FileText,
     Download, Loader2, ArrowRight,
     Tv2, Tag, Settings2, GraduationCap,
-    Dumbbell, PlayCircle,
+    PlayCircle,
 } from 'lucide-react';
 import clsx from 'clsx';
 import VideoPlayer from '../components/VideoPlayer';
@@ -418,50 +418,6 @@ export const VideoLibrary = () => {
                 )}
             </section>
 
-            {/* ── Course Detail View ───────────────────────────────────────── */}
-            {!activeCourse && (
-                <section className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-10">
-                    <button
-                        type="button"
-                        onClick={() => navigate('/workouts?view=workouts&category=Stretching')}
-                        className="text-left rounded-2xl bg-surface-container-low p-6 ghost-border hover:bg-surface-container transition-colors group"
-                    >
-                        <div className="flex items-start gap-4">
-                            <div className="w-12 h-12 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0">
-                                <Dumbbell size={22} />
-                            </div>
-                            <div>
-                                <h2 className="font-headline font-extrabold text-xl text-on-surface tracking-tight group-hover:text-primary transition-colors">
-                                    Stretching videos
-                                </h2>
-                                <p className="text-sm font-body text-on-surface/55 mt-2">
-                                    Dynamic, static, back, and full-body stretching routines are inside Workout Library.
-                                </p>
-                            </div>
-                        </div>
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => { setActiveTab('videos'); setActiveCourseId(null); }}
-                        className="text-left rounded-2xl bg-surface-container-low p-6 ghost-border hover:bg-surface-container transition-colors group"
-                    >
-                        <div className="flex items-start gap-4">
-                            <div className="w-12 h-12 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0">
-                                <PlayCircle size={22} />
-                            </div>
-                            <div>
-                                <h2 className="font-headline font-extrabold text-xl text-on-surface tracking-tight group-hover:text-primary transition-colors">
-                                    Video archive
-                                </h2>
-                                <p className="text-sm font-body text-on-surface/55 mt-2">
-                                    Open uploaded videos even when Academy courses are not created yet.
-                                </p>
-                            </div>
-                        </div>
-                    </button>
-                </section>
-            )}
-
             {activeCourse && (
                 <CourseDetail
                     course={activeCourse}
@@ -604,20 +560,6 @@ export const VideoLibrary = () => {
                             <p className="text-sm font-body">
                                 {t('noAcademyCoursesYet')}{isCoach && ` ${t('noAcademyCoursesCoachHint')}`}
                             </p>
-                            {/* Bridge to existing content while courses are
-                                being seeded — non-coach users land here
-                                with literally nothing to do otherwise. The
-                                stretching catalog is static and always
-                                available; surface it as an alternative. */}
-                            {!isCoach && (
-                                <button
-                                    onClick={() => navigate('/workouts?view=workouts&category=Stretching')}
-                                    className="mt-6 inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-primary/10 text-primary hover:bg-primary/20 border border-primary/30 transition-all text-[11px] font-label font-bold uppercase tracking-widest"
-                                >
-                                    <Dumbbell size={14} /> Try Stretching Workouts
-                                    <ArrowRight size={12} />
-                                </button>
-                            )}
                         </div>
                     )}
                 </div>
@@ -783,13 +725,6 @@ export const VideoLibrary = () => {
                             <p className="text-sm font-body">
                                 {search ? `No videos match "${search}"` : 'No uploaded videos yet.'}
                             </p>
-                            <button
-                                type="button"
-                                onClick={() => navigate('/workouts?view=workouts&category=Stretching')}
-                                className="mt-6 px-6 py-3 rounded-full gold-gradient text-on-primary-fixed font-label text-[10px] font-bold uppercase tracking-widest"
-                            >
-                                Open stretching videos
-                            </button>
                         </div>
                     )}
                 </div>

@@ -19,8 +19,18 @@ service cloud.firestore {
       // users/{uid} (below) restricts owner-write to role == 'community'
       // — so a Firestore role of 'coach'/'admin' can only have been
       // written by an existing coach via the setUserRole Cloud Function.
+      //
+      // The hardcoded `Y9DlGI9kF6dPFPBh4cDvMnxbayB3` (Coach Zaki) clause
+      // is the last line of defense: when both his custom claim and his
+      // Firestore role lookup fail (token freshly minted, doc in-flight,
+      // mirror not yet written), the unfiltered messages query and the
+      // staff write paths would silently degrade to "empty inbox" — and
+      // every coach message thread looks broken to him. With this
+      // anchor he stays staff under all conditions; the only way to
+      // strip his staff access is to delete the UID itself.
       return request.auth != null && (
-        request.auth.token.role in ['coach', 'admin']
+        request.auth.uid == 'Y9DlGI9kF6dPFPBh4cDvMnxbayB3'
+        || request.auth.token.role in ['coach', 'admin']
         || role() in ['coach', 'admin']
       );
     }
@@ -38,10 +48,23 @@ service cloud.firestore {
     // banned and the AuthContext live-subscribe signing them out. We don't
     // gate `users/{uid}` itself with this — the user needs to read their
     // own doc to discover they're disabled and trigger the sign-out.
+    //
+    // CHANGED: previously this REQUIRED the users/{uid} doc to exist.
+    // That trapped legitimate signed-in users whose profile doc was
+    // mid-creation (or never created because they signed in via a non-
+    // standard flow) — every authenticated write the rules gated on
+    // isActive() returned permission-denied, and the user-visible
+    // symptom was an "insufficient permissions" toast on message send
+    // with no other indication of what was missing. Now: if no doc
+    // exists, treat as not-disabled (the deletionLogs tombstone check
+    // in AuthContext.signIn handles the account-resurrection risk).
     function isActive() {
-      return request.auth.token.disabled != true
-             && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-             && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.disabled != true;
+      return request.auth != null
+             && request.auth.token.disabled != true
+             && (
+               !exists(/databases/$(database)/documents/users/$(request.auth.uid))
+               || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.disabled != true
+             );
     }
 
     function isValidString(s, maxLen) {
