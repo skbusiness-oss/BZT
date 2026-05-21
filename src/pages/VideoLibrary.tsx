@@ -604,6 +604,20 @@ export const VideoLibrary = () => {
                             <p className="text-sm font-body">
                                 {t('noAcademyCoursesYet')}{isCoach && ` ${t('noAcademyCoursesCoachHint')}`}
                             </p>
+                            {/* Bridge to existing content while courses are
+                                being seeded — non-coach users land here
+                                with literally nothing to do otherwise. The
+                                stretching catalog is static and always
+                                available; surface it as an alternative. */}
+                            {!isCoach && (
+                                <button
+                                    onClick={() => navigate('/workouts?view=workouts&category=Stretching')}
+                                    className="mt-6 inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-primary/10 text-primary hover:bg-primary/20 border border-primary/30 transition-all text-[11px] font-label font-bold uppercase tracking-widest"
+                                >
+                                    <Dumbbell size={14} /> Try Stretching Workouts
+                                    <ArrowRight size={12} />
+                                </button>
+                            )}
                         </div>
                     )}
                 </div>
