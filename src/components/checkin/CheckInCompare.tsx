@@ -185,7 +185,13 @@ function PhotoCell({ label, src }: { label: string; src?: string }) {
     return (
         <div className="aspect-[3/4] rounded-xl overflow-hidden relative clay-inset">
             {src ? (
-                <img src={src} alt={label} className="w-full h-full object-cover" />
+                <img
+                    src={src}
+                    alt={label}
+                    loading="lazy"
+                    decoding="async"
+                    className="w-full h-full object-cover"
+                />
             ) : (
                 <div className="w-full h-full flex items-center justify-center text-on-surface-variant/60 text-xs">
                     no photo

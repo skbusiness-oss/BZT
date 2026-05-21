@@ -83,9 +83,20 @@ export const CourseCard = ({
                 onClick={handleClick}
             >
                 {course.coverImageUrl ? (
+                    // Performance: lazy-load + async-decode + explicit
+                    // dimensions. Cards beyond the first viewport no
+                    // longer trigger eager downloads of full-resolution
+                    // Firebase Storage originals, and the browser can
+                    // decode in a non-blocking thread. width/height
+                    // attributes also reserve layout space so we don't
+                    // get a CLS thrash when each image lands.
                     <img
                         src={course.coverImageUrl}
                         alt={course.title}
+                        loading="lazy"
+                        decoding="async"
+                        width={640}
+                        height={360}
                         className={clsx(
                             'w-full h-full object-cover transition-transform duration-700 group-hover:scale-105',
                             !canAccess && 'grayscale opacity-50',

@@ -61,7 +61,13 @@ export const ExerciseModal = ({ exerciseName, exerciseDetail, onClose }: Exercis
                         <h2 className="text-3xl font-headline font-extrabold text-on-surface mb-6">{exerciseName}</h2>
                         {remoteGif ? (
                             <div className="w-full aspect-video rounded-xl ghost-border bg-surface-container-lowest relative overflow-hidden mb-6">
-                                <img src={remoteGif} alt={exerciseName} className="w-full h-full object-cover opacity-80" />
+                                <img
+                                    src={remoteGif}
+                                    alt={exerciseName}
+                                    loading="lazy"
+                                    decoding="async"
+                                    className="w-full h-full object-cover opacity-80"
+                                />
                                 <div className="absolute inset-0 border-2 border-primary/30 rounded-xl pointer-events-none" />
                             </div>
                         ) : (
@@ -142,7 +148,14 @@ export const ExerciseModal = ({ exerciseName, exerciseDetail, onClose }: Exercis
                                 return src;
                             })() ? (
                                 <>
-                                    <img src={(!imgError && exerciseDetail.gifUrl) || remoteGif || ''} alt={name} className="w-full h-full object-cover opacity-80" onError={() => setImgError(true)} />
+                                    <img
+                                        src={(!imgError && exerciseDetail.gifUrl) || remoteGif || ''}
+                                        alt={name}
+                                        loading="lazy"
+                                        decoding="async"
+                                        className="w-full h-full object-cover opacity-80"
+                                        onError={() => setImgError(true)}
+                                    />
                                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                                         <div className="w-16 h-16 rounded-full bg-gradient-to-br from-primary to-primary-container flex items-center justify-center shadow-lg opacity-80">
                                             <Play size={32} className="text-on-primary fill-current ml-1" />

@@ -497,6 +497,8 @@ export const ClientDashboard = () => {
                                                 <img
                                                     src={url}
                                                     alt={label}
+                                                    loading="lazy"
+                                                    decoding="async"
                                                     className="w-full h-full object-cover"
                                                 />
                                                 <div className="absolute top-2 left-2 px-2.5 py-1 rounded-md bg-surface-container-highest/80 backdrop-blur-sm text-[10px] font-label uppercase tracking-widest text-on-surface font-bold">{label}</div>

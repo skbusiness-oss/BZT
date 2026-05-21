@@ -215,7 +215,19 @@ export const CourseDetail = ({
 
                     <div className="relative min-h-[240px] bg-surface-container-lowest">
                         {course.coverImageUrl ? (
-                            <img src={course.coverImageUrl} alt={course.title} className="absolute inset-0 w-full h-full object-cover opacity-70" />
+                            // Hero — eager + high priority so it lands
+                            // in the first frame of the course-detail
+                            // view. Explicit dims reserve layout space.
+                            <img
+                                src={course.coverImageUrl}
+                                alt={course.title}
+                                loading="eager"
+                                decoding="async"
+                                fetchPriority="high"
+                                width={1200}
+                                height={400}
+                                className="absolute inset-0 w-full h-full object-cover opacity-70"
+                            />
                         ) : (
                             <div className="absolute inset-0 bg-gradient-to-br from-surface-container-highest via-surface-container to-surface-container-lowest" />
                         )}
@@ -271,7 +283,20 @@ export const CourseDetail = ({
                                         {/* Thumbnail */}
                                         <div className="relative aspect-video rounded-xl overflow-hidden bg-surface-container-lowest">
                                             {lesson.thumbnailUrl ? (
-                                                <img src={lesson.thumbnailUrl} alt={lesson.title} className={clsx('w-full h-full object-cover', !unlocked && 'grayscale opacity-50')} />
+                                                // Lesson list can run long
+                                                // (dozens of items); lazy +
+                                                // async-decode keeps below-
+                                                // viewport entries from
+                                                // hammering the network.
+                                                <img
+                                                    src={lesson.thumbnailUrl}
+                                                    alt={lesson.title}
+                                                    loading="lazy"
+                                                    decoding="async"
+                                                    width={400}
+                                                    height={225}
+                                                    className={clsx('w-full h-full object-cover', !unlocked && 'grayscale opacity-50')}
+                                                />
                                             ) : (
                                                 <div className="w-full h-full bg-surface-container-highest" />
                                             )}

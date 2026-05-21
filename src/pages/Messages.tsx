@@ -453,6 +453,8 @@ export const Messages = () => {
                                                     <img
                                                         src={msg.imageUrl}
                                                         alt={msg.imageName || 'Chat attachment'}
+                                                        loading="lazy"
+                                                        decoding="async"
                                                         className="max-h-72 w-full rounded-xl object-cover"
                                                     />
                                                 </a>

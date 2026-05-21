@@ -382,7 +382,13 @@ export const ClientInfoPanel = ({ client, weeks, onClose }: Props) => {
                                 {(['front', 'side', 'back'] as const).map(angle => (
                                     photoMap[angle] ? (
                                         <div key={angle} className="aspect-[3/4] rounded-xl overflow-hidden relative">
-                                            <img src={photoMap[angle]} alt={angle} className="w-full h-full object-cover" />
+                                            <img
+                                                src={photoMap[angle]}
+                                                alt={angle}
+                                                loading="lazy"
+                                                decoding="async"
+                                                className="w-full h-full object-cover"
+                                            />
                                             <div className="absolute top-1 left-1 px-2 py-0.5 rounded bg-black/60 text-xs text-on-surface capitalize">{angle}</div>
                                         </div>
                                     ) : null
