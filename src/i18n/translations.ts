@@ -1154,6 +1154,56 @@ export const translations = {
     upgradeProofLine:          { en: 'Trusted by people who finally got the body they were chasing.',
                                  ar: 'يثق به أشخاص حصلوا أخيراً على الجسم الذي كانوا يلاحقونه.' },
 
+    // ─── Welcome / pre-login landing ────────────────────────────────
+    welcomeEyebrow:            { en: 'BioZackTeam',                          ar: 'بيوزاك تيم' },
+    welcomeTagline:            { en: 'Where strength meets science.',        ar: 'حيث تلتقي القوّة بالعلم.' },
+    welcomeHeroTitle:          { en: 'The body you\'ve been chasing — built with a coach who\'s been there.',
+                                 ar: 'الجسم الذي تسعى إليه — تبنيه مع كوتش سلك الطريق قبلك.' },
+    welcomeHeroSub:            { en: 'Coach Med\'s full fitness platform — academy lessons, custom programs, calibrated diets, and one-on-one coaching for the members who want results, not advice.',
+                                 ar: 'منصّة الكوتش ميد المتكاملة للياقة — دروس الأكاديمية، برامج مخصّصة، خطط غذائية معدّلة، وتدريب فردي للأعضاء الذين يريدون نتائج، لا نصائح.' },
+    welcomeCtaSignIn:          { en: 'Sign in',                              ar: 'تسجيل الدخول' },
+    welcomeCtaSeePlans:        { en: 'See plans',                            ar: 'استعرض الباقات' },
+
+    // What's inside
+    welcomeInsideEyebrow:      { en: 'What\'s inside',                       ar: 'ما الذي بالداخل' },
+    welcomeInsideTitle:        { en: 'Everything you need under one roof.',  ar: 'كل ما تحتاجه تحت سقف واحد.' },
+    welcomeInside1Title:       { en: 'BioZackTeam University',                ar: 'جامعة بيوزاك تيم' },
+    welcomeInside1Sub:         { en: 'Beginner → Advanced lessons mapped into a real curriculum. You start at the bottom and you finish at the top — no skipping.',
+                                 ar: 'دروس من المبتدئ إلى المتقدم في منهج حقيقي. تبدأ من الأساس وتُنهي في القمّة — بلا قفز.' },
+    welcomeInside2Title:       { en: 'Training programs that fit your goal', ar: 'برامج تدريب تلائم هدفك' },
+    welcomeInside2Sub:         { en: '100+ pre-built rotations sorted by goal — fat loss, recomp, strength, endurance. Pick one and follow it.',
+                                 ar: 'أكثر من 100 برنامج جاهز مرتّبة حسب الهدف — حرق دهون، تنشيف، قوّة، تحمّل. اختر واحداً واتبعه.' },
+    welcomeInside3Title:       { en: 'Diet plans tuned to YOUR body',        ar: 'خطط غذائية مضبوطة على جسمك' },
+    welcomeInside3Sub:         { en: 'Calorie tiers + macro splits + meal counts adjusted to your weekly check-ins. Real food, real measurements.',
+                                 ar: 'سعرات حرارية وتقسيم ماكروز وعدد وجبات معدّلة حسب متابعاتك الأسبوعية. أكل حقيقي وقياسات حقيقية.' },
+    welcomeInside4Title:       { en: 'Coach Med, in your corner',            ar: 'كوتش ميد، بجانبك' },
+    welcomeInside4Sub:         { en: 'For coaching clients: direct messages, weekly reviews, custom protocols. For community: the academy and the team feed.',
+                                 ar: 'لعملاء التدريب: رسائل مباشرة ومراجعات أسبوعية وبروتوكولات مخصّصة. للمجتمع: الأكاديمية وفيد الفريق.' },
+
+    // Social proof
+    welcomeProofEyebrow:       { en: 'Real members. Real results.',          ar: 'أعضاء حقيقيون. نتائج حقيقية.' },
+    welcomeStatMembers:        { en: 'Members',                              ar: 'عضواً' },
+    welcomeStatCountries:      { en: 'Countries',                            ar: 'دول' },
+    welcomeStatPrograms:       { en: 'Programs',                             ar: 'برنامجاً' },
+
+    // How it works
+    welcomeHowEyebrow:         { en: 'How it works',                         ar: 'كيف يعمل' },
+    welcomeHow1Title:          { en: 'Sign in & pick your goal',             ar: 'سجّل دخولك واختر هدفك' },
+    welcomeHow1Sub:            { en: 'A 30-second baseline tells the app where you are today.',
+                                 ar: 'إعدادات أوّلية بسرعة 30 ثانية تخبر التطبيق بنقطتك الحالية.' },
+    welcomeHow2Title:          { en: 'Train, eat, log your week',            ar: 'تدرّب، تناول، وسجّل أسبوعك' },
+    welcomeHow2Sub:            { en: 'Follow the plan. Log weight, photos, and how you felt.',
+                                 ar: 'اتبع الخطّة. سجّل وزنك وصورك وكيف شعرت.' },
+    welcomeHow3Title:          { en: 'Review & adjust each week',            ar: 'راجع وعدّل كل أسبوع' },
+    welcomeHow3Sub:            { en: 'Coach Med reads your check-in (coaching tier) or your charts move (community).',
+                                 ar: 'يقرأ الكوتش ميد متابعتك (باقة التدريب) أو تتحدّث رسومك (المجتمع).' },
+
+    // Final call-to-action strip near the form
+    welcomeReadyEyebrow:       { en: 'Ready?',                               ar: 'جاهز؟' },
+    welcomeReadyTitle:         { en: 'Step inside.',                         ar: 'ادخل.' },
+    welcomeReadySub:           { en: 'Already a member? Sign in. New here? Pick a plan first, then come back to log in.',
+                                 ar: 'هل أنت عضو؟ سجّل دخولك. جديد هنا؟ اختر باقتك أولاً، ثم عُد لتسجيل الدخول.' },
+
     // ─── University level cards ────────────────────────────────────
     universityLevelLabel:      { en: 'Level',                                ar: 'المستوى' },
     universityOpenLabel:       { en: 'Open',                                 ar: 'افتح' },
