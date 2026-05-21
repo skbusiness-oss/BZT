@@ -430,30 +430,33 @@ export const VideoLibrary = () => {
                                     <LevelCollectionCard
                                         index={1}
                                         title="Beginner"
-                                        subtitle={`${academyByLevel.beginner.length} ${academyByLevel.beginner.length === 1 ? 'course' : 'courses'}`}
+                                        subtitle={`${academyByLevel.beginner.length} ${academyByLevel.beginner.length === 1 ? 'course' : 'courses'} · Starting the journey`}
                                         accentColor="rgb(16 185 129)"   /* emerald */
                                         accentTint="rgb(16 185 129 / 0.10)"
                                         icon={<GraduationCap size={22} />}
+                                        coverUrl="/university/level-beginner.jpg"
                                         onClick={() => setActiveLevel('beginner')}
                                         disabled={academyByLevel.beginner.length === 0}
                                     />
                                     <LevelCollectionCard
                                         index={2}
                                         title="Intermediate"
-                                        subtitle={`${academyByLevel.intermediate.length} ${academyByLevel.intermediate.length === 1 ? 'course' : 'courses'}`}
+                                        subtitle={`${academyByLevel.intermediate.length} ${academyByLevel.intermediate.length === 1 ? 'course' : 'courses'} · Building skills & growing`}
                                         accentColor="rgb(245 158 11)"   /* amber */
                                         accentTint="rgb(245 158 11 / 0.10)"
                                         icon={<BookOpen size={22} />}
+                                        coverUrl="/university/level-intermediate.jpg"
                                         onClick={() => setActiveLevel('intermediate')}
                                         disabled={academyByLevel.intermediate.length === 0}
                                     />
                                     <LevelCollectionCard
                                         index={3}
                                         title="Advanced"
-                                        subtitle={`${academyByLevel.advanced.length} ${academyByLevel.advanced.length === 1 ? 'course' : 'courses'}`}
+                                        subtitle={`${academyByLevel.advanced.length} ${academyByLevel.advanced.length === 1 ? 'course' : 'courses'} · Teaching & leading others`}
                                         accentColor="rgb(244 63 94)"    /* rose */
                                         accentTint="rgb(244 63 94 / 0.10)"
                                         icon={<Award size={22} />}
+                                        coverUrl="/university/level-advanced.jpg"
                                         onClick={() => setActiveLevel('advanced')}
                                         disabled={academyByLevel.advanced.length === 0}
                                     />
@@ -749,11 +752,20 @@ export const VideoLibrary = () => {
 
 // ─────────────────────────────────────────────────────────────────────
 // LevelCollectionCard — one of the 4 ordered cards on the academy
-// landing. Mirrors the "online course" collection-card pattern from
-// the reference design: tinted background, big number badge, title,
-// course count, soft icon. Disabled state (count = 0) renders the
-// card muted so the user knows nothing's there yet without it
-// looking like a layout bug.
+// landing. Two visual modes:
+//
+//   1. Photo-backdrop mode (preferred for the 3 main levels) — a
+//      full-bleed branded thumbnail with a bottom-dark gradient so the
+//      title, level pill, and arrow stay legible regardless of cover
+//      brightness. Same pattern as BigCalorieBandCard on Diets, so
+//      the cross-app card language stays consistent.
+//
+//   2. Tinted-icon mode (fallback, used for Topics) — the original
+//      treatment with a tinted background, big number badge, and soft
+//      icon. Used when no `coverUrl` is supplied.
+//
+// Disabled state (count = 0) renders the card muted so the user knows
+// nothing's there yet without it looking like a layout bug.
 // ─────────────────────────────────────────────────────────────────────
 function LevelCollectionCard({
     index,
@@ -764,18 +776,105 @@ function LevelCollectionCard({
     icon,
     onClick,
     disabled,
+    coverUrl,
 }: {
     index: number;
     title: string;
     subtitle: string;
     /** Solid color for the number badge + outline accents. */
     accentColor: string;
-    /** Translucent tint for the card background fill. */
+    /** Translucent tint for the card background fill (fallback mode). */
     accentTint: string;
     icon: React.ReactNode;
     onClick: () => void;
     disabled?: boolean;
+    /** Optional branded photo for the card backdrop. When set, the
+        card flips to photo-backdrop mode (full-bleed image + bottom
+        darken). When omitted, falls back to the tinted-icon style. */
+    coverUrl?: string;
 }) {
+    // Photo-backdrop mode — branded thumbnail with dark legibility
+    // gradient anchored to the bottom-left text block.
+    if (coverUrl) {
+        return (
+            <button
+                type="button"
+                onClick={disabled ? undefined : onClick}
+                disabled={disabled}
+                className="group relative overflow-hidden rounded-2xl text-left transition-all duration-200 enabled:hover:-translate-y-0.5 enabled:active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{
+                    aspectRatio: '16 / 10',
+                    border: `1px solid ${accentColor.replace(')', ' / 0.35)')}`,
+                    boxShadow: '0 14px 32px rgba(0,0,0,0.30)',
+                }}
+            >
+                {/* Photo backdrop — slight zoom on hover so the card
+                    feels alive without being noisy. */}
+                <div
+                    className="absolute inset-0 transition-transform duration-500 group-hover:scale-[1.04]"
+                    style={{
+                        backgroundImage: `url(${coverUrl})`,
+                        backgroundSize: 'cover',
+                        backgroundPosition: 'center',
+                    }}
+                />
+                {/* Bottom darken — heavier near the text so the title,
+                    level pill, and subtitle read cleanly against any
+                    cover. Top edge stays mostly clear so the branded
+                    artwork remains visible. */}
+                <div
+                    className="absolute inset-0"
+                    style={{
+                        background:
+                            'linear-gradient(180deg, rgba(0,0,0,0.10) 0%, rgba(0,0,0,0.35) 45%, rgba(0,0,0,0.78) 80%, rgba(0,0,0,0.92) 100%)',
+                    }}
+                />
+
+                {/* Top-right level pill — anchors the ordering without
+                    fighting the artwork. */}
+                <span
+                    className="absolute top-3 right-3 inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[9px] font-label font-extrabold uppercase tracking-[0.22em]"
+                    style={{
+                        background: 'rgba(0,0,0,0.55)',
+                        color: accentColor,
+                        border: `1px solid ${accentColor.replace(')', ' / 0.45)')}`,
+                        backdropFilter: 'blur(6px)',
+                        WebkitBackdropFilter: 'blur(6px)',
+                    }}
+                >
+                    Level {index}
+                </span>
+
+                {/* Title + meta — bottom-left, full white over the
+                    dark gradient. */}
+                <div className="absolute inset-x-0 bottom-0 p-4 md:p-5">
+                    <h3
+                        className="font-headline font-extrabold text-2xl md:text-[26px] leading-none tracking-tight"
+                        style={{ color: '#fff', textShadow: '0 1px 8px rgba(0,0,0,0.6)' }}
+                    >
+                        {title}
+                    </h3>
+                    <p
+                        className="text-xs font-body mt-2"
+                        style={{ color: 'rgb(255 255 255 / 0.82)' }}
+                    >
+                        {subtitle}
+                    </p>
+                    {!disabled && (
+                        <span
+                            className="inline-flex items-center gap-1.5 text-[10px] font-label font-extrabold uppercase tracking-widest mt-3"
+                            style={{ color: accentColor }}
+                        >
+                            Open <ArrowRight size={12} />
+                        </span>
+                    )}
+                </div>
+            </button>
+        );
+    }
+
+    // Tinted-icon fallback — used when no branded cover is available
+    // (e.g. the off-path Topics tile).
     return (
         <button
             type="button"
@@ -784,7 +883,7 @@ function LevelCollectionCard({
             className="relative overflow-hidden rounded-2xl p-6 text-left transition-all duration-200 enabled:hover:-translate-y-0.5 enabled:active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed"
             style={{
                 background: `linear-gradient(135deg, ${accentTint}, rgb(255 255 255 / 0.02) 90%)`,
-                border: `1px solid ${accentColor.replace('rgb(', 'rgb(').replace(')', ' / 0.30)')}`,
+                border: `1px solid ${accentColor.replace(')', ' / 0.30)')}`,
                 boxShadow: '0 8px 24px rgba(0,0,0,0.20)',
             }}
         >

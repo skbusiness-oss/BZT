@@ -923,6 +923,22 @@ export const ClientDashboard = () => {
                                             : t('pendingSubmission')
                                 }
                             </h2>
+                            {/* Purpose caption — explains in one line what
+                                the user can do on the check-in screen. Same
+                                pattern as the dashboard's PurposeLine helper
+                                but inlined here because this card lives on
+                                a dark hero photo with its own styles. */}
+                            <p style={{
+                                fontFamily: bzt.body, fontSize: 11.5, fontWeight: 500, fontStyle: 'italic',
+                                color: 'rgba(255,255,255,0.72)',
+                                margin: '0 0 8px', lineHeight: 1.45,
+                            }}>
+                                {currentWeekData.status === 'reviewed'
+                                    ? 'Read coach Zaki’s feedback and start the next week.'
+                                    : currentWeekData.status === 'submitted'
+                                        ? 'Already submitted — sit tight while coach Zaki reviews it.'
+                                        : 'Log weight, photos, and macros so coach Zaki can review your week.'}
+                            </p>
                             {/* Subtitle drops the duplicate "Weekly check-in" wording for the
                                 pending state — the eyebrow already announces the section. */}
                             {currentWeekData.status !== 'pending' && (

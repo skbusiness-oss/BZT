@@ -106,6 +106,31 @@ export function MetricCard({ label, value, unit, sub, hero }: {
     );
 }
 
+// ─── PurposeLine ───────────────────────────────────────────────────────
+// Small italic caption that sits under each card's title to say in
+// plain English what the card is FOR. Founder direction: every card
+// should explain itself at a glance — the eyebrow tells you what it
+// IS, this line tells you what tapping it WILL DO.
+//
+// Two tones:
+//   - 'dark'  → for cards with a photo background (white-ish italic
+//               readable against the dark overlay).
+//   - 'light' → for cards on the regular surface (uses theme tokens).
+function PurposeLine({ children, tone = 'dark' }: {
+    children: string;
+    tone?: 'dark' | 'light';
+}) {
+    return (
+        <p style={{
+            fontFamily: t.body, fontSize: 11.5, fontWeight: 500, fontStyle: 'italic',
+            color: tone === 'dark' ? 'rgba(255,255,255,0.72)' : t.onSurfaceVariant,
+            margin: '0 0 10px', lineHeight: 1.45,
+        }}>
+            {children}
+        </p>
+    );
+}
+
 // ─── Continue Academy ───────────────────────────────────────────────────
 // iOS-style hero: course cover image as the background, dark gradient overlay,
 // eyebrow + title + progress overlaid. Falls back to a gold gradient when no
@@ -178,6 +203,7 @@ export function ContinueAcademyCard({ courses, userProgress, lessons, loadLesson
                 }}>
                     {tx('academyEmptyTitle')}
                 </h2>
+                <PurposeLine>Bite-sized lessons from coach Zaki — structured by level.</PurposeLine>
                 <p style={{ fontFamily: t.body, fontSize: 12, color: 'rgba(255,255,255,0.82)', margin: '0 0 14px' }}>
                     {tx('academyEmptySub')}
                 </p>
@@ -235,6 +261,9 @@ export function ContinueAcademyCard({ courses, userProgress, lessons, loadLesson
                     color: '#fff', margin: '0 0 4px', letterSpacing: '-0.02em',
                     textShadow: '0 1px 3px rgba(0,0,0,0.45)',
                 }}>{next.title}</h2>
+                <PurposeLine>
+                    {isNew ? 'Start the next required course in your path.' : 'Pick up where you left off in the curriculum.'}
+                </PurposeLine>
                 <p style={{
                     fontFamily: t.body, fontSize: 12, color: 'rgba(255,255,255,0.82)',
                     margin: '0 0 14px',
@@ -322,6 +351,7 @@ export function TodayWorkoutCard({ activeProgram, getTodaysDay, todaysDayNumber,
                     color: '#fff', margin: '0 0 4px', letterSpacing: '-0.02em',
                     textShadow: '0 1px 3px rgba(0,0,0,0.45)',
                 }}>{tx('noProgramYet')}</h2>
+                <PurposeLine>Browse 10-day rotations and pick the one matching your goal.</PurposeLine>
                 <p style={{ fontFamily: t.body, fontSize: 12, color: 'rgba(255,255,255,0.82)', margin: '0 0 14px' }}>
                     {tx('chooseProgramSub')}
                 </p>
@@ -405,6 +435,11 @@ export function TodayWorkoutCard({ activeProgram, getTodaysDay, todaysDayNumber,
                     }}>
                         {isRest ? tx('restDayLabel') : (today?.label ?? activeProgram.programName)}
                     </h2>
+                    <PurposeLine>
+                        {isRest
+                            ? 'No lifts today — let the body rebuild what you trained.'
+                            : 'Open today’s session to follow exercises, sets, and rest.'}
+                    </PurposeLine>
                     <p style={{ fontFamily: t.body, fontSize: 12, color: 'rgba(255,255,255,0.82)', margin: '0 0 14px' }}>
                         {isRest
                             ? tx('recoveryTagline')
@@ -477,6 +512,7 @@ export function TodayDietCard({
                     color: '#fff', margin: '0 0 4px', letterSpacing: '-0.02em',
                     textShadow: '0 1px 3px rgba(0,0,0,0.45)',
                 }}>{tx('startMyPlan') ?? 'Start my plan'}</h2>
+                <PurposeLine>Quick calculator that picks the right calorie tier and macro split for you.</PurposeLine>
                 <p style={{ fontFamily: t.body, fontSize: 12, color: 'rgba(255,255,255,0.82)', margin: '0 0 14px' }}>
                     {tx('dietCalculateBlurb') ?? 'Sex, age, weight, height, activity, goal. We do the math, match the plan.'}
                 </p>
@@ -560,9 +596,10 @@ export function TodayDietCard({
                             kcal
                         </span>
                     </div>
-                    <p style={{ fontFamily: t.body, fontSize: 12, color: 'rgba(255,255,255,0.82)', margin: '0 0 14px' }}>
+                    <p style={{ fontFamily: t.body, fontSize: 12, color: 'rgba(255,255,255,0.82)', margin: '0 0 4px' }}>
                         {headlineProtein}P · {headlineCarbs}C · {headlineFat}F · {headlineMeals} {tx('mealsPerDay') ?? 'meals'}
                     </p>
+                    <PurposeLine>Open your meal plan to see today’s macros, food keys, and the day-by-day split.</PurposeLine>
                     <span style={{
                         display: 'inline-block',
                         padding: pillPad, borderRadius: 999,
@@ -622,9 +659,10 @@ export function CommunityActivityCard({ posts, onNavigate }: {
                         }}>{tx('communityEyebrow')}</span>
                         <h2 style={{
                             fontFamily: t.display, fontSize: 22, fontWeight: 600,
-                            color: '#fff', margin: 0, letterSpacing: '-0.02em',
+                            color: '#fff', margin: '0 0 4px', letterSpacing: '-0.02em',
                             textShadow: '0 1px 3px rgba(0,0,0,0.45)',
                         }}>{tx('whatsHappening')}</h2>
+                        <PurposeLine>What the rest of the team posted this week.</PurposeLine>
                     </div>
                     <button onClick={() => onNavigate('/community')} style={{
                         padding: pillPad, borderRadius: 999,
@@ -1086,6 +1124,7 @@ export function ProgressCTA({ onNavigate, weightHistory }: {
                 }}>
                     {tx('viewProgressCta')}
                 </h2>
+                <PurposeLine>Your weight trend, photos, and measurements over time.</PurposeLine>
                 <p style={{
                     fontFamily: t.body, fontSize: 12, color: 'rgba(255,255,255,0.82)',
                     margin: '0 0 14px',
