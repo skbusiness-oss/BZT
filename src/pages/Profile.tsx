@@ -3,6 +3,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { ClipboardList, TrendingUp } from 'lucide-react';
 import { ProgressPanel } from '../components/profile/ProgressPanel';
 import { CoachingJourneyPanel } from '../components/profile/CoachingJourneyPanel';
+import { UpgradeOffer } from '../components/profile/UpgradeOffer';
 
 export const Profile = () => {
     const { user } = useAuth();
@@ -24,6 +25,13 @@ export const Profile = () => {
                     {t('profileTitle')}<span className="text-primary-container">.</span>
                 </h1>
             </header>
+
+            {/* Inline upgrade offer for community users — replaces the
+                old "browse three tiers on /pricing" model. Renders
+                near the top so it's the first thing they see when
+                they tap the sidebar Upgrade link. Component is a
+                no-op for non-community users. */}
+            {isCommunity && <UpgradeOffer />}
 
             {showProgress && (
                 <section>

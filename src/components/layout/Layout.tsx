@@ -217,11 +217,13 @@ export const Layout = () => {
                         <SidebarItem to="/update" icon={UserCircle} label={t('navProfile')} onClick={closeSidebar} />
                         <SidebarItem to="/settings" icon={Settings} label={t('navSettings')} onClick={closeSidebar} />
 
-                        {/* Subscribe / Upgrade — community users see this prominently. Hidden
-                            for already-paying clients and coaches. Always points at the
-                            launch-day Stripe Payment Links via /pricing. */}
+                        {/* Subscribe / Upgrade — community users see this prominently.
+                            Hidden for already-paying clients and coaches. Now points at
+                            /update (the Profile page) where the inline UpgradeOffer card
+                            lives. The old /pricing route still exists for direct/guest
+                            access but is no longer the entry point from inside the app. */}
                         {user.role === 'community' && (
-                            <SidebarItem to="/pricing" icon={Sparkles} label={t('navUpgrade') ?? 'Upgrade'} onClick={closeSidebar} />
+                            <SidebarItem to="/update" icon={Sparkles} label={t('navUpgrade') ?? 'Upgrade'} onClick={closeSidebar} />
                         )}
                     </nav>
                 </div>
