@@ -3,7 +3,11 @@ import { useLanguage } from '../context/LanguageContext';
 import { ClipboardList, TrendingUp } from 'lucide-react';
 import { ProgressPanel } from '../components/profile/ProgressPanel';
 import { CoachingJourneyPanel } from '../components/profile/CoachingJourneyPanel';
-import { UpgradeOffer } from '../components/profile/UpgradeOffer';
+
+// Profile / Update page — purely about the user updating their own
+// metrics (weight, energy, hunger, photos, etc.) and reviewing past
+// progress. The community-to-coaching upgrade pitch lives on its own
+// dedicated /upgrade route now — don't mount UpgradeOffer here.
 
 export const Profile = () => {
     const { user } = useAuth();
@@ -11,8 +15,8 @@ export const Profile = () => {
 
     if (!user) return null;
 
-    const isCommunity = user.role === 'community';
     const isCoachingClient = user.role === 'client';
+    const isCommunity = user.role === 'community';
     const showProgress = isCoachingClient || isCommunity;
 
     return (
@@ -25,13 +29,6 @@ export const Profile = () => {
                     {t('profileTitle')}<span className="text-primary-container">.</span>
                 </h1>
             </header>
-
-            {/* Inline upgrade offer for community users — replaces the
-                old "browse three tiers on /pricing" model. Renders
-                near the top so it's the first thing they see when
-                they tap the sidebar Upgrade link. Component is a
-                no-op for non-community users. */}
-            {isCommunity && <UpgradeOffer />}
 
             {showProgress && (
                 <section>
