@@ -14,7 +14,7 @@ export const Messages = () => {
     // coach sees every message involving the selected client regardless
     // of which staff UID was the recipient.
     const { clients, messages, sendMessage, markMessagesRead } = useData();
-    const { t } = useLanguage();
+    const { t, isRTL } = useLanguage();
     const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
     const [text, setText] = useState('');
     const [selectedImage, setSelectedImage] = useState<File | null>(null);
@@ -341,9 +341,12 @@ export const Messages = () => {
         // Firestore returns Timestamp objects from serverTimestamp() writes.
         // Pending writes appear as null on the writer's local snapshot
         // briefly — show a dash until the server stamp lands.
+        // Locale matches the active language so Arabic users see Arabic
+        // month names and Arabic-Indic digits in the timestamp row.
         const d = tsToDate(ts);
         if (!d) return '—';
-        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ', ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+        const locale = isRTL ? 'ar-EG' : 'en-US';
+        return d.toLocaleDateString(locale, { month: 'short', day: 'numeric' }) + '، ' + d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
     };
 
     // Resolve the displayed name from the contact list. Falls back to the
@@ -364,7 +367,7 @@ export const Messages = () => {
             {contacts.length > 0 && (
                 <div className={`${selectedUserId ? 'hidden md:flex' : 'flex'} flex-col w-full md:w-80 shrink-0 bg-surface-container-low rounded-2xl ghost-border overflow-hidden`}>
                     <div className="p-6 bg-surface-container/50 border-b border-outline-variant/30">
-                        <span className="font-label text-[10px] uppercase tracking-widest text-primary font-bold block mb-2">Inbox</span>
+                        <span className="font-label text-[10px] uppercase tracking-widest text-primary font-bold block mb-2">{t('inbox')}</span>
                         <h2 className="text-2xl font-headline font-extrabold text-on-surface flex items-center gap-3">
                             <MessageSquare size={20} className="text-primary" />
                             {t('navMessages')}
@@ -376,7 +379,12 @@ export const Messages = () => {
                                 key={c.userId}
                                 onClick={() => setSelectedUserId(c.userId)}
                                 className={`w-full flex items-center gap-4 p-5 text-left transition-all hover:bg-surface-container-highest/30 ${selectedUserId === c.userId ? 'bg-primary/5' : ''}`}
-                                style={{ borderLeft: selectedUserId === c.userId ? '3px solid #e6c364' : '3px solid transparent' }}
+                                // Active-thread rail anchors to the "start" edge — left
+                                // in English, right in Arabic — so the highlight always
+                                // sits where the cursor enters the row.
+                                style={isRTL
+                                    ? { borderRight: selectedUserId === c.userId ? '3px solid #e6c364' : '3px solid transparent' }
+                                    : { borderLeft:  selectedUserId === c.userId ? '3px solid #e6c364' : '3px solid transparent' }}
                             >
                                 <div className="w-12 h-12 rounded-full bg-surface-container-highest flex items-center justify-center text-on-surface font-headline font-bold text-lg shrink-0 border border-primary/20">
                                     {c.name.charAt(0)}
@@ -388,14 +396,14 @@ export const Messages = () => {
                                             <span
                                                 className="px-2.5 py-1 rounded-full bg-primary text-on-primary font-label text-[10px] font-bold uppercase tracking-widest flex items-center justify-center shrink-0 bzt-pulse-soft"
                                                 style={{ animation: 'bzt-pulse-soft 1.6s cubic-bezier(0.16, 1, 0.3, 1) infinite' }}
-                                                aria-label={`${c.unread} unread message${c.unread === 1 ? '' : 's'}`}
+                                                aria-label={`${c.unread} ${t('msgUnreadAria')}`}
                                             >
-                                                {c.unread} NEW
+                                                {c.unread} {t('msgUnreadBadge')}
                                             </span>
                                         )}
                                     </div>
                                     <p className="text-on-surface/50 text-xs font-body truncate">
-                                        {c.lastMsg ? (c.lastMsg.text || (c.lastMsg.imageUrl ? 'Photo' : '')) : t('noMessagesYet')}
+                                        {c.lastMsg ? (c.lastMsg.text || (c.lastMsg.imageUrl ? t('msgPhotoFallback') : '')) : t('noMessagesYet')}
                                     </p>
                                 </div>
                             </button>
@@ -452,7 +460,7 @@ export const Messages = () => {
                                                 <a href={msg.imageUrl} target="_blank" rel="noreferrer" className="block mb-3">
                                                     <img
                                                         src={msg.imageUrl}
-                                                        alt={msg.imageName || 'Chat attachment'}
+                                                        alt={msg.imageName || t('msgChatAttachmentAlt')}
                                                         loading="lazy"
                                                         decoding="async"
                                                         className="max-h-72 w-full rounded-xl object-cover"
@@ -498,7 +506,7 @@ export const Messages = () => {
                                             if (fileInputRef.current) fileInputRef.current.value = '';
                                         }}
                                         className="h-9 w-9 rounded-full bg-surface-container-high text-on-surface/60 hover:text-on-surface flex items-center justify-center"
-                                        aria-label="Remove image"
+                                        aria-label={t('msgRemoveImage')}
                                     >
                                         <X size={16} />
                                     </button>
@@ -517,7 +525,7 @@ export const Messages = () => {
                                     onClick={() => fileInputRef.current?.click()}
                                     disabled={sending}
                                     className="w-14 h-14 rounded-full bg-surface-container-lowest text-on-surface/60 hover:text-primary hover:bg-surface-container-high flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed transition-all shrink-0"
-                                    aria-label="Attach image"
+                                    aria-label={t('msgAttachImage')}
                                 >
                                     <ImagePlus size={20} />
                                 </button>

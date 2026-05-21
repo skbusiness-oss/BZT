@@ -1113,6 +1113,15 @@ export const translations = {
     checkinHeroPending:        { en: 'Log weight, photos, and macros so coach Zaki can review your week.',
                                  ar: 'سجّل وزنك، صورك، وماكروزك ليتمكّن الكوتش زاكي من مراجعة أسبوعك.' },
 
+    // ─── Messages (chat) ───────────────────────────────────────────
+    inbox:                     { en: 'Inbox',                                ar: 'الرسائل' },
+    msgUnreadBadge:            { en: 'NEW',                                  ar: 'جديد' },
+    msgPhotoFallback:          { en: 'Photo',                                ar: 'صورة' },
+    msgRemoveImage:            { en: 'Remove image',                         ar: 'إزالة الصورة' },
+    msgAttachImage:            { en: 'Attach image',                         ar: 'إرفاق صورة' },
+    msgChatAttachmentAlt:      { en: 'Chat attachment',                      ar: 'مرفق المحادثة' },
+    msgUnreadAria:             { en: 'unread messages',                      ar: 'رسائل غير مقروءة' },
+
     // ─── University level cards ────────────────────────────────────
     universityLevelLabel:      { en: 'Level',                                ar: 'المستوى' },
     universityOpenLabel:       { en: 'Open',                                 ar: 'افتح' },
