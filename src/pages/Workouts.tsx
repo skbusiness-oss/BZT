@@ -52,8 +52,6 @@ const groupItems = <T,>(items: T[], getLabel: (item: T) => string): [string, T[]
 
 // ─── Component ────────────────────────────────────────────────
 
-type ViewMode = 'programs' | 'workouts' | 'custom';
-
 export const Workouts = () => {
     const [searchParams] = useSearchParams();
     const {
@@ -70,7 +68,10 @@ export const Workouts = () => {
     const showWizard = !isCoach && !programLoading && !activeProgram;
 
     // ── View / filter state ────────────────────────────────────
-    const [viewMode, setViewMode]         = useState<ViewMode>(() => searchParams.get('view') === 'workouts' ? 'workouts' : 'programs');
+    // viewMode was removed with the Training Programs / Workout
+    // Library / Custom tab pills — category cards alone drive what
+    // renders now. Each section auto-shows when there's content for
+    // the picked category.
     const [search, setSearch]             = useState('');
     const [categoryFilter, setCategoryFilter] = useState(() => searchParams.get('category') || 'All');
     const [goalFilter, setGoalFilter]     = useState<'all' | WorkoutGoal>('all');
@@ -87,14 +88,12 @@ export const Workouts = () => {
     const [showCategoryModal, setShowCategoryModal] = useState(false);
     const [newCategoryName, setNewCategoryName]     = useState('');
 
+    // URL-driven deep-linking — only `?category=` still matters.
+    // `?view=` was removed alongside the view-mode tabs.
     useEffect(() => {
-        const view = searchParams.get('view');
         const category = searchParams.get('category');
-        if (view === 'programs' || view === 'workouts' || (view === 'custom' && isCoach)) {
-            setViewMode(view);
-        }
         if (category) setCategoryFilter(category);
-    }, [isCoach, searchParams]);
+    }, [searchParams]);
 
     // ── Editor handlers ────────────────────────────────────────
     const openCreate = () => { setEditingWorkout(null); setShowEditor(true); };
@@ -176,12 +175,11 @@ export const Workouts = () => {
     }, [workouts, allCategories.join('|')]);
 
     const handleCategoryFilter = (cat: string) => {
+        // viewMode auto-switching went away with the tab pills — each
+        // section auto-renders when it has matching content for the
+        // chosen category, so the user doesn't have to think about
+        // which "view" their picked category lives in.
         setCategoryFilter(cat);
-        if (cat !== 'All') {
-            const hasProgramSplit = ALL_PROGRAMS.some(p => p.split === cat);
-            const hasStaticWorkoutCategory = workouts.some(w => !isCustom(w) && w.category === cat);
-            if (!hasProgramSplit && hasStaticWorkoutCategory) setViewMode('workouts');
-        }
     };
 
     // ─────────────────────────────────────────────────────────
@@ -244,47 +242,11 @@ export const Workouts = () => {
                 </div>
             </div>
 
-            {/* ── View mode tabs ────────────────────────────── */}
-            <div className="flex gap-3 flex-wrap">
-                <button
-                    onClick={() => setViewMode('programs')}
-                    className={clsx(
-                        'px-6 py-3 rounded-full text-[10px] font-label font-bold uppercase tracking-widest transition-all flex items-center gap-2 border',
-                        viewMode === 'programs'
-                            ? 'bg-primary text-on-primary border-primary shadow-[0_10px_20px_rgba(230,195,100,0.2)]'
-                            : 'bg-surface-container-low text-on-surface/60 border-outline-variant/30 hover:bg-surface-container hover:text-on-surface'
-                    )}
-                >
-                    <Calendar size={14} /> {t('trainingProgramsTab')}
-                </button>
-
-                <button
-                    onClick={() => setViewMode('workouts')}
-                    className={clsx(
-                        'px-6 py-3 rounded-full text-[10px] font-label font-bold uppercase tracking-widest transition-all flex items-center gap-2 border',
-                        viewMode === 'workouts'
-                            ? 'bg-primary text-on-primary border-primary shadow-[0_10px_20px_rgba(230,195,100,0.2)]'
-                            : 'bg-surface-container-low text-on-surface/60 border-outline-variant/30 hover:bg-surface-container hover:text-on-surface'
-                    )}
-                >
-                    <Dumbbell size={14} /> Workout Library
-                </button>
-
-                {isCoach && (
-                    <button
-                        onClick={() => setViewMode('custom')}
-                        className={clsx(
-                            'px-6 py-3 rounded-full text-[10px] font-label font-bold uppercase tracking-widest transition-all flex items-center gap-2 border',
-                            viewMode === 'custom'
-                                ? 'bg-primary text-on-primary border-primary shadow-[0_10px_20px_rgba(230,195,100,0.2)]'
-                                : 'bg-surface-container-low text-on-surface/60 border-outline-variant/30 hover:bg-surface-container hover:text-on-surface'
-                        )}
-                    >
-                        <Dumbbell size={14} /> {t('customWorkoutsTab')}
-                    </button>
-                )}
-
-            </div>
+            {/* View-mode tabs (Training Programs / Workout Library /
+                Custom Workouts) were removed — founder direction is
+                that the category cards alone drive filtering. When a
+                category is selected, every section that has matching
+                content for that category renders below. */}
 
             {/* ── Categories + Goal filter ─────────────────────
                 Category browsing replaces the old chip strip with a
@@ -374,8 +336,12 @@ export const Workouts = () => {
 
             {/* ═══════════════════════════════════════════════
                 TRAINING PROGRAMS VIEW
+                Only renders when a category is selected AND there's
+                at least one program in that category — keeps the
+                page quiet if the user picked a category that's
+                only represented in the library.
             ════════════════════════════════════════════════ */}
-            {viewMode === 'programs' && categoryFilter !== 'All' && (
+            {categoryFilter !== 'All' && filteredPrograms.length > 0 && (
                 <div className="space-y-8">
                     {groupedPrograms.map(([split, programs]) => (
                         <section key={split} className="space-y-4">
@@ -564,9 +530,12 @@ export const Workouts = () => {
             )}
 
             {/* ═══════════════════════════════════════════════
-                CUSTOM WORKOUTS VIEW  (coach only)
+                WORKOUT LIBRARY VIEW
+                Static stretching / standalone workouts. Same render
+                gate: only when a category is selected AND there's
+                content for it.
             ════════════════════════════════════════════════ */}
-            {viewMode === 'workouts' && categoryFilter !== 'All' && (
+            {categoryFilter !== 'All' && libraryWorkouts.length > 0 && (
                 <div className="space-y-8">
                     {groupedLibraryWorkouts.map(([category, items]) => (
                         <section key={category} className="space-y-4">
@@ -651,7 +620,8 @@ export const Workouts = () => {
                 </div>
             )}
 
-            {viewMode === 'custom' && categoryFilter !== 'All' && (
+            {/* Coach-only custom workouts for the selected category. */}
+            {isCoach && categoryFilter !== 'All' && customWorkouts.length > 0 && (
                 <div className="grid grid-cols-1 gap-6">
                     {customWorkouts.map(workout => {
                         const isExpanded = expandedWorkout === workout.id;
