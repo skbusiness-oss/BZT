@@ -90,7 +90,11 @@ export const Layout = () => {
 
     const isCoach = user.role === 'coach' || user.role === 'admin';
     const isClient = user.role === 'client';
-    const canMessageCoach = isCoach || isClient || user.role === 'community';
+    // Messaging is a coaching-tier feature: coach <-> paid client only.
+    // Community-tier users have the Community feed for asking questions;
+    // private messaging stays gated behind the paid plan so the coach's
+    // inbox doesn't get flooded by users with no coaching engagement.
+    const canMessageCoach = isCoach || isClient;
 
     return (
         <div className="flex h-screen text-on-surface overflow-hidden bg-surface">

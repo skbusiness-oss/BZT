@@ -162,7 +162,7 @@ export const AppRoutes = () => {
                     </ProtectedRoute>
                 } />
                 <Route path="/messages" element={
-                    <ProtectedRoute allowedRoles={['coach', 'admin', 'client', 'community']}>
+                    <ProtectedRoute allowedRoles={['coach', 'admin', 'client']}>
                         <ErrorBoundary><RequireActive><Messages /></RequireActive></ErrorBoundary>
                     </ProtectedRoute>
                 } />

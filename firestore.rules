@@ -23,9 +23,8 @@ service cloud.firestore {
       // The hardcoded `Y9DlGI9kF6dPFPBh4cDvMnxbayB3` (Coach Zaki) clause
       // is the last line of defense: when both his custom claim and his
       // Firestore role lookup fail (token freshly minted, doc in-flight,
-      // mirror not yet written), the unfiltered messages query and the
-      // staff write paths would silently degrade to "empty inbox" — and
-      // every coach message thread looks broken to him. With this
+      // mirror not yet written), coach-only write paths would silently
+      // degrade and admin tools would look broken to him. With this
       // anchor he stays staff under all conditions; the only way to
       // strip his staff access is to delete the UID itself.
       return request.auth != null && (
@@ -41,6 +40,20 @@ service cloud.firestore {
 
     function isOwner(uid) {
       return request.auth.uid == uid;
+    }
+
+    // Messaging is gated to the coaching tier — coach <-> paid client.
+    // Community users use the public posts feed for questions; private
+    // messaging is a paid-plan feature so the coach's inbox doesn't
+    // get flooded by users with no coaching engagement. The hardcoded
+    // Y9Dl branch matches isCoach() so the single-coach launch stays
+    // intact even when role lookup is mid-resolve.
+    function isCoachingTier() {
+      return request.auth != null && (
+        request.auth.uid == 'Y9DlGI9kF6dPFPBh4cDvMnxbayB3'
+        || request.auth.token.role in ['coach', 'admin', 'client']
+        || role() in ['coach', 'admin', 'client']
+      );
     }
 
     // Belt-and-suspenders gate. Originally this was a heavy predicate:
@@ -329,20 +342,24 @@ service cloud.firestore {
     }
 
     // ─── messages/{messageId} ─────────────────────────────────
+    // Coaching-tier only — community users cannot read, create, or
+    // update message docs. The coach's unfiltered inbox query needs
+    // the isCoach() branch so it doesn't fail per-doc when neither
+    // sender nor receiver is him.
     match /messages/{messageId} {
-      allow read: if isSignedIn() && isActive()
+      allow read: if isCoachingTier()
                   && (isCoach()
                       || resource.data.senderId == request.auth.uid
                       || resource.data.receiverId == request.auth.uid);
 
-      allow create: if isSignedIn() && isActive()
+      allow create: if isCoachingTier()
                     && request.resource.data.senderId == request.auth.uid
                     && request.resource.data.receiverId is string
                     && request.resource.data.senderName is string
                     && isValidMessageBody();
 
-      // Only mark-as-read updates allowed for the receiver
-      allow update: if isSignedIn() && isActive()
+      // Only mark-as-read updates allowed for the receiver.
+      allow update: if isCoachingTier()
                     && resource.data.receiverId == request.auth.uid
                     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
 
