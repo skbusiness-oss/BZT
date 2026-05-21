@@ -16,3 +16,4 @@ export { forwardMessagesToCoach } from './forwardMessages';
 export { consolidateMessagesToCoach } from './consolidateMessages';
 export { onMessageCreated, onCheckInReviewed } from './pushNotifications';
 export { weeklyReminders } from './weeklyReminders';
+export { sendTestPush } from './sendTestPush';

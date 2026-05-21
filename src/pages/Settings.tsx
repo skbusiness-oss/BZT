@@ -17,15 +17,20 @@
  * Removed — the identity card here makes it redundant, and Profile now
  * means "progress + details", not "your account".
  */
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import {
     Globe, Bell, LogOut, Shield, Sun, Moon, Edit2, Calendar, UserRound, Activity, Target, Award,
+    CheckCircle2, AlertCircle, Loader2, Send,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { onSnapshot, doc } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
+import { db, functions } from '../lib/firebase';
+import { registerFcmToken } from '../lib/fcm';
 import { CommunityBaselineForm } from '../components/profile/CommunityBaselineForm';
 
 function calculateAge(birthdate: string): number {
@@ -189,6 +194,9 @@ export const Settings = () => {
                 />
             </section>
 
+            {/* ── Push notifications diagnostic ─────────────────────── */}
+            <NotificationsDiagnostic uid={user.id} />
+
             {/* ── Account card ─────────────────────────────────────── */}
             <section className="bg-surface-container-low rounded-2xl ghost-border overflow-hidden">
                 <div className="px-6 pt-6 pb-3">
@@ -272,4 +280,191 @@ function Row({ icon, label, control, last }: {
 
 function InfoValue({ children }: { children: React.ReactNode }) {
     return <span className="text-sm font-headline font-bold text-on-surface">{children}</span>;
+}
+
+// ── Push notifications diagnostic ────────────────────────────────────
+// Reads four signals so the user can self-diagnose "I'm not getting
+// pushes" without DevTools:
+//   1. Browser-level Notification.permission (granted / default / denied)
+//   2. Service-worker registration status
+//   3. fcmTokens.length on users/{uid}  ← live snapshot
+//   4. Round-trip test push that calls sendTestPush callable
+//
+// If (1) or (2) fail → user must act in browser settings.
+// If (3) is 0 → registration never persisted (rules / VAPID / browser).
+// If (1-3) good but (4) returns successCount=0 → tokens stale, the
+// function prunes them and the next sign-in re-registers.
+// If (4) succeeds but no OS notification appears → OS-level mute / DnD.
+function NotificationsDiagnostic({ uid }: { uid: string }) {
+    const [permission, setPermission] = useState<NotificationPermission | 'unsupported'>(() =>
+        typeof Notification === 'undefined' ? 'unsupported' : Notification.permission
+    );
+    const [swRegistered, setSwRegistered] = useState<boolean | null>(null);
+    const [tokenCount, setTokenCount] = useState<number | null>(null);
+    const [registering, setRegistering] = useState(false);
+    const [testing, setTesting] = useState(false);
+    const [testResult, setTestResult] = useState<string | null>(null);
+    const [testOk, setTestOk] = useState<boolean | null>(null);
+
+    useEffect(() => {
+        if (!('serviceWorker' in navigator)) {
+            setSwRegistered(false);
+            return;
+        }
+        navigator.serviceWorker
+            .getRegistration('/firebase-messaging-sw.js')
+            .then(reg => setSwRegistered(!!reg))
+            .catch(() => setSwRegistered(false));
+    }, []);
+
+    // Live-watch fcmTokens so re-registration is reflected without reload.
+    useEffect(() => {
+        const unsub = onSnapshot(
+            doc(db, 'users', uid),
+            (snap) => {
+                const tokens = (snap.data()?.fcmTokens as string[] | undefined) ?? [];
+                setTokenCount(tokens.length);
+            },
+            () => setTokenCount(null),
+        );
+        return () => unsub();
+    }, [uid]);
+
+    const handleRegister = async () => {
+        setRegistering(true);
+        setTestResult(null);
+        try {
+            const ok = await registerFcmToken(uid);
+            if (!ok) setTestResult('Registration failed — check DevTools console for [fcm] log lines.');
+            // tokenCount updates via the snapshot listener.
+            if (typeof Notification !== 'undefined') setPermission(Notification.permission);
+        } finally {
+            setRegistering(false);
+        }
+    };
+
+    const handleSendTest = async () => {
+        setTesting(true);
+        setTestResult(null);
+        setTestOk(null);
+        try {
+            const fn = httpsCallable<
+                Record<string, never>,
+                {
+                    ok: boolean;
+                    tokenCount: number;
+                    successCount: number;
+                    failureCount: number;
+                    failures: { code: string; message: string }[];
+                    reason?: string;
+                }
+            >(functions, 'sendTestPush');
+            const res = await fn({});
+            const { ok, tokenCount: tc, successCount, failureCount, failures, reason } = res.data;
+            setTestOk(ok);
+            if (reason) {
+                setTestResult(reason);
+            } else if (ok) {
+                setTestResult(
+                    `Sent to ${tc} device${tc === 1 ? '' : 's'}: ${successCount} success, ${failureCount} failed.` +
+                    (failures.length > 0 ? ` First failure: ${failures[0].code}` : '')
+                );
+            } else {
+                setTestResult(
+                    `Send completed but FCM rejected all tokens. ${failures.length > 0 ? `First failure: ${failures[0].code} — ${failures[0].message}` : ''}`
+                );
+            }
+        } catch (err) {
+            setTestOk(false);
+            const msg = err instanceof Error ? err.message : String(err);
+            setTestResult(`Call failed: ${msg}`);
+        } finally {
+            setTesting(false);
+        }
+    };
+
+    const StatusPill = ({ ok, label }: { ok: boolean | null; label: string }) => (
+        <div className="flex items-center gap-2 text-sm">
+            {ok === null ? (
+                <Loader2 size={14} className="text-on-surface/40 animate-spin" />
+            ) : ok ? (
+                <CheckCircle2 size={14} className="text-emerald-400" />
+            ) : (
+                <AlertCircle size={14} className="text-amber-400" />
+            )}
+            <span className="text-on-surface font-body">{label}</span>
+        </div>
+    );
+
+    return (
+        <section className="bg-surface-container-low rounded-2xl ghost-border overflow-hidden">
+            <div className="px-6 pt-6 pb-3">
+                <span className="font-label text-[10px] font-bold uppercase tracking-widest text-on-surface/55">
+                    Push notifications
+                </span>
+                <p className="text-xs text-on-surface/55 mt-1 font-body leading-relaxed">
+                    Diagnose why pushes aren't arriving. All four lines should be green.
+                </p>
+            </div>
+
+            <div className="px-6 pb-4 space-y-2.5">
+                <StatusPill
+                    ok={permission === 'granted'}
+                    label={
+                        permission === 'granted' ? 'Notification permission granted' :
+                        permission === 'denied' ? 'Notification permission DENIED — re-allow in browser site settings' :
+                        permission === 'unsupported' ? 'This browser does not support web push' :
+                        'Notification permission not asked yet — tap Register below'
+                    }
+                />
+                <StatusPill
+                    ok={swRegistered}
+                    label={swRegistered === false ? 'Service worker NOT registered' : 'Service worker registered'}
+                />
+                <StatusPill
+                    ok={tokenCount === null ? null : tokenCount > 0}
+                    label={
+                        tokenCount === null ? 'Checking registered devices…' :
+                        tokenCount === 0 ? 'No devices registered on this account — tap Register below' :
+                        `${tokenCount} device${tokenCount === 1 ? '' : 's'} registered on this account`
+                    }
+                />
+                {testOk !== null && (
+                    <StatusPill
+                        ok={testOk}
+                        label={testOk ? 'Test push delivered to FCM' : 'Test push failed at FCM'}
+                    />
+                )}
+            </div>
+
+            <div className="px-6 pb-6 flex flex-wrap gap-3">
+                <button
+                    type="button"
+                    onClick={handleRegister}
+                    disabled={registering || permission === 'denied' || permission === 'unsupported'}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-surface-container-highest text-on-surface text-sm font-label font-bold uppercase tracking-widest hover:bg-surface-bright disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                >
+                    {registering ? <Loader2 size={14} className="animate-spin" /> : <Bell size={14} />}
+                    {registering ? 'Registering…' : 'Register this device'}
+                </button>
+                <button
+                    type="button"
+                    onClick={handleSendTest}
+                    disabled={testing || tokenCount === 0}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl gold-gradient text-on-primary-fixed text-sm font-label font-bold uppercase tracking-widest disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                >
+                    {testing ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                    {testing ? 'Sending…' : 'Send test push'}
+                </button>
+            </div>
+
+            {testResult && (
+                <div className="px-6 pb-6">
+                    <div className={`rounded-xl px-4 py-3 text-xs font-mono leading-relaxed ${testOk ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/30' : 'bg-amber-500/10 text-amber-300 border border-amber-500/30'}`}>
+                        {testResult}
+                    </div>
+                </div>
+            )}
+        </section>
+    );
 }
