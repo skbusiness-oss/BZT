@@ -12,6 +12,7 @@ import { db, storage } from '../lib/firebase';
 import { useAuth } from './AuthContext';
 import { Message } from '../types';
 import { rateLimits, validateImageFile, validateText } from '../lib/validation';
+import { compressImageIfNeeded } from '../lib/imageCompression';
 import { tsToMillis } from '../lib/firestoreTime';
 import type { QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 
@@ -274,6 +275,12 @@ export const MessagesProvider = ({ children }: { children: ReactNode }) => {
     if (imageFile) {
       const imageErr = validateImageFile(imageFile);
       if (imageErr) throw new Error(imageErr);
+      // Compress phone-camera originals to a reasonable max edge before
+      // upload. Cuts a typical 6MB iPhone photo to ~300KB and saves
+      // the receiver an equivalent download. Bypasses if the file is
+      // already small or in a format the canvas can't decode (e.g.,
+      // HEIC on Chrome) — see src/lib/imageCompression.ts.
+      const uploadFile = await compressImageIfNeeded(imageFile);
       const mimeToExt: Record<string, string> = {
         'image/jpeg': 'jpg',
         'image/png': 'png',
@@ -282,15 +289,15 @@ export const MessagesProvider = ({ children }: { children: ReactNode }) => {
         'image/heic': 'heic',
         'image/heif': 'heif',
       };
-      const ext = mimeToExt[imageFile.type] ?? 'jpg';
+      const ext = mimeToExt[uploadFile.type] ?? 'jpg';
       const path = `chat-images/${senderId}/to/${receiverId}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-      const snapshot = await uploadBytes(ref(storage, path), imageFile, { contentType: imageFile.type || `image/${ext}` });
+      const snapshot = await uploadBytes(ref(storage, path), uploadFile, { contentType: uploadFile.type || `image/${ext}` });
       imagePayload = {
         imageUrl: await getDownloadURL(snapshot.ref),
         imagePath: path,
-        imageName: imageFile.name,
-        imageType: imageFile.type,
-        imageSize: imageFile.size,
+        imageName: imageFile.name, // keep the user-facing name
+        imageType: uploadFile.type,
+        imageSize: uploadFile.size,
       };
     }
 

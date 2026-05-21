@@ -20,6 +20,7 @@ const callSetUserRole = httpsCallable<
 >(functions, 'setUserRole');
 import { Client, Week, MacroTarget, MacroTargets } from '../types';
 import { validateImageFile } from '../lib/validation';
+import { compressImageIfNeeded } from '../lib/imageCompression';
 import { reportError } from '../lib/reportError';
 import { DEFAULT_TARGETS } from '../lib/constants';
 import type { QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
@@ -326,6 +327,12 @@ export const CoachingProvider = ({ children }: { children: ReactNode }) => {
   const uploadPhoto = async (file: File, userId: string, weekNumber: number): Promise<string> => {
     const err = validateImageFile(file);
     if (err) throw new Error(err);
+    // Progress photos from phones are typically 6-12 MB at 4000+ px
+    // wide. We display them at 200-400 px in cards and full-screen
+    // in lightboxes — neither needs that resolution. Compress to a
+    // 1600 px max edge JPEG before upload: 90%+ size cut, no visible
+    // quality loss, faster upload + faster download for coach review.
+    const uploadFile = await compressImageIfNeeded(file);
 
     // Use the browser-reported MIME type for the extension, not the filename,
     // to prevent extension spoofing (e.g. evil.exe renamed to photo.jpg).
@@ -333,12 +340,12 @@ export const CoachingProvider = ({ children }: { children: ReactNode }) => {
       'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp',
       'image/gif': 'gif', 'image/heic': 'heic', 'image/heif': 'heif',
     };
-    const ext = mimeToExt[file.type] ?? 'jpg';
+    const ext = mimeToExt[uploadFile.type] ?? 'jpg';
     const path = `check-ins/${userId}/week${weekNumber}/${Date.now()}.${ext}`;
     const storageRef = ref(storage, path);
     // Force the contentType. iOS Safari can send `application/octet-stream`
     // for files picked from Files app, and our storage rule denies that.
-    const snapshot = await uploadBytes(storageRef, file, { contentType: file.type || `image/${ext}` });
+    const snapshot = await uploadBytes(storageRef, uploadFile, { contentType: uploadFile.type || `image/${ext}` });
     return getDownloadURL(snapshot.ref);
   };
 
