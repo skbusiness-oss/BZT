@@ -169,9 +169,15 @@ function WeeklyUpdateReminderCard({ locked, lastDate, nextDate, onNavigate }: {
     nextDate?: string | null;
     onNavigate: (path: string) => void;
 }) {
-    const { t: tx } = useLanguage();
-    const fmt = (iso?: string | null) =>
-        iso ? new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
+    const { t: tx, isRTL } = useLanguage();
+    // Locale-aware date format — Arabic users see Arabic month names
+    // ("17 مايو") instead of "May 17" alongside the rest of their
+    // translated card chrome.
+    const fmt = (iso?: string | null) => {
+        if (!iso) return '';
+        const locale = isRTL ? 'ar-EG' : 'en-US';
+        return new Date(iso).toLocaleDateString(locale, { month: 'short', day: 'numeric' });
+    };
 
     return (
         <button
@@ -215,7 +221,7 @@ function WeeklyUpdateReminderCard({ locked, lastDate, nextDate, onNavigate }: {
                         textTransform: 'uppercase',
                         color: locked ? t.onSurfaceVariant : t.primary,
                     }}>
-                        Weekly update
+                        {tx('dashWeeklyUpdateEyebrow')}
                     </div>
                     <div style={{
                         marginTop: 4,
@@ -225,10 +231,10 @@ function WeeklyUpdateReminderCard({ locked, lastDate, nextDate, onNavigate }: {
                         color: t.onSurface,
                         letterSpacing: '-0.01em',
                     }}>
-                        {locked ? `Logged ${fmt(lastDate)}` : 'Log weight, signals, and cardio'}
+                        {locked ? `${tx('dashWeeklyUpdateLoggedPfx')} ${fmt(lastDate)}` : tx('dashWeeklyUpdateLogCta')}
                     </div>
                     <p style={{ margin: '4px 0 0', fontFamily: t.body, fontSize: 12, color: t.onSurfaceVariant }}>
-                        {locked ? `Next update opens ${fmt(nextDate)}` : 'Takes one minute and updates your charts.'}
+                        {locked ? `${tx('dashWeeklyUpdateNextOpens')} ${fmt(nextDate)}` : tx('dashWeeklyUpdateMinute')}
                     </p>
                 </div>
             </div>
@@ -244,7 +250,7 @@ function WeeklyUpdateReminderCard({ locked, lastDate, nextDate, onNavigate }: {
                 letterSpacing: '0.08em',
                 textTransform: 'uppercase',
             }}>
-                {locked ? tx('view') : 'Log cardio'}
+                {locked ? tx('view') : tx('dashWeeklyUpdatePillLog')}
             </span>
         </button>
     );

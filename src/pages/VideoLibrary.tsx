@@ -273,10 +273,10 @@ export const VideoLibrary = () => {
         : 1;
 
     const TABS: { id: MainTab; label: string; icon: React.ReactNode }[] = [
-        { id: 'academy', label: 'Academy Path', icon: <GraduationCap size={15} /> },
-        { id: 'lives', label: 'Live Sessions', icon: <Tv2 size={15} /> },
-        { id: 'topics', label: 'Topics', icon: <Tag size={15} /> },
-        ...(isCoach ? [{ id: 'manage' as MainTab, label: 'Manage', icon: <Settings2 size={15} /> }] : []),
+        { id: 'academy', label: t('tabAcademyPath'),   icon: <GraduationCap size={15} /> },
+        { id: 'lives',   label: t('tabLiveSessions'),  icon: <Tv2 size={15} /> },
+        { id: 'topics',  label: t('tabTopics'),        icon: <Tag size={15} /> },
+        ...(isCoach ? [{ id: 'manage' as MainTab, label: t('tabManage'), icon: <Settings2 size={15} /> }] : []),
     ];
 
     // ── Render ────────────────────────────────────────────────────────────────
@@ -391,7 +391,7 @@ export const VideoLibrary = () => {
                                         className="text-[10px] font-headline font-bold uppercase tracking-[0.3em] block mb-2"
                                         style={{ color: '#e6c364' }}
                                     >
-                                        Continue Learning
+                                        {t('continueLearningEyebrow')}
                                     </span>
                                     <h2
                                         className="text-2xl md:text-[28px] font-headline font-extrabold mb-2 leading-tight"
@@ -401,7 +401,7 @@ export const VideoLibrary = () => {
                                     </h2>
                                     {continueLearning.nextLesson && (
                                         <p className="text-sm" style={{ color: 'rgba(255,255,255,0.82)' }}>
-                                            Next: <span style={{ color: '#fff', fontWeight: 500 }}>{continueLearning.nextLesson.title}</span>
+                                            {t('continueNextLabel')}: <span style={{ color: '#fff', fontWeight: 500 }}>{continueLearning.nextLesson.title}</span>
                                         </p>
                                     )}
                                 </div>
@@ -409,7 +409,7 @@ export const VideoLibrary = () => {
                                     onClick={() => setActiveCourseId(continueLearning.course.id)}
                                     className="gold-gradient text-on-primary-fixed px-8 py-3.5 rounded-full font-label text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 shrink-0 shadow-lg shadow-primary/30 active:scale-95 transition-all self-start md:self-end"
                                 >
-                                    Continue <ArrowRight size={14} />
+                                    {t('continueCta')} <ArrowRight size={14} />
                                 </button>
                             </div>
                         </div>

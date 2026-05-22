@@ -389,6 +389,7 @@ function InfoValue({ children }: { children: React.ReactNode }) {
 // function prunes them and the next sign-in re-registers.
 // If (4) succeeds but no OS notification appears → OS-level mute / DnD.
 function NotificationsDiagnostic({ uid }: { uid: string }) {
+    const { t } = useLanguage();
     const [permission, setPermission] = useState<NotificationPermission | 'unsupported'>(() =>
         typeof Notification === 'undefined' ? 'unsupported' : Notification.permission
     );
@@ -550,10 +551,10 @@ function NotificationsDiagnostic({ uid }: { uid: string }) {
         <section className="bg-surface-container-low rounded-2xl ghost-border overflow-hidden">
             <div className="px-6 pt-6 pb-3">
                 <span className="font-label text-[10px] font-bold uppercase tracking-widest text-on-surface/55">
-                    Push notifications
+                    {t('pushPanelHeader')}
                 </span>
                 <p className="text-xs text-on-surface/55 mt-1 font-body leading-relaxed">
-                    Diagnose why pushes aren't arriving. All four lines should be green.
+                    {t('pushPanelBlurb')}
                 </p>
             </div>
 
@@ -561,28 +562,28 @@ function NotificationsDiagnostic({ uid }: { uid: string }) {
                 <StatusPill
                     ok={permission === 'granted'}
                     label={
-                        permission === 'granted' ? 'Notification permission granted' :
-                        permission === 'denied' ? 'Notification permission DENIED — re-allow in browser site settings' :
-                        permission === 'unsupported' ? 'This browser does not support web push' :
-                        'Notification permission not asked yet — tap Register below'
+                        permission === 'granted' ? t('pushPermissionGranted') :
+                        permission === 'denied' ? t('pushPermissionDenied') :
+                        permission === 'unsupported' ? t('pushPermissionUnsupported') :
+                        t('pushPermissionDefault')
                     }
                 />
                 <StatusPill
                     ok={swRegistered}
-                    label={swRegistered === false ? 'Service worker NOT registered' : 'Service worker registered'}
+                    label={swRegistered === false ? t('pushSwNotRegistered') : t('pushSwRegistered')}
                 />
                 <StatusPill
                     ok={tokenCount === null ? null : tokenCount > 0}
                     label={
-                        tokenCount === null ? 'Checking registered devices…' :
-                        tokenCount === 0 ? 'No devices registered on this account — tap Register below' :
-                        `${tokenCount} device${tokenCount === 1 ? '' : 's'} registered on this account`
+                        tokenCount === null ? '…' :
+                        tokenCount === 0 ? t('pushNoDevices') :
+                        `${tokenCount} ${tokenCount === 1 ? t('pushDeviceCountSingular') : t('pushDeviceCountPlural')}`
                     }
                 />
                 {testOk !== null && (
                     <StatusPill
                         ok={testOk}
-                        label={testOk ? 'Test push delivered to FCM' : 'Test push failed at FCM'}
+                        label={testOk ? t('pushTestOk') : t('pushTestFail')}
                     />
                 )}
             </div>
@@ -604,27 +605,25 @@ function NotificationsDiagnostic({ uid }: { uid: string }) {
                     className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-surface-container-highest text-on-surface text-sm font-label font-bold uppercase tracking-widest hover:bg-surface-bright disabled:opacity-40 disabled:cursor-not-allowed transition-all"
                 >
                     {registering ? <Loader2 size={14} className="animate-spin" /> : <Bell size={14} />}
-                    {registering ? 'Registering…' : 'Register this device'}
+                    {registering ? t('pushBtnRegistering') : t('pushBtnRegister')}
                 </button>
                 <button
                     type="button"
                     onClick={() => doRegister(true)}
                     disabled={registering || permission === 'unsupported'}
                     className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-surface-container-highest text-on-surface text-sm font-label font-bold uppercase tracking-widest hover:bg-surface-bright disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-                    title="Delete this device's current token and mint a fresh one. Use when the device is stuck."
                 >
                     {registering ? <Loader2 size={14} className="animate-spin" /> : <Bell size={14} />}
-                    Reset &amp; re-register
+                    {t('pushBtnResetReregister')}
                 </button>
                 <button
                     type="button"
                     onClick={doWipeAndRegister}
                     disabled={registering || permission === 'unsupported'}
                     className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-rose-500/10 text-rose-300 border border-rose-500/30 text-sm font-label font-bold uppercase tracking-widest hover:bg-rose-500/15 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-                    title="Clear EVERY token on this account, then register only this device. Use this if device count keeps growing."
                 >
                     {registering ? <Loader2 size={14} className="animate-spin" /> : <Bell size={14} />}
-                    Wipe &amp; register only this device
+                    {t('pushBtnWipeRegister')}
                 </button>
                 <button
                     type="button"
@@ -633,7 +632,7 @@ function NotificationsDiagnostic({ uid }: { uid: string }) {
                     className="flex items-center gap-2 px-4 py-2.5 rounded-xl gold-gradient text-on-primary-fixed text-sm font-label font-bold uppercase tracking-widest disabled:opacity-40 disabled:cursor-not-allowed transition-all"
                 >
                     {testing ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-                    {testing ? 'Sending…' : 'Send test push'}
+                    {testing ? t('pushBtnSending') : t('pushBtnSendTest')}
                 </button>
             </div>
 

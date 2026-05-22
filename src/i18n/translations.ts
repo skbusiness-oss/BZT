@@ -458,7 +458,12 @@ export const translations = {
     membership: { en: 'Membership', ar: 'العضوية' },
     coachingTag: { en: 'Coaching', ar: 'تدريب' },
     premiumClient: { en: 'Premium client', ar: 'عميل بريميوم' },
-    communityMemberFree: { en: 'Community member (free)', ar: 'عضو مجتمع (مجاني)' },
+    // Note: the key name is historical — we no longer say "(free)" anywhere.
+    // Founder direction: drop the "free" framing; the plan is "Community
+    // member" period. The Upgrade offer below already does the work of
+    // showing what's missing without needing to remind anyone they're not
+    // paying.
+    communityMemberFree: { en: 'Community member', ar: 'عضو مجتمع' },
     yourCoach: { en: 'Your coach', ar: 'مدربك' },
     messageClient: { en: 'Message client', ar: 'راسل الكلاينت' },
     quickMessagePlaceholder: { en: 'Send a quick note to the client…', ar: 'أرسل ملاحظة سريعة للكلاينت…' },
@@ -1229,6 +1234,54 @@ export const translations = {
     statCurrent:               { en: 'Current',                              ar: 'الحالي' },
     statGoal:                  { en: 'Goal',                                 ar: 'الهدف' },
     statProgress:              { en: 'Progress',                             ar: 'التقدم' },
+
+    // ─── Settings push notifications diagnostic panel ──────────────
+    pushPanelHeader:           { en: 'Push notifications',                   ar: 'الإشعارات الفورية' },
+    pushPanelBlurb:            { en: 'Diagnose why pushes aren\'t arriving. All four lines should be green.',
+                                 ar: 'شخّص سبب عدم وصول الإشعارات. يجب أن تكون السطور الأربعة باللون الأخضر.' },
+    pushPermissionGranted:     { en: 'Notification permission granted',       ar: 'تم منح إذن الإشعارات' },
+    pushPermissionDenied:      { en: 'Notifications blocked — open browser settings to re-allow',
+                                 ar: 'الإشعارات محظورة — افتح إعدادات المتصفح لإعادة السماح' },
+    pushPermissionDefault:     { en: 'Notification permission not yet granted',
+                                 ar: 'لم يُمنح إذن الإشعارات بعد' },
+    pushPermissionUnsupported: { en: 'Push not supported in this browser',
+                                 ar: 'الإشعارات غير مدعومة في هذا المتصفح' },
+    pushSwRegistered:          { en: 'Service worker registered',             ar: 'تم تسجيل عامل الخدمة' },
+    pushSwNotRegistered:       { en: 'Service worker NOT registered',         ar: 'لم يُسجَّل عامل الخدمة' },
+    pushNoDevices:             { en: 'No devices registered — tap Register below',
+                                 ar: 'لا توجد أجهزة مسجّلة — اضغط تسجيل بالأسفل' },
+    pushDeviceCountSingular:   { en: 'device registered on this account',     ar: 'جهاز مسجّل على هذا الحساب' },
+    pushDeviceCountPlural:     { en: 'devices registered on this account',    ar: 'أجهزة مسجّلة على هذا الحساب' },
+    pushTestOk:                { en: 'Test push delivered to FCM',            ar: 'تم تسليم إشعار الاختبار إلى FCM' },
+    pushTestFail:              { en: 'Test push failed at FCM',               ar: 'فشل إشعار الاختبار في FCM' },
+    pushBtnRegister:           { en: 'Register this device',                  ar: 'تسجيل هذا الجهاز' },
+    pushBtnRegistering:        { en: 'Registering…',                          ar: 'جاري التسجيل…' },
+    pushBtnResetReregister:    { en: 'Reset & re-register',                   ar: 'إعادة الضبط وإعادة التسجيل' },
+    pushBtnWipeRegister:       { en: 'Wipe & register only this device',      ar: 'مسح وتسجيل هذا الجهاز فقط' },
+    pushBtnSendTest:           { en: 'Send test push',                        ar: 'إرسال إشعار تجريبي' },
+    pushBtnSending:            { en: 'Sending…',                              ar: 'جاري الإرسال…' },
+
+    // ─── Community dashboard — Weekly update card ──────────────────
+    dashWeeklyUpdateEyebrow:    { en: 'Weekly update',                       ar: 'التحديث الأسبوعي' },
+    dashWeeklyUpdateLoggedPfx:  { en: 'Logged',                              ar: 'سُجِّل بتاريخ' },
+    dashWeeklyUpdateLogCta:     { en: 'Log weight, signals, and cardio',     ar: 'سجّل الوزن، الإشارات، والكارديو' },
+    dashWeeklyUpdateNextOpens:  { en: 'Next update opens',                   ar: 'التحديث التالي يفتح في' },
+    dashWeeklyUpdateMinute:     { en: 'Takes one minute and updates your charts.',
+                                  ar: 'يستغرق دقيقة واحدة ويحدّث رسومك البيانية.' },
+    dashWeeklyUpdatePillLog:    { en: 'Log',                                 ar: 'سجّل' },
+
+    // ─── VideoLibrary / University main tabs ───────────────────────
+    tabAcademyPath:            { en: 'Academy Path',                        ar: 'مسار الأكاديمية' },
+    tabLiveSessions:           { en: 'Live Sessions',                       ar: 'الجلسات المباشرة' },
+    tabTopics:                 { en: 'Topics',                              ar: 'المواضيع' },
+    tabManage:                 { en: 'Manage',                              ar: 'إدارة' },
+
+    // ─── Continue Learning hero (Academy landing) — extra keys ───
+    // Note: `continueCta` already exists earlier in this file as the
+    // dashboard's "Continue" lesson CTA; we reuse it here instead of
+    // redefining (which throws TS1117).
+    continueLearningEyebrow:   { en: 'Continue learning',                   ar: 'تابع التعلّم' },
+    continueNextLabel:         { en: 'Next',                                ar: 'التالي' },
 
     // ─── Inline upgrade offer (Profile page, community users) ──────
     upgradeYourPlanEyebrow:    { en: 'Your plan',                            ar: 'باقتك الحالية' },
