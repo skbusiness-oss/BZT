@@ -1166,6 +1166,46 @@ export const translations = {
     editNameTooLongError:      { en: 'Name is too long (max 60 characters).', ar: 'الاسم طويل جداً (60 حرف كحد أقصى).' },
     editNameFailedError:       { en: 'Could not save. Try again.',           ar: 'تعذّر الحفظ. حاول مجدداً.' },
 
+    // ─── Community Updates / WeeklyCheckIn (ProgressPanel.tsx) ────
+    updWeeklyHeaderEditable:   { en: 'Update your weight and progress once per week.',
+                                 ar: 'حدّث وزنك وتقدّمك مرة في الأسبوع.' },
+    updWeeklyHeaderLocked:     { en: 'This week is logged.',
+                                 ar: 'تم تسجيل هذا الأسبوع.' },
+    updLastSubmitted:          { en: 'Last submitted',                       ar: 'آخر تسجيل' },
+    updNextAvailable:          { en: 'Next available',                       ar: 'متاح في' },
+    updDontForgetTitle:        { en: 'Don\'t forget to log',                 ar: 'لا تنسَ التسجيل' },
+    updDontForgetBody:         { en: 'Update your current weight, log cardio calories for the week, and add a quick note about how it went — these lock with the week.',
+                                 ar: 'حدّث وزنك الحالي، سجّل سعرات الكارديو للأسبوع، وأضف ملاحظة سريعة عن سير الأسبوع — تُقفل هذه القيم مع الأسبوع.' },
+    updRequiredPill:           { en: 'Required',                             ar: 'مطلوب' },
+    updDontForgetPill:         { en: 'Don\'t forget',                       ar: 'لا تنسَ' },
+    updCardioRangeHint:        { en: '0–2000 / week',                        ar: '0–2000 / أسبوعياً' },
+    updHowDidThisWeekGo:       { en: 'How did this week go? Anything to remember.',
+                                 ar: 'كيف كان هذا الأسبوع؟ أي ملاحظات تستحق التذكّر.' },
+    updHintEnterWeight:        { en: 'Enter your current weight to submit.',
+                                 ar: 'أدخل وزنك الحالي لإرسال التسجيل.' },
+    updHintWeightRange:        { en: 'Weight must be between 20 and 350 kg.',
+                                 ar: 'يجب أن يكون الوزن بين 20 و 350 كجم.' },
+    updHintCardioRange:        { en: 'Cardio calories must be between 0 and 2000.',
+                                 ar: 'سعرات الكارديو يجب أن تكون بين 0 و 2000.' },
+    updBtnSubmitLockWeek:      { en: 'Submit & lock week',                   ar: 'إرسال وقفل الأسبوع' },
+    updBtnSaving:              { en: 'Saving…',                              ar: 'يتم الحفظ…' },
+    updBtnSavedOk:             { en: '✓ Saved',                              ar: '✓ تم الحفظ' },
+    updBtnLocked:              { en: 'Locked',                               ar: 'مقفل' },
+    updSaveFailed:             { en: 'Failed to save. Try again.',           ar: 'فشل الحفظ. حاول مجدداً.' },
+
+    // ─── Body Measurements card ──────────────────────────────────
+    measEyebrow:               { en: 'Body Measurements',                    ar: 'قياسات الجسم' },
+    measHeader:                { en: 'Beyond the scale.',                    ar: 'ما وراء الميزان.' },
+    measChest:                 { en: 'Chest',                                ar: 'الصدر' },
+    measWaist:                 { en: 'Waist',                                ar: 'الخصر' },
+    measHips:                  { en: 'Hips',                                 ar: 'الأرداف' },
+    measArms:                  { en: 'Arms',                                 ar: 'الذراعين' },
+    measBtnUpdate:             { en: 'Update measurements',                  ar: 'تحديث القياسات' },
+    measBtnSave:               { en: 'Save measurements',                    ar: 'حفظ القياسات' },
+
+    // ─── Photo Gallery — already has progressPhotos; add header ──
+    photosHeader:              { en: 'The visible record.',                  ar: 'السجل المرئي.' },
+
     // ─── Inline upgrade offer (Profile page, community users) ──────
     upgradeYourPlanEyebrow:    { en: 'Your plan',                            ar: 'باقتك الحالية' },
     upgradeOfferEyebrow:       { en: 'Your next chapter',                    ar: 'فصلك التالي' },

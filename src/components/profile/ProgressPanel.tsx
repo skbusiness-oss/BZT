@@ -430,25 +430,33 @@ function ProgressSlider({ label, value, onChange, max = 10, disabled }: {
     label: string; value: number; onChange: (v: number) => void; max?: number; disabled?: boolean;
 }) {
     const pct = ((value - 1) / (max - 1)) * 100;
+    // Slider track stays LTR explicitly even in Arabic. 1→10 numeric
+    // scales are universally read left-to-right (Apple Health, Strava,
+    // and every other fitness app do this), and natively-RTL range
+    // inputs were producing a confusing "thumb starts on the right but
+    // value 1 is shown on the right too" mismatch. The label above
+    // still flips correctly via flex's natural RTL behavior.
     return (
         <div style={{ marginBottom: 18 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                 <span style={{ fontFamily: t.body, fontSize: 13, color: t.onSurface, fontWeight: 500 }}>{label}</span>
-                <span style={{ fontFamily: t.display, fontSize: 16, fontWeight: 500, color: t.primary }}>
+                <span dir="ltr" style={{ fontFamily: t.display, fontSize: 16, fontWeight: 500, color: t.primary }}>
                     {value}<span style={{ color: t.onSurfaceMuted, fontWeight: 300 }}> / {max}</span>
                 </span>
             </div>
-            <input
-                type="range" min={1} max={max} value={value}
-                disabled={disabled}
-                onChange={(e) => onChange(Number(e.target.value))}
-                className="progress-panel-slider"
-                style={{
-                    width: '100%',
-                    background: `linear-gradient(to right, ${t.primary} 0%, ${t.primaryContainer} ${pct}%, ${t.surfaceContainerHighest} ${pct}%, ${t.surfaceContainerHighest} 100%)`,
-                    opacity: disabled ? 0.5 : 1,
-                }}
-            />
+            <div dir="ltr">
+                <input
+                    type="range" min={1} max={max} value={value}
+                    disabled={disabled}
+                    onChange={(e) => onChange(Number(e.target.value))}
+                    className="progress-panel-slider"
+                    style={{
+                        width: '100%',
+                        background: `linear-gradient(to right, ${t.primary} 0%, ${t.primaryContainer} ${pct}%, ${t.surfaceContainerHighest} ${pct}%, ${t.surfaceContainerHighest} 100%)`,
+                        opacity: disabled ? 0.5 : 1,
+                    }}
+                />
+            </div>
         </div>
     );
 }
@@ -550,13 +558,14 @@ function WeeklyCheckIn({ existingLog, isWindowLocked, lastSubmittedDate, nextAva
 
     // Human-readable hint for why the button is disabled. The submit button
     // could be unclickable for three different reasons; previously the user
-    // had no way to know which one applied.
+    // had no way to know which one applied. All three strings translated
+    // via translation keys so Arabic users see Arabic hints.
     const disabledHint = (() => {
         if (isLocked) return null; // The "This week is logged" header already explains.
-        if (weight === '') return 'Enter your current weight to submit.';
+        if (weight === '') return tx('updHintEnterWeight');
         const w = Number(weight);
-        if (!Number.isFinite(w) || w <= 20 || w >= 350) return 'Weight must be between 20 and 350 kg.';
-        if (!cardioValid) return 'Cardio calories must be between 0 and 2000.';
+        if (!Number.isFinite(w) || w <= 20 || w >= 350) return tx('updHintWeightRange');
+        if (!cardioValid) return tx('updHintCardioRange');
         return null;
     })();
 
@@ -568,9 +577,9 @@ function WeeklyCheckIn({ existingLog, isWindowLocked, lastSubmittedDate, nextAva
 
     return (
         <Card variant="glass">
-            <Eyebrow>Weekly check-in</Eyebrow>
+            <Eyebrow>{tx('weeklyCheckIn')}</Eyebrow>
             <h2 style={{ fontFamily: t.display, fontSize: 22, fontWeight: 400, color: t.onSurface, margin: '8px 0 8px', letterSpacing: '-0.02em' }}>
-                {isLocked ? 'This week is logged.' : 'Update your weight and progress once per week.'}
+                {isLocked ? tx('updWeeklyHeaderLocked') : tx('updWeeklyHeaderEditable')}
             </h2>
             {isLocked && (
                 <div style={{
@@ -578,10 +587,10 @@ function WeeklyCheckIn({ existingLog, isWindowLocked, lastSubmittedDate, nextAva
                     marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 4,
                 }}>
                     {lastSubmittedDate && (
-                        <span>Last submitted: <strong style={{ color: t.onSurface }}>{fmt(lastSubmittedDate)}</strong></span>
+                        <span>{tx('updLastSubmitted')}: <strong style={{ color: t.onSurface }}>{fmt(lastSubmittedDate)}</strong></span>
                     )}
                     {nextAvailableAt && (
-                        <span>Next available: <strong style={{ color: t.primary }}>{fmt(nextAvailableAt)}</strong></span>
+                        <span>{tx('updNextAvailable')}: <strong style={{ color: t.primary }}>{fmt(nextAvailableAt)}</strong></span>
                     )}
                 </div>
             )}
@@ -619,13 +628,13 @@ function WeeklyCheckIn({ existingLog, isWindowLocked, lastSubmittedDate, nextAva
                             letterSpacing: '0.16em', textTransform: 'uppercase',
                             color: t.primary, marginBottom: 4,
                         }}>
-                            Don&apos;t forget to log
+                            {tx('updDontForgetTitle')}
                         </div>
                         <div style={{
                             fontFamily: t.body, fontSize: 13, lineHeight: 1.55,
                             color: t.onSurface,
                         }}>
-                            Update your <strong>current weight</strong>, log <strong>cardio calories for the week</strong>, and add a quick <strong>note</strong> about how it went — these lock with the week.
+                            {tx('updDontForgetBody')}
                         </div>
                     </div>
                 </div>
@@ -646,7 +655,7 @@ function WeeklyCheckIn({ existingLog, isWindowLocked, lastSubmittedDate, nextAva
                                 fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase',
                                 color: t.primary, padding: '2px 6px', borderRadius: 999,
                                 background: `${t.primary}1f`, lineHeight: 1.4,
-                            }}>Required</span>
+                            }}>{tx('updRequiredPill')}</span>
                         )}
                     </span>
                     <span style={{ fontFamily: t.body, fontSize: 11, color: t.onSurfaceMuted, letterSpacing: '0.08em' }}>kg</span>
@@ -670,9 +679,9 @@ function WeeklyCheckIn({ existingLog, isWindowLocked, lastSubmittedDate, nextAva
             {/* Subjective sliders + cardio — feed `metrics` on the log so the
                 ProgressChart below renders a trend across submitted weeks. */}
             <div style={{ marginBottom: 16 }}>
-                <ProgressSlider label="Strength" value={strength} onChange={setStrength} disabled={isLocked} />
-                <ProgressSlider label="Hunger"   value={hunger}   onChange={setHunger}   disabled={isLocked} />
-                <ProgressSlider label="Energy"   value={energy}   onChange={setEnergy}   disabled={isLocked} />
+                <ProgressSlider label={tx('strength')} value={strength} onChange={setStrength} disabled={isLocked} />
+                <ProgressSlider label={tx('hunger')}   value={hunger}   onChange={setHunger}   disabled={isLocked} />
+                <ProgressSlider label={tx('energy')}   value={energy}   onChange={setEnergy}   disabled={isLocked} />
                 <div style={{
                     // Same gold left-rail as the weight block when
                     // editable, so the cardio field reads as part of
@@ -689,10 +698,10 @@ function WeeklyCheckIn({ existingLog, isWindowLocked, lastSubmittedDate, nextAva
                                     fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase',
                                     color: t.primary, padding: '2px 6px', borderRadius: 999,
                                     background: `${t.primary}1f`, lineHeight: 1.4,
-                                }}>Don&apos;t forget</span>
+                                }}>{tx('updDontForgetPill')}</span>
                             )}
                         </span>
-                        <span style={{ fontFamily: t.body, fontSize: 11, color: t.onSurfaceMuted, letterSpacing: '0.08em' }}>0–2000 / week</span>
+                        <span style={{ fontFamily: t.body, fontSize: 11, color: t.onSurfaceMuted, letterSpacing: '0.08em' }}>{tx('updCardioRangeHint')}</span>
                     </div>
                     <input
                         type="number" inputMode="numeric" min={0} max={2000}
@@ -784,7 +793,7 @@ function WeeklyCheckIn({ existingLog, isWindowLocked, lastSubmittedDate, nextAva
                     transition: 'all 0.2s ease',
                 }}
             >
-                {isLocked ? 'Locked' : saved ? '✓ Saved' : saving ? 'Saving…' : 'Submit & lock week'}
+                {isLocked ? tx('updBtnLocked') : saved ? tx('updBtnSavedOk') : saving ? tx('updBtnSaving') : tx('updBtnSubmitLockWeek')}
             </button>
         </Card>
     );
@@ -797,15 +806,16 @@ function WeeklyCheckIn({ existingLog, isWindowLocked, lastSubmittedDate, nextAva
 function BodyMeasurementsCard({ current, baseline, onUpdate }: {
     current?: Meas; baseline?: Meas; onUpdate: (m: Meas) => Promise<void>;
 }) {
+    const { t: tx } = useLanguage();
     const [editing, setEditing] = useState(false);
     const [draft, setDraft] = useState<Meas>(current ?? {});
     const [saving, setSaving] = useState(false);
 
     const rows: { key: keyof Meas; label: string; goodDirection: 'up' | 'down' }[] = [
-        { key: 'chest', label: 'Chest', goodDirection: 'down' },
-        { key: 'waist', label: 'Waist', goodDirection: 'down' },
-        { key: 'hips', label: 'Hips', goodDirection: 'down' },
-        { key: 'arms', label: 'Arms', goodDirection: 'up' },
+        { key: 'chest', label: tx('measChest'), goodDirection: 'down' },
+        { key: 'waist', label: tx('measWaist'), goodDirection: 'down' },
+        { key: 'hips',  label: tx('measHips'),  goodDirection: 'down' },
+        { key: 'arms',  label: tx('measArms'),  goodDirection: 'up' },
     ];
 
     const handleSave = async () => {
@@ -820,9 +830,9 @@ function BodyMeasurementsCard({ current, baseline, onUpdate }: {
 
     return (
         <Card>
-            <Eyebrow>Body Measurements</Eyebrow>
+            <Eyebrow>{tx('measEyebrow')}</Eyebrow>
             <h2 style={{ fontFamily: t.display, fontSize: 20, fontWeight: 400, color: t.onSurface, margin: '8px 0 24px', letterSpacing: '-0.02em' }}>
-                Beyond the scale.
+                {tx('measHeader')}
             </h2>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {rows.map(r => {
@@ -891,20 +901,21 @@ function BodyMeasurementsCard({ current, baseline, onUpdate }: {
                     cursor: 'pointer', transition: 'border-color 0.2s ease',
                 }}
             >
-                {editing ? (saving ? 'Saving…' : 'Save measurements') : 'Update measurements'}
+                {editing ? (saving ? tx('updBtnSaving') : tx('measBtnSave')) : tx('measBtnUpdate')}
             </button>
         </Card>
     );
 }
 
 function PhotoGallery({ photos }: { photos: { weekNumber: number; front?: string; side?: string; back?: string }[] }) {
+    const { t: tx } = useLanguage();
     if (photos.length === 0) return null;
     const recent = photos.slice(-4).reverse();
     return (
         <Card>
-            <Eyebrow>Progress Photos</Eyebrow>
+            <Eyebrow>{tx('progressPhotos')}</Eyebrow>
             <h2 style={{ fontFamily: t.display, fontSize: 20, fontWeight: 400, color: t.onSurface, margin: '8px 0 20px', letterSpacing: '-0.02em' }}>
-                The visible record.
+                {tx('photosHeader')}
             </h2>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12 }}>
                 {recent.map(p => (
