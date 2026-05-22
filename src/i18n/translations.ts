@@ -1206,6 +1206,30 @@ export const translations = {
     // ─── Photo Gallery — already has progressPhotos; add header ──
     photosHeader:              { en: 'The visible record.',                  ar: 'السجل المرئي.' },
 
+    // ─── ProgressChart — tabbed weekly progress view ──────────────
+    chartEyebrow:              { en: 'Weekly progress',                      ar: 'التقدم الأسبوعي' },
+    chartHeader:               { en: 'Pick a signal. See its trend.',        ar: 'اختر إشارة. شاهد تطوّرها.' },
+    chartTabWeight:            { en: 'Weight',                               ar: 'الوزن' },
+    chartTabStrength:          { en: 'Strength',                             ar: 'القوة' },
+    chartTabHunger:            { en: 'Hunger',                               ar: 'الجوع' },
+    chartTabEnergy:            { en: 'Energy',                               ar: 'الطاقة' },
+    chartTabCardio:            { en: 'Cardio',                               ar: 'الكارديو' },
+    chartLockedLabel:          { en: 'Locked',                               ar: 'مقفل' },
+    chartLastLogged:           { en: 'Last logged',                          ar: 'آخر تسجيل' },
+    chartNextAvailable:        { en: 'Next available',                       ar: 'متاح في' },
+    chartLastCheckIn:          { en: 'Last check-in',                        ar: 'آخر تسجيل' },
+    chartCanLog:               { en: 'You can log this week',                ar: 'يمكنك التسجيل هذا الأسبوع' },
+    chartEmpty:                { en: 'Log this week\'s check-in to see the chart.',
+                                 ar: 'سجّل تحديث هذا الأسبوع لتظهر الرسوم البيانية.' },
+    chartRefStart:             { en: 'Start',                                ar: 'البداية' },
+    chartRefGoal:              { en: 'Goal',                                 ar: 'الهدف' },
+    chartSeriesWeight:         { en: 'Weight (kg)',                          ar: 'الوزن (كجم)' },
+    chartSeriesCardio:         { en: 'Cardio (cal)',                         ar: 'الكارديو (سعرة)' },
+    statStart:                 { en: 'Start',                                ar: 'البداية' },
+    statCurrent:               { en: 'Current',                              ar: 'الحالي' },
+    statGoal:                  { en: 'Goal',                                 ar: 'الهدف' },
+    statProgress:              { en: 'Progress',                             ar: 'التقدم' },
+
     // ─── Inline upgrade offer (Profile page, community users) ──────
     upgradeYourPlanEyebrow:    { en: 'Your plan',                            ar: 'باقتك الحالية' },
     upgradeOfferEyebrow:       { en: 'Your next chapter',                    ar: 'فصلك التالي' },

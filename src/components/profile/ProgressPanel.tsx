@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import {
     ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-    ReferenceLine, Legend,
+    ReferenceLine,
 } from 'recharts';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
@@ -218,37 +218,54 @@ function StatusCarousel({ slides }: {
 }
 
 // ─── ProgressChart ──────────────────────────────────────────────────────
-// Combined weekly chart: weight + subjective metrics on a single ComposedChart
-// with two Y-axes (left = weight kg, reversed; right = 1–10 metrics).
-// Weight rides as a filled area, each metric is a thin line. Cardio is
-// stored as calories (0–2000) but plotted on the same 1–10 axis after
-// `/ 10` scaling so the legend label notes that division explicitly.
+// Tabbed weekly chart. Founder direction: the previous "everything on one
+// chart with two Y-axes + tooltip listing all five metrics" version was
+// too noisy to read at a glance. Now there's a tab strip at the top
+// (Weight / Strength / Hunger / Energy / Cardio) and the chart renders
+// ONE metric at a time — clear axis, clear color, no overlap.
+//
+// Weight tab: filled area on a reversed weight axis (lower weight is
+// visually higher, matches the psychology of "going down" toward goal),
+// with Start and Goal reference lines.
+// Other tabs: thin coloured line on the 0-10 axis (or 0-2000 for cardio).
+//
+// Stats panel below still shows weight progress (Start / Current / Goal /
+// Progress %) regardless of tab — those are the user's primary objective
+// and live in the same card so the chart context doesn't lose them.
 function ProgressChart({ data, startWeight, goalWeight, lastSubmittedDate, nextAvailableAt }: {
     /** One row per date. Missing values are null so Recharts breaks the
-     *  line instead of drawing a fake zero. */
+     *  line instead of drawing a fake zero. Cardio is stored here as
+     *  cardioCalories÷10 from the upstream merger; we re-multiply when
+     *  the Cardio tab is selected so the y-axis reads in real calories. */
     data: {
         label: string;
         weight: number | null;
         strength: number | null;
         energy: number | null;
         hunger: number | null;
-        cardio: number | null; // already scaled (cardioCalories ÷ 10)
+        cardio: number | null;
     }[];
     startWeight: number;
     goalWeight: number;
     lastSubmittedDate?: string | null;
     nextAvailableAt?: string | null;
 }) {
+    const { t: tx } = useLanguage();
     const todayKey = new Date().toISOString().slice(0, 10);
     const isLocked = !!nextAvailableAt && nextAvailableAt > todayKey;
     const fmtDate = (iso?: string | null) =>
         iso ? new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
     const [range, setRange] = useState<'1M' | '3M' | '6M' | '1Y'>('6M');
     const ranges: ('1M' | '3M' | '6M' | '1Y')[] = ['1M', '3M', '6M', '1Y'];
+
+    type Tab = 'weight' | 'strength' | 'hunger' | 'energy' | 'cardio';
+    const [tab, setTab] = useState<Tab>('weight');
+
     const filtered = useMemo(() => {
         const counts: Record<string, number> = { '1M': 30, '3M': 90, '6M': 180, '1Y': 365 };
         return data.slice(-counts[range]);
     }, [data, range]);
+
     // "Current" = the most recent week with a weight reading. Fall back to
     // start so the stat block never reads "--" once they've onboarded.
     const lastWeightRow = [...filtered].reverse().find(r => typeof r.weight === 'number');
@@ -256,27 +273,168 @@ function ProgressChart({ data, startWeight, goalWeight, lastSubmittedDate, nextA
     const pct = (goalWeight > 0 && goalWeight !== startWeight && typeof current === 'number')
         ? Math.round(((startWeight - current) / (startWeight - goalWeight)) * 100)
         : 0;
-    const series = [
-        { key: 'strength', label: 'Strength', color: t.cyan },
-        { key: 'energy',   label: 'Energy',   color: t.gold },
-        { key: 'hunger',   label: 'Hunger',   color: t.coral },
-        { key: 'cardio',   label: 'Cardio (cal ÷ 10)', color: t.violet },
+
+    // Tab metadata — label key, color, y-axis configuration. The chart
+    // renders a single one of these at a time based on `tab`. Strength /
+    // hunger / energy share the 0-10 right-axis behaviour; weight uses a
+    // reversed kg axis; cardio uses a 0-2000 calorie axis (un-scaled so
+    // the number is meaningful at a glance, not divided by 10).
+    const tabs: { key: Tab; label: string; color: string }[] = [
+        { key: 'weight',   label: tx('chartTabWeight'),   color: t.primary },
+        { key: 'strength', label: tx('chartTabStrength'), color: t.cyan },
+        { key: 'hunger',   label: tx('chartTabHunger'),   color: t.coral },
+        { key: 'energy',   label: tx('chartTabEnergy'),   color: t.gold },
+        { key: 'cardio',   label: tx('chartTabCardio'),   color: t.violet },
     ];
+    const activeTab = tabs.find(x => x.key === tab) ?? tabs[0];
+
+    // Cardio data was stored at /10 scale upstream so it could share an
+    // axis with the 0-10 sliders. On the dedicated cardio tab we want
+    // real calories on the y-axis, so map it back here.
+    const tabData = useMemo(() => {
+        if (tab !== 'cardio') return filtered;
+        return filtered.map(r => ({ ...r, cardio: r.cardio == null ? null : r.cardio * 10 }));
+    }, [filtered, tab]);
+
+    const renderChart = () => {
+        if (filtered.length === 0) {
+            return (
+                <div style={{ textAlign: 'center', padding: 40, color: t.onSurfaceMuted, fontFamily: t.body, fontSize: 13 }}>
+                    {tx('chartEmpty')}
+                </div>
+            );
+        }
+        // Weight tab — filled area on reversed kg axis with start + goal
+        // reference lines.
+        if (tab === 'weight') {
+            return (
+                <div style={{ width: '100%', height: 300 }} dir="ltr">
+                    <ResponsiveContainer>
+                        <ComposedChart data={tabData} margin={{ top: 10, right: 16, left: -10, bottom: 0 }}>
+                            <defs>
+                                <linearGradient id="bzWeightStrokeP" x1="0" y1="0" x2="1" y2="0">
+                                    <stop offset="0%" stopColor={t.primary} />
+                                    <stop offset="100%" stopColor={t.primaryContainer} />
+                                </linearGradient>
+                                <linearGradient id="bzWeightFillP" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stopColor={t.primary} stopOpacity={0.28} />
+                                    <stop offset="100%" stopColor={t.primary} stopOpacity={0} />
+                                </linearGradient>
+                            </defs>
+                            <CartesianGrid stroke={t.outlineVariant} vertical={false} strokeDasharray="2 6" />
+                            <XAxis dataKey="label" stroke={t.onSurfaceMuted} tick={{ fontFamily: t.body, fontSize: 11, fill: t.onSurfaceVariant }} tickLine={false} axisLine={false} />
+                            <YAxis reversed domain={['dataMin - 1', 'dataMax + 1']} stroke={t.onSurfaceMuted} tick={{ fontFamily: t.body, fontSize: 11, fill: t.onSurfaceVariant }} tickLine={false} axisLine={false} width={40} />
+                            <Tooltip contentStyle={{ background: t.surfaceBright, border: `1px solid ${t.outline}`, borderRadius: 10, fontFamily: t.body, fontSize: 13, color: t.onSurface }} labelStyle={{ color: t.onSurfaceVariant, fontSize: 11 }} />
+                            {startWeight > 0 && (
+                                <ReferenceLine y={startWeight} stroke={t.onSurfaceMuted} strokeDasharray="3 6" strokeWidth={1.5}
+                                    label={{ value: `${tx('chartRefStart')} ${startWeight}kg`, position: 'insideTopLeft', fontSize: 10, fontFamily: t.body, fill: t.onSurfaceVariant, fontWeight: 600 }} />
+                            )}
+                            {goalWeight > 0 && (
+                                <ReferenceLine y={goalWeight} stroke={t.primary} strokeDasharray="3 6" strokeWidth={1.5}
+                                    label={{ value: `${tx('chartRefGoal')} ${goalWeight}kg`, position: 'insideBottomLeft', fontSize: 10, fontFamily: t.body, fill: t.primary, fontWeight: 700 }} />
+                            )}
+                            <Area
+                                type="monotone"
+                                dataKey="weight"
+                                name={tx('chartSeriesWeight')}
+                                stroke="url(#bzWeightStrokeP)"
+                                strokeWidth={2.5}
+                                fill="url(#bzWeightFillP)"
+                                connectNulls
+                                dot={{ r: 4, fill: t.primary, stroke: t.surface, strokeWidth: 2 }}
+                                activeDot={{ r: 7, fill: t.primary, stroke: t.surface, strokeWidth: 3 }}
+                            />
+                        </ComposedChart>
+                    </ResponsiveContainer>
+                </div>
+            );
+        }
+        // Subjective metric tab (strength / hunger / energy) — single line
+        // on the 0-10 axis. Cardio uses a 0-2000 axis with the same line
+        // chart shape so the visual reads consistently across non-weight
+        // tabs.
+        const isCardio = tab === 'cardio';
+        const yDomain: [number, number] = isCardio ? [0, 2000] : [0, 10];
+        const seriesName = isCardio ? tx('chartSeriesCardio') : activeTab.label;
+        return (
+            <div style={{ width: '100%', height: 300 }} dir="ltr">
+                <ResponsiveContainer>
+                    <ComposedChart data={tabData} margin={{ top: 10, right: 16, left: -10, bottom: 0 }}>
+                        <CartesianGrid stroke={t.outlineVariant} vertical={false} strokeDasharray="2 6" />
+                        <XAxis dataKey="label" stroke={t.onSurfaceMuted} tick={{ fontFamily: t.body, fontSize: 11, fill: t.onSurfaceVariant }} tickLine={false} axisLine={false} />
+                        <YAxis domain={yDomain} stroke={t.onSurfaceMuted} tick={{ fontFamily: t.body, fontSize: 11, fill: t.onSurfaceVariant }} tickLine={false} axisLine={false} width={isCardio ? 44 : 32} />
+                        <Tooltip contentStyle={{ background: t.surfaceBright, border: `1px solid ${t.outline}`, borderRadius: 10, fontFamily: t.body, fontSize: 13, color: t.onSurface }} labelStyle={{ color: t.onSurfaceVariant, fontSize: 11 }} />
+                        <Line
+                            type="monotone"
+                            dataKey={tab}
+                            name={seriesName}
+                            stroke={activeTab.color}
+                            strokeWidth={2.5}
+                            connectNulls
+                            dot={{ r: 4, fill: activeTab.color, stroke: t.surface, strokeWidth: 2 }}
+                            activeDot={{ r: 7, fill: activeTab.color, stroke: t.surface, strokeWidth: 3 }}
+                        />
+                    </ComposedChart>
+                </ResponsiveContainer>
+            </div>
+        );
+    };
+
     return (
         <Card variant="glass">
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16, marginBottom: 16 }}>
                 <div>
-                    <Eyebrow>Weekly progress</Eyebrow>
+                    <Eyebrow>{tx('chartEyebrow')}</Eyebrow>
                     <h2 style={{ fontFamily: t.display, fontSize: 24, fontWeight: 400, color: t.onSurface, margin: '8px 0 0', letterSpacing: '-0.02em' }}>
-                        Weight + signals, one chart.
+                        {tx('chartHeader')}
                     </h2>
                 </div>
-                <div style={{ display: 'flex', gap: 6 }}>
+                {/* Time-range pills (1M/3M/6M/1Y). Wrapped in dir="ltr" so
+                    the order stays consistent regardless of language —
+                    these tokens are universal abbreviations. */}
+                <div style={{ display: 'flex', gap: 6 }} dir="ltr">
                     {ranges.map(r => <Chip key={r} active={range === r} onClick={() => setRange(r)}>{r}</Chip>)}
                 </div>
             </div>
-            {/* Cadence pill — same shape as before, just now lives above the
-                single unified chart. */}
+
+            {/* Metric tabs — one per signal. Founder direction: each
+                signal gets its OWN chart, not all overlaid. Tapping a
+                tab swaps the chart below to that metric only. Active
+                tab gets the metric's brand color so the eye can map
+                "this tab = that color" instantly. */}
+            <div style={{
+                display: 'flex', flexWrap: 'wrap', gap: 8,
+                marginBottom: 16,
+            }}>
+                {tabs.map(x => {
+                    const active = tab === x.key;
+                    return (
+                        <button
+                            key={x.key}
+                            type="button"
+                            onClick={() => setTab(x.key)}
+                            style={{
+                                padding: '8px 14px', borderRadius: 999,
+                                fontFamily: t.body, fontSize: 12,
+                                fontWeight: 600, letterSpacing: '0.04em',
+                                cursor: 'pointer',
+                                background: active ? `${x.color}1f` : t.surfaceContainerLow,
+                                color: active ? x.color : t.onSurfaceVariant,
+                                border: active
+                                    ? `1.5px solid ${x.color}99`
+                                    : `1px solid ${t.outlineVariant}`,
+                                transition: 'all 0.15s ease',
+                            }}
+                            aria-pressed={active}
+                        >
+                            {x.label}
+                        </button>
+                    );
+                })}
+            </div>
+
+            {/* Cadence pill — lives above the chart so it's the same
+                "what week is this" anchor across every tab. */}
             {(isLocked || lastSubmittedDate) && (
                 <div style={{
                     display: 'flex', alignItems: 'center', gap: 10,
@@ -292,125 +450,31 @@ function ProgressChart({ data, startWeight, goalWeight, lastSubmittedDate, nextA
                     }} />
                     {isLocked ? (
                         <span style={{ color: t.onSurface }}>
-                            Locked · Last logged <strong>{fmtDate(lastSubmittedDate)}</strong> · Next available <strong style={{ color: t.primary }}>{fmtDate(nextAvailableAt)}</strong>
+                            {tx('chartLockedLabel')} · {tx('chartLastLogged')} <strong>{fmtDate(lastSubmittedDate)}</strong> · {tx('chartNextAvailable')} <strong style={{ color: t.primary }}>{fmtDate(nextAvailableAt)}</strong>
                         </span>
                     ) : (
                         <span style={{ color: t.onSurfaceVariant }}>
-                            Last check-in <strong style={{ color: t.onSurface }}>{fmtDate(lastSubmittedDate)}</strong> · You can log this week
+                            {tx('chartLastCheckIn')} <strong style={{ color: t.onSurface }}>{fmtDate(lastSubmittedDate)}</strong> · {tx('chartCanLog')}
                         </span>
                     )}
                 </div>
             )}
-            {filtered.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: 40, color: t.onSurfaceMuted, fontFamily: t.body, fontSize: 13 }}>
-                    Log this week's check-in to see the chart.
-                </div>
-            ) : (
-                <div style={{ width: '100%', height: 300 }}>
-                    <ResponsiveContainer>
-                        <ComposedChart data={filtered} margin={{ top: 10, right: 16, left: -10, bottom: 0 }}>
-                            <defs>
-                                <linearGradient id="bzWeightStrokeP" x1="0" y1="0" x2="1" y2="0">
-                                    <stop offset="0%" stopColor={t.primary} />
-                                    <stop offset="100%" stopColor={t.primaryContainer} />
-                                </linearGradient>
-                                <linearGradient id="bzWeightFillP" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="0%" stopColor={t.primary} stopOpacity={0.28} />
-                                    <stop offset="100%" stopColor={t.primary} stopOpacity={0} />
-                                </linearGradient>
-                            </defs>
-                            <CartesianGrid stroke={t.outlineVariant} vertical={false} strokeDasharray="2 6" />
-                            <XAxis dataKey="label" stroke={t.onSurfaceMuted} tick={{ fontFamily: t.body, fontSize: 11, fill: t.onSurfaceVariant }} tickLine={false} axisLine={false} />
-                            {/* Left axis = weight (kg), reversed so lower weights
-                                are visually higher on the chart (matches the
-                                psychology of "going down" toward a goal). */}
-                            <YAxis
-                                yAxisId="weight"
-                                reversed
-                                domain={['dataMin - 1', 'dataMax + 1']}
-                                stroke={t.onSurfaceMuted}
-                                tick={{ fontFamily: t.body, fontSize: 11, fill: t.onSurfaceVariant }}
-                                tickLine={false} axisLine={false} width={40}
-                            />
-                            {/* Right axis = 1–10 metric scale (strength/energy/
-                                hunger + cardio÷10). */}
-                            <YAxis
-                                yAxisId="metrics"
-                                orientation="right"
-                                domain={[0, 10]}
-                                stroke={t.onSurfaceMuted}
-                                tick={{ fontFamily: t.body, fontSize: 11, fill: t.onSurfaceVariant }}
-                                tickLine={false} axisLine={false} width={30}
-                            />
-                            <Tooltip
-                                contentStyle={{ background: t.surfaceBright, border: `1px solid ${t.outline}`, borderRadius: 10, fontFamily: t.body, fontSize: 13, color: t.onSurface }}
-                                labelStyle={{ color: t.onSurfaceVariant, fontSize: 11 }}
-                            />
-                            <Legend
-                                wrapperStyle={{ fontFamily: t.body, fontSize: 11, color: t.onSurfaceVariant, paddingTop: 8 }}
-                                iconType="circle"
-                            />
-                            {/* Start + Goal reference lines on the weight axis. */}
-                            {startWeight > 0 && (
-                                <ReferenceLine
-                                    yAxisId="weight"
-                                    y={startWeight}
-                                    stroke={t.onSurfaceMuted}
-                                    strokeDasharray="3 6" strokeWidth={1.5}
-                                    label={{ value: `Start ${startWeight}kg`, position: 'insideTopLeft', fontSize: 10, fontFamily: t.body, fill: t.onSurfaceVariant, fontWeight: 600 }}
-                                />
-                            )}
-                            {goalWeight > 0 && (
-                                <ReferenceLine
-                                    yAxisId="weight"
-                                    y={goalWeight}
-                                    stroke={t.primary}
-                                    strokeDasharray="3 6" strokeWidth={1.5}
-                                    label={{ value: `Goal ${goalWeight}kg`, position: 'insideBottomLeft', fontSize: 10, fontFamily: t.body, fill: t.primary, fontWeight: 700 }}
-                                />
-                            )}
-                            <Area
-                                yAxisId="weight"
-                                type="monotone"
-                                dataKey="weight"
-                                name="Weight (kg)"
-                                stroke="url(#bzWeightStrokeP)"
-                                strokeWidth={2.5}
-                                fill="url(#bzWeightFillP)"
-                                connectNulls
-                                dot={{ r: 4, fill: t.primary, stroke: t.surface, strokeWidth: 2 }}
-                                activeDot={{ r: 7, fill: t.primary, stroke: t.surface, strokeWidth: 3 }}
-                            />
-                            {series.map(s => (
-                                <Line
-                                    key={s.key}
-                                    yAxisId="metrics"
-                                    type="monotone"
-                                    dataKey={s.key}
-                                    name={s.label}
-                                    stroke={s.color}
-                                    strokeWidth={2}
-                                    dot={false}
-                                    connectNulls
-                                    activeDot={{ r: 5, strokeWidth: 0 }}
-                                />
-                            ))}
-                        </ComposedChart>
-                    </ResponsiveContainer>
-                </div>
-            )}
-            {/* Stats: Start · Current · Goal · Progress. Drawn from the same
-                merged data the chart consumes, so they always agree. */}
+
+            {renderChart()}
+
+            {/* Stats: Start · Current · Goal · Progress. Always weight-
+                centric because that's the user's primary objective; this
+                doesn't change when the chart tab changes. */}
             <div style={{
                 display: 'grid',
                 gridTemplateColumns: 'repeat(2, 1fr)',
                 gap: 12,
                 marginTop: 24, padding: '20px 24px', background: t.surfaceContainerLow, borderRadius: 14,
             }} className="weight-stat-grid">
-                <StatBlock label="Start"    value={`${startWeight || '--'} kg`} />
-                <StatBlock label="Current"  value={`${current || '--'} kg`} gold />
-                <StatBlock label="Goal"     value={`${goalWeight || '--'} kg`} />
-                <StatBlock label="Progress" value={`${pct}%`} />
+                <StatBlock label={tx('statStart')}    value={`${startWeight || '--'} kg`} />
+                <StatBlock label={tx('statCurrent')}  value={`${current || '--'} kg`} gold />
+                <StatBlock label={tx('statGoal')}     value={`${goalWeight || '--'} kg`} />
+                <StatBlock label={tx('statProgress')} value={`${pct}%`} />
             </div>
             <style>{`
                 @media (min-width: 640px) {
