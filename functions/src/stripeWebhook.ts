@@ -351,10 +351,20 @@ async function handleCheckoutCompleted(
  * meaningful states: 'active' (let them in) vs 'past_due' (show a
  * banner) vs 'canceled' (downgrade — but disable is handled by the
  * subscription.deleted event, not this one).
+ *
+ * ALSO syncs role when the customer changed price via the Customer
+ * Portal (e.g. "Allow customers to update subscriptions" enabled,
+ * customer upgrades from Community Monthly → Coaching Monthly). The
+ * portal fires subscription.updated NOT checkout.session.completed,
+ * so the role-sync logic from the checkout handler doesn't run.
+ * Without this branch the customer would pay the new price but not
+ * get the new role — the exact bug enabling portal-update would
+ * silently introduce.
  */
 async function handleSubscriptionUpdated(event: StripeEvent): Promise<void> {
     const sub = event.data.object as StripeSubscription;
     const db = getFirestore();
+    const auth = getAuth();
     const stripeCustomerId =
         typeof sub.customer === 'string' ? sub.customer : sub.customer.id;
 
@@ -370,17 +380,48 @@ async function handleSubscriptionUpdated(event: StripeEvent): Promise<void> {
         console.warn(`[stripeWebhook] subscription update for unknown customer ${stripeCustomerId}`);
         return;
     }
-    const userRef = usersQuery.docs[0].ref;
+    const userDocSnap = usersQuery.docs[0];
+    const userRef = userDocSnap.ref;
+    const currentRole = (userDocSnap.data()?.role as Tier | undefined) ?? null;
 
     const subWithPeriod = sub as StripeSubscription & { current_period_end?: number };
     const currentPeriodEnd = subWithPeriod.current_period_end
         ? new Date(subWithPeriod.current_period_end * 1000).toISOString()
         : null;
 
+    // Role sync — look up the new price's tier. If the user switched
+    // plans (e.g. via Customer Portal "update subscription"), this
+    // moves them between community ↔ client cleanly. Skips if the
+    // new price isn't in our mapping (logs a warning so the founder
+    // knows to update stripeConfig.ts) and skips if the role hasn't
+    // actually changed.
+    const newPriceId = sub.items.data[0]?.price.id;
+    const newPriceMeta = newPriceId ? PRICE_TO_TIER[newPriceId] : undefined;
+
+    const roleUpdate: Record<string, unknown> = {};
+    if (newPriceMeta && newPriceMeta.tier !== currentRole) {
+        roleUpdate.role = newPriceMeta.tier;
+        // Mirror to Firebase Auth custom claim so Firestore + Storage
+        // rules pick up the new tier server-side without waiting for
+        // the user to re-auth.
+        try {
+            await auth.setCustomUserClaims(userDocSnap.id, { role: newPriceMeta.tier });
+        } catch (err) {
+            // eslint-disable-next-line no-console
+            console.warn('[stripeWebhook] setCustomUserClaims on plan switch failed:', err);
+        }
+        // eslint-disable-next-line no-console
+        console.log(`[stripeWebhook] role switched ${currentRole}→${newPriceMeta.tier} via plan change (uid=${userDocSnap.id})`);
+    } else if (newPriceId && !newPriceMeta) {
+        // eslint-disable-next-line no-console
+        console.warn(`[stripeWebhook] subscription.updated: unknown new price ${newPriceId} — role NOT synced. Add this priceId to stripeConfig.ts.`);
+    }
+
     await userRef.update({
+        ...roleUpdate,
         subscriptionStatus: sub.status, // active|past_due|canceled|trialing|unpaid|incomplete
         stripeSubscriptionId: sub.id,
-        stripePriceId: sub.items.data[0]?.price.id,
+        stripePriceId: newPriceId,
         currentPeriodEnd,
         cancelAtPeriodEnd: !!sub.cancel_at_period_end,
         updatedAt: FieldValue.serverTimestamp(),
