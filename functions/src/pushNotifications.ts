@@ -202,8 +202,28 @@ async function pushToUser(
  * URL deep-link routes to /messages with their conversation pre-
  * selected, so a tap from the lock screen goes straight to the thread.
  */
+/**
+ * minInstances: 1 keeps a single instance permanently warm. Without it,
+ * Cloud Run kills the container after ~15 minutes of idle and the next
+ * push triggers a 30-60s cold start — exactly the "1-minute delay"
+ * the founder reported. With one warm instance, a fresh message dispatches
+ * its push within ~500ms of the Firestore write landing.
+ *
+ * Cost: ~$5/month for a minimal CPU/RAM v2 function at the always-on
+ * baseline. Cheap insurance against the worst-case user complaint
+ * (slow chat notifications) in a coaching product where push latency
+ * IS the UX.
+ *
+ * concurrency:80 lets the warm instance fan out to up to 80 simultaneous
+ * doc-create events without spinning up a second container — the
+ * notification payload is tiny so head-of-line risk is near zero.
+ */
 export const onMessageCreated = onDocumentCreated(
-    'messages/{messageId}',
+    {
+        document: 'messages/{messageId}',
+        minInstances: 1,
+        concurrency: 80,
+    },
     async (event) => {
         // eslint-disable-next-line no-console
         console.log('[onMessageCreated] fired for', event.params.messageId);
@@ -256,8 +276,17 @@ export const onMessageCreated = onDocumentCreated(
  * → 'reviewed' from a non-reviewed prior state). Other update events
  * (coach typing feedback live, target changes, etc.) are ignored.
  */
+/**
+ * Same minInstances:1 rationale as onMessageCreated — check-in reviews
+ * are infrequent (handful per day) and would otherwise always be cold.
+ * Coach hits Submit, client should see the push within seconds.
+ */
 export const onCheckInReviewed = onDocumentUpdated(
-    'checkIns/{checkInId}',
+    {
+        document: 'checkIns/{checkInId}',
+        minInstances: 1,
+        concurrency: 80,
+    },
     async (event) => {
         const before = event.data?.before.data();
         const after = event.data?.after.data();
