@@ -504,6 +504,23 @@ export interface Post {
     commentCount?: number;
 }
 
+/** Coach broadcast notification — sent from /broadcast, fanned out by
+ *  the onBroadcastCreated Cloud Function to every user matching the
+ *  selected audience. Stored in Firestore as broadcasts/{id}. */
+export type BroadcastAudience = 'all' | 'community' | 'coaching' | 'both';
+
+export interface Broadcast {
+    id: string;
+    body: string;
+    audience: BroadcastAudience;
+    senderId: string;
+    senderName: string;
+    /** Firestore Timestamp at write time. Stored as a server-side
+     *  sentinel; readers should tolerate both Timestamp and ISO string
+     *  shapes (cache vs server snap). */
+    createdAt: unknown;
+}
+
 // --- Workout Wizard & Program Tracking ---
 export type Difficulty = 'beginner' | 'intermediate' | 'advanced';
 

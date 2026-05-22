@@ -725,12 +725,33 @@ export function TodayDietCard({
 }
 
 // ─── Community Activity ─────────────────────────────────────────────────
-export function CommunityActivityCard({ posts, onNavigate }: {
+// Originally listed recent community posts. Founder direction: replace
+// the post list with the LATEST BROADCAST from Coach Zaki. The card
+// still navigates to /community on the See-all CTA, but the body now
+// surfaces Coach Zaki's latest announcement so the dashboard rewards
+// the user for opening the app with a single, hand-picked update.
+//
+// `posts` prop is kept so the consumer signatures don't churn but is
+// no longer used. A `latestBroadcast` prop is added; consumers pass
+// the most recent broadcast (or null).
+export function CommunityActivityCard({ latestBroadcast, onNavigate }: {
     posts: Post[];
+    latestBroadcast: { senderName: string; body: string; createdAt: unknown } | null;
     onNavigate: (path: string) => void;
 }) {
-    const { t: tx } = useLanguage();
-    if (posts.length === 0) return null;
+    const { t: tx, isRTL } = useLanguage();
+
+    const formatBroadcastTime = (ts: unknown): string => {
+        const d = ts instanceof Date
+            ? ts
+            : (typeof ts === 'object' && ts !== null && 'toDate' in ts && typeof (ts as { toDate: () => Date }).toDate === 'function')
+                ? (ts as { toDate: () => Date }).toDate()
+                : (typeof ts === 'string' ? new Date(ts) : null);
+        if (!d || isNaN(d.getTime())) return '';
+        const locale = isRTL ? 'ar-EG' : 'en-US';
+        return d.toLocaleDateString(locale, { month: 'short', day: 'numeric' }) +
+            '، ' + d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+    };
 
     return (
         <div
@@ -739,10 +760,7 @@ export function CommunityActivityCard({ posts, onNavigate }: {
                 border: `1px solid ${t.outline}`, boxShadow: '0 8px 40px 0 rgba(0,0,0,0.25)',
             }}
         >
-            {/* Header band — coaching-journey photo (people-themed) drives the
-                community card visual identity. Sits above the post list at
-                144px height so it reads as a hero strip without crowding
-                the content. */}
+            {/* Header band — same coaching-journey photo identity as before. */}
             <div
                 style={{
                     position: 'relative', height: 144, overflow: 'hidden',
@@ -786,60 +804,75 @@ export function CommunityActivityCard({ posts, onNavigate }: {
                 </div>
             </div>
             <div style={{
-                background: t.surfaceContainer, padding: '1.5rem 2rem 2rem',
+                background: t.surfaceContainer, padding: '1.5rem 2rem 1.75rem',
             }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {posts.map(post => {
-                    // Tombstone substitution — deleteUser writes empty
-                    // authorId + sentinel '[deleted]' name on posts whose
-                    // author was deleted. Show the localized "Deleted user"
-                    // label and a neutral avatar instead of the sentinel.
-                    const isTombstoned = !post.authorId || post.authorName === '[deleted]';
-                    const displayName = isTombstoned ? tx('deletedUserLabel') : post.authorName;
-                    const initials = isTombstoned
-                        ? '—'
-                        : (post.authorName.slice(0, 2).toUpperCase() || '··');
-                    return (
-                    <div key={post.id} style={{
-                        padding: '14px 16px', background: t.surfaceContainerLow, borderRadius: 14,
+                {/* "Latest from Coach Zaki" eyebrow + broadcast body, or
+                    empty-state if the coach hasn't sent anything yet. */}
+                <span style={{
+                    fontFamily: t.body, fontSize: 10, fontWeight: 700,
+                    letterSpacing: '0.20em', textTransform: 'uppercase',
+                    color: t.primary, display: 'block', marginBottom: 10,
+                }}>{tx('dashCoachBroadcastEyebrow')}</span>
+
+                {latestBroadcast ? (
+                    <div style={{
+                        padding: '14px 16px',
+                        background: t.surfaceContainerLow,
+                        borderRadius: 14,
                         border: `1px solid ${t.outlineVariant}`,
-                        opacity: isTombstoned ? 0.7 : 1,
                     }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                        <div style={{
+                            display: 'flex', alignItems: 'center',
+                            gap: 10, marginBottom: 8,
+                        }}>
                             <div style={{
-                                width: 28, height: 28, borderRadius: '50%', background: t.surfaceContainerHighest,
-                                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                                fontFamily: t.display, fontSize: 11, fontWeight: 600,
-                                color: isTombstoned ? t.onSurfaceMuted : t.primary,
-                                fontStyle: isTombstoned ? 'italic' : 'normal',
+                                width: 28, height: 28, borderRadius: '50%',
+                                background: 'rgb(var(--primary) / 0.18)',
+                                display: 'flex', alignItems: 'center',
+                                justifyContent: 'center', flexShrink: 0,
+                                fontFamily: t.display, fontSize: 11, fontWeight: 700,
+                                color: t.primary,
+                                border: '1px solid rgb(var(--primary) / 0.32)',
                             }}>
-                                {initials}
+                                {(latestBroadcast.senderName || tx('dashCoachName')).slice(0, 1).toUpperCase()}
                             </div>
-                            <span
-                                style={{
-                                    fontFamily: t.body, fontSize: 13, fontWeight: 600,
-                                    color: isTombstoned ? t.onSurfaceMuted : t.onSurface,
-                                    fontStyle: isTombstoned ? 'italic' : 'normal',
-                                }}
-                            >
-                                {displayName}
+                            <span style={{
+                                fontFamily: t.body, fontSize: 13, fontWeight: 700,
+                                color: t.onSurface,
+                            }}>
+                                {latestBroadcast.senderName || tx('dashCoachName')}
                             </span>
-                            {!isTombstoned && post.authorRole === 'coach' && (
-                                <span style={{ fontFamily: t.body, fontSize: 11, color: t.primary, letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 600 }}>{tx('coachLabel')}</span>
-                            )}
+                            <span style={{
+                                fontFamily: t.body, fontSize: 11,
+                                color: t.primary, letterSpacing: '0.08em',
+                                textTransform: 'uppercase', fontWeight: 600,
+                            }}>{tx('coachLabel')}</span>
+                            <span style={{ flex: 1 }} />
+                            <span style={{
+                                fontFamily: t.body, fontSize: 11,
+                                color: t.onSurfaceMuted, whiteSpace: 'nowrap',
+                            }}>
+                                {formatBroadcastTime(latestBroadcast.createdAt)}
+                            </span>
                         </div>
-                        <p style={{ fontFamily: t.body, fontSize: 13, color: t.onSurfaceVariant, lineHeight: 1.55, margin: 0 }}>
-                            {post.content.slice(0, 120)}{post.content.length > 120 ? '…' : ''}
+                        <p style={{
+                            fontFamily: t.body, fontSize: 13,
+                            color: t.onSurfaceVariant, lineHeight: 1.6,
+                            margin: 0, whiteSpace: 'pre-wrap',
+                        }}>
+                            {latestBroadcast.body.slice(0, 220)}
+                            {latestBroadcast.body.length > 220 ? '…' : ''}
                         </p>
-                        {(post.likes?.length ?? 0) > 0 && (
-                            <div style={{ marginTop: 8, fontFamily: t.body, fontSize: 11, color: t.onSurfaceMuted }}>
-                                ❤ {post.likes.length}
-                            </div>
-                        )}
                     </div>
-                    );
-                })}
-            </div>
+                ) : (
+                    <p style={{
+                        fontFamily: t.body, fontSize: 13,
+                        color: t.onSurfaceMuted, fontStyle: 'italic',
+                        margin: 0, padding: '8px 0',
+                    }}>
+                        {tx('dashCoachBroadcastEmpty')}
+                    </p>
+                )}
             </div>
         </div>
     );

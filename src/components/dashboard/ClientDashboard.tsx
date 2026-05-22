@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useData, useCoaching } from '../../context/DataContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { useActiveProgram } from '../../hooks/useActiveProgram';
+import { useLatestBroadcast } from '../../hooks/useLatestBroadcast';
 import { useAcademy } from '../../context/AcademyContext';
 import { useCommunity } from '../../context/CommunityContext';
 import { useAssignedDiet } from '../../hooks/useAssignedDiet';
@@ -202,6 +203,7 @@ export const ClientDashboard = () => {
     const { user } = useAuth();
     const { t: tStrict, lang } = useLanguage();
     const t = tStrict as unknown as (k: string) => string | undefined;
+    const latestBroadcast = useLatestBroadcast(user?.role);
     const { clients, getClientWeeks, completeOnboarding, createProgram, uploadPhoto } = useData();
     // Direct read of CoachingContext.loading so we can distinguish
     // "client doc genuinely doesn't exist for this uid" from "listener
@@ -1044,7 +1046,7 @@ export const ClientDashboard = () => {
                 <ContinueAcademyCard courses={courses} userProgress={userProgress} lessons={lessons} loadLessons={loadLessons} onNavigate={navigate} />
             </div>
 
-            <CommunityActivityCard posts={posts.slice(0, 3)} onNavigate={navigate} />
+            <CommunityActivityCard posts={posts.slice(0, 3)} latestBroadcast={latestBroadcast} onNavigate={navigate} />
         </div>
     );
 };

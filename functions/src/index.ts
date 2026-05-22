@@ -15,5 +15,6 @@ export { wipeLegacyMetrics } from './wipeLegacyMetrics';
 export { forwardMessagesToCoach } from './forwardMessages';
 export { consolidateMessagesToCoach } from './consolidateMessages';
 export { onMessageCreated, onCheckInReviewed } from './pushNotifications';
+export { onBroadcastCreated } from './broadcastNotifications';
 export { weeklyReminders } from './weeklyReminders';
 export { sendTestPush } from './sendTestPush';

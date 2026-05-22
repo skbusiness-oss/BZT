@@ -1,5 +1,7 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
+import { collection, query, orderBy, limit, onSnapshot, doc } from 'firebase/firestore';
+import { db } from '../../lib/firebase';
 import { useAuth } from '../../context/AuthContext';
 import { useMessages } from '../../context/MessagesContext';
 import { useLanguage } from '../../context/LanguageContext';
@@ -23,9 +25,33 @@ import {
     Trophy,
     Utensils,
     Sparkles,
+    Bell,
+    Megaphone,
     type LucideIcon,
 } from 'lucide-react';
 import clsx from 'clsx';
+
+/** Convert a Firestore Timestamp / ISO string / Date to millis. */
+function tsToMillis(ts: unknown): number {
+    if (!ts) return 0;
+    if (ts instanceof Date) return ts.getTime();
+    if (typeof ts === 'object' && ts !== null && 'toDate' in ts && typeof (ts as { toDate: () => Date }).toDate === 'function') {
+        return (ts as { toDate: () => Date }).toDate().getTime();
+    }
+    if (typeof ts === 'string') {
+        const d = new Date(ts);
+        return isNaN(d.getTime()) ? 0 : d.getTime();
+    }
+    return 0;
+}
+
+/** Audiences a given role is supposed to see in the Notifications inbox. */
+function visibleBroadcastAudiencesFor(role: string | undefined): Set<string> {
+    if (role === 'coach' || role === 'admin') return new Set(['all', 'community', 'coaching', 'both']);
+    if (role === 'client') return new Set(['all', 'coaching', 'both']);
+    if (role === 'community') return new Set(['all', 'community', 'both']);
+    return new Set(['all']);
+}
 
 /** iOS-style sidebar item: rounded-square icon tile + label, tight rows. */
 const SidebarItem = ({ to, icon: Icon, label, end = false, onClick }: { to: string, icon: LucideIcon, label: string, end?: boolean, onClick?: () => void }) => {
@@ -74,6 +100,46 @@ export const Layout = () => {
         [getUnreadCount, user]
     );
 
+    // Broadcast unread tracking — listen to broadcasts/ + the user's
+    // own lastBroadcastReadAt timestamp, count visible broadcasts whose
+    // createdAt is newer than the read stamp. The Notifications page
+    // updates lastBroadcastReadAt on mount, so opening the inbox clears
+    // the bell badge.
+    const [broadcastTimes, setBroadcastTimes] = useState<{ ts: number; audience: string }[]>([]);
+    const [lastReadAt, setLastReadAt] = useState<number>(0);
+    useEffect(() => {
+        const q = query(collection(db, 'broadcasts'), orderBy('createdAt', 'desc'), limit(50));
+        const unsub = onSnapshot(q,
+            (snap) => {
+                setBroadcastTimes(snap.docs.map((d) => {
+                    const data = d.data() as { createdAt?: unknown; audience?: string };
+                    return { ts: tsToMillis(data.createdAt), audience: data.audience ?? 'all' };
+                }));
+            },
+            () => { /* ignore */ }
+        );
+        return unsub;
+    }, []);
+    useEffect(() => {
+        if (!user) {
+            setLastReadAt(0);
+            return;
+        }
+        const unsub = onSnapshot(doc(db, 'users', user.id),
+            (snap) => {
+                const data = snap.data() as { lastBroadcastReadAt?: unknown } | undefined;
+                setLastReadAt(tsToMillis(data?.lastBroadcastReadAt));
+            },
+            () => setLastReadAt(0),
+        );
+        return unsub;
+    }, [user]);
+    const broadcastUnread = useMemo(() => {
+        if (!user) return 0;
+        const allowed = visibleBroadcastAudiencesFor(user.role);
+        return broadcastTimes.filter((b) => allowed.has(b.audience) && b.ts > lastReadAt).length;
+    }, [broadcastTimes, lastReadAt, user]);
+
     const handleLogout = async () => {
         setSidebarOpen(false);
         await signOut();
@@ -118,6 +184,32 @@ export const Layout = () => {
                     <Menu size={22} className="text-primary" />
                 )}
             </button>
+
+            {/* Notification bell — top-right (top-left in RTL). Shows
+                an unread count badge sourced from broadcastUnread above.
+                Tap → /notifications, which marks all read on mount. */}
+            <NavLink
+                to="/notifications"
+                className="fixed top-4 z-50 p-2.5 rounded-xl transition-all duration-200 active:scale-95 bg-surface-container-low border border-primary/20 shadow-clay-sm hover:bg-surface-container"
+                style={{
+                    [isRTL ? 'left' : 'right']: '1rem',
+                    [isRTL ? 'right' : 'left']: 'auto',
+                }}
+                aria-label={t('notificationsBellAria')}
+            >
+                <span className="relative inline-flex">
+                    <Bell size={22} className="text-primary" />
+                    {broadcastUnread > 0 && (
+                        <span
+                            aria-hidden
+                            className="absolute -top-1.5 -right-2 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-extrabold flex items-center justify-center"
+                            style={{ boxShadow: '0 2px 6px rgba(0,0,0,0.30)' }}
+                        >
+                            {broadcastUnread > 99 ? '99+' : broadcastUnread}
+                        </span>
+                    )}
+                </span>
+            </NavLink>
 
             {/* Backdrop Overlay */}
             <div
@@ -223,6 +315,12 @@ export const Layout = () => {
 
                         {isCoach && (
                             <SidebarItem to="/leaderboard" icon={Trophy} label={t('navLeaderboard')} onClick={closeSidebar} />
+                        )}
+                        {/* Broadcast — coach-only sender for app-wide
+                            announcements. Lives next to Leaderboard so
+                            both admin-y entries cluster together. */}
+                        {isCoach && (
+                            <SidebarItem to="/broadcast" icon={Megaphone} label={t('navBroadcast')} onClick={closeSidebar} />
                         )}
                         <SidebarItem to="/update" icon={UserCircle} label={t('navProfile')} onClick={closeSidebar} />
                         <SidebarItem to="/settings" icon={Settings} label={t('navSettings')} onClick={closeSidebar} />

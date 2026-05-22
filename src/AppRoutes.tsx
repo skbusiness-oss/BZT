@@ -19,6 +19,8 @@ import { ProgramBrowse } from './pages/ProgramBrowse';
 import { UserView } from './pages/UserView';
 import { Profile } from './pages/Profile';
 import { Upgrade } from './pages/Upgrade';
+import { Broadcast } from './pages/Broadcast';
+import { Notifications } from './pages/Notifications';
 import { Messages } from './pages/Messages';
 import { Community } from './pages/Community';
 import { Leaderboard } from './pages/Leaderboard';
@@ -356,6 +358,8 @@ export const AppRoutes = () => {
                 <Route path="/profile" element={<ErrorBoundary><Profile /></ErrorBoundary>} />
                 <Route path="/update" element={<ErrorBoundary><Profile /></ErrorBoundary>} />
                 <Route path="/upgrade" element={<ErrorBoundary><Upgrade /></ErrorBoundary>} />
+                <Route path="/broadcast" element={<ErrorBoundary><Broadcast /></ErrorBoundary>} />
+                <Route path="/notifications" element={<ErrorBoundary><Notifications /></ErrorBoundary>} />
                 <Route path="/leaderboard" element={
                     <ProtectedRoute allowedRoles={['coach', 'admin']}>
                         <ErrorBoundary><Leaderboard /></ErrorBoundary>

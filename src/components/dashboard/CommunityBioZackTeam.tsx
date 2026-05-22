@@ -5,6 +5,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { useSelfLogs } from '../../hooks/useSelfLogs';
 import { useWeeklyCheckIns } from '../../hooks/useWeeklyCheckIns';
 import { useActiveProgram } from '../../hooks/useActiveProgram';
+import { useLatestBroadcast } from '../../hooks/useLatestBroadcast';
 import { useAcademy } from '../../context/AcademyContext';
 import { useCommunity } from '../../context/CommunityContext';
 import { useAssignedDiet } from '../../hooks/useAssignedDiet';
@@ -255,6 +256,7 @@ export const CommunityBioZackTeam = () => {
     const navigate = useNavigate();
     const { logs } = useSelfLogs();
     const { weighIns } = useWeeklyCheckIns();
+    const latestBroadcast = useLatestBroadcast(user?.role);
     const { activeProgram, getTodaysDay, todaysDayNumber } = useActiveProgram();
     const { assignedDietId, snapshot: assignedDietSnapshot } = useAssignedDiet();
     const { courses, userProgress, lessons, loadLessons } = useAcademy();
@@ -402,7 +404,7 @@ export const CommunityBioZackTeam = () => {
                 <ContinueAcademyCard courses={courses} userProgress={userProgress} lessons={lessons} loadLessons={loadLessons} onNavigate={navigate} />
             </div>
 
-            <CommunityActivityCard posts={posts.slice(0, 3)} onNavigate={navigate} />
+            <CommunityActivityCard posts={posts.slice(0, 3)} latestBroadcast={latestBroadcast} onNavigate={navigate} />
         </div>
     );
 };

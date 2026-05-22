@@ -366,6 +366,34 @@ service cloud.firestore {
       allow delete: if isSignedIn() && isCoach();
     }
 
+    // ─── broadcasts/{broadcastId} ─────────────────────────────────
+    // Coach-authored broadcast notifications (announcements, news,
+    // live-session pings) fanned out to community + coaching users.
+    //
+    // - Any signed-in user can READ — the in-app notifications page
+    //   filters by audience client-side. (Pushing the filter into
+    //   rules is doable but each client only reads a small set, so
+    //   the simpler "everyone can see the list" approach wins for
+    //   maintenance.)
+    // - Only the coach can CREATE. The senderId is pinned to the
+    //   caller's uid so a forged broadcast can't masquerade under
+    //   someone else's identity, and audience is constrained to the
+    //   four supported values.
+    // - No updates allowed (broadcasts are immutable history — if
+    //   the coach makes a typo, send a corrected one).
+    // - Coach can DELETE if a broadcast was sent in error.
+    match /broadcasts/{broadcastId} {
+      allow read: if isSignedIn();
+      allow create: if isCoach()
+                    && request.resource.data.senderId == request.auth.uid
+                    && request.resource.data.body is string
+                    && request.resource.data.body.size() > 0
+                    && request.resource.data.body.size() <= 1000
+                    && request.resource.data.audience in ['all', 'community', 'coaching', 'both'];
+      allow update: if false;
+      allow delete: if isSignedIn() && isCoach();
+    }
+
     // ─── posts/{postId} ───────────────────────────────────────
     match /posts/{postId} {
       allow read: if isSignedIn() && isActive();

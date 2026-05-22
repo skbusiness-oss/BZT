@@ -1122,6 +1122,43 @@ export const translations = {
     msgChatAttachmentAlt:      { en: 'Chat attachment',                      ar: 'مرفق المحادثة' },
     msgUnreadAria:             { en: 'unread messages',                      ar: 'رسائل غير مقروءة' },
 
+    // ─── Broadcast / notifications ─────────────────────────────────
+    navBroadcast:              { en: 'Broadcast',                            ar: 'إرسال إشعار' },
+    navNotifications:          { en: 'Notifications',                        ar: 'الإشعارات' },
+    broadcastPageTitle:        { en: 'Send a broadcast',                     ar: 'إرسال إشعار جماعي' },
+    broadcastPageSub:          { en: 'Push a message to every member you pick. Use it for announcements, lives, and news.',
+                                 ar: 'أرسل رسالة لكل عضو تختاره. استخدمها للإعلانات، البثوث المباشرة، والأخبار.' },
+    broadcastBodyLabel:        { en: 'Message',                              ar: 'الرسالة' },
+    broadcastBodyPlaceholder:  { en: "Write what everyone should know — keep it short and clear. Example: \"Live Q&A tonight at 9 PM, see you there.\"",
+                                 ar: 'اكتب ما يجب أن يعرفه الجميع — اجعلها قصيرة وواضحة. مثال: «بث مباشر للأسئلة الليلة الساعة 9 مساءً».' },
+    broadcastAudienceLabel:    { en: 'Send to',                              ar: 'إرسال إلى' },
+    broadcastAudienceAll:      { en: 'Everyone (community + coaching)',      ar: 'الجميع (المجتمع + التدريب)' },
+    broadcastAudienceCommunity:{ en: 'Community only',                       ar: 'المجتمع فقط' },
+    broadcastAudienceCoaching: { en: 'Coaching clients only',                ar: 'عملاء التدريب فقط' },
+    broadcastSendCta:          { en: 'Send broadcast',                       ar: 'إرسال الإشعار' },
+    broadcastSending:          { en: 'Sending…',                             ar: 'يتم الإرسال…' },
+    broadcastSent:             { en: 'Broadcast sent.',                      ar: 'تم إرسال الإشعار.' },
+    broadcastEmptyError:       { en: 'Write something first.',               ar: 'اكتب شيئاً أولاً.' },
+    broadcastFailedError:      { en: 'Could not send. Try again.',           ar: 'تعذّر الإرسال. حاول مجدداً.' },
+    broadcastRecentTitle:      { en: 'Recent broadcasts',                    ar: 'الإشعارات الأخيرة' },
+    broadcastRecentEmpty:      { en: 'No broadcasts yet.',                   ar: 'لا توجد إشعارات حتى الآن.' },
+
+    notificationsPageTitle:    { en: 'Notifications',                        ar: 'الإشعارات' },
+    notificationsPageSub:      { en: 'Every announcement and update from Coach Zaki.',
+                                 ar: 'كل الإعلانات والتحديثات من كوتش زاكي.' },
+    notificationsEmpty:        { en: 'Nothing yet. New broadcasts from Coach Zaki will show up here.',
+                                 ar: 'لا شيء حتى الآن. ستظهر هنا الإشعارات الجديدة من كوتش زاكي.' },
+    notificationsBellAria:     { en: 'View notifications',                   ar: 'عرض الإشعارات' },
+    notificationsAudienceAll:      { en: 'For everyone',                     ar: 'للجميع' },
+    notificationsAudienceCommunity:{ en: 'For community',                    ar: 'للمجتمع' },
+    notificationsAudienceCoaching: { en: 'For coaching',                     ar: 'للتدريب' },
+
+    // Dashboard community card — show coach's latest broadcast
+    dashCoachBroadcastEyebrow: { en: 'Latest from Coach Zaki',               ar: 'آخر إشعار من كوتش زاكي' },
+    dashCoachBroadcastEmpty:   { en: 'Coach Zaki hasn\'t posted a broadcast yet.',
+                                 ar: 'لم يرسل كوتش زاكي أي إشعار بعد.' },
+    dashCoachName:             { en: 'Coach Zaki',                           ar: 'كوتش زاكي' },
+
     // ─── Inline upgrade offer (Profile page, community users) ──────
     upgradeYourPlanEyebrow:    { en: 'Your plan',                            ar: 'باقتك الحالية' },
     upgradeOfferEyebrow:       { en: 'Your next chapter',                    ar: 'فصلك التالي' },
