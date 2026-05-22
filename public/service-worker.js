@@ -1,5 +1,5 @@
 // Bump VERSION whenever the cache strategy changes so old installs purge.
-const VERSION = 'v70';
+const VERSION = 'v71';
 const STATIC_CACHE = `bzt-static-${VERSION}`;
 
 /**

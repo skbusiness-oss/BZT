@@ -27,6 +27,7 @@ import {
     Sparkles,
     Bell,
     Megaphone,
+    CreditCard,
     type LucideIcon,
 } from 'lucide-react';
 import clsx from 'clsx';
@@ -321,6 +322,12 @@ export const Layout = () => {
                             both admin-y entries cluster together. */}
                         {isCoach && (
                             <SidebarItem to="/broadcast" icon={Megaphone} label={t('navBroadcast')} onClick={closeSidebar} />
+                        )}
+                        {/* Subscriptions — coach-only view of every
+                            paying member with their tier, status, next
+                            bill, and quick disable/re-enable actions. */}
+                        {isCoach && (
+                            <SidebarItem to="/subscriptions" icon={CreditCard} label={t('navSubscriptions')} onClick={closeSidebar} />
                         )}
                         <SidebarItem to="/update" icon={UserCircle} label={t('navProfile')} onClick={closeSidebar} />
                         <SidebarItem to="/settings" icon={Settings} label={t('navSettings')} onClick={closeSidebar} />

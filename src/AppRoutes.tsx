@@ -23,6 +23,7 @@ import { Broadcast } from './pages/Broadcast';
 import { Notifications } from './pages/Notifications';
 import { Welcome } from './pages/Welcome';
 import { UpgradeSuccess } from './pages/UpgradeSuccess';
+import { Subscriptions } from './pages/Subscriptions';
 import { Messages } from './pages/Messages';
 import { Community } from './pages/Community';
 import { Leaderboard } from './pages/Leaderboard';
@@ -372,6 +373,11 @@ export const AppRoutes = () => {
                 <Route path="/upgrade" element={<ErrorBoundary><Upgrade /></ErrorBoundary>} />
                 <Route path="/broadcast" element={<ErrorBoundary><Broadcast /></ErrorBoundary>} />
                 <Route path="/notifications" element={<ErrorBoundary><Notifications /></ErrorBoundary>} />
+                <Route path="/subscriptions" element={
+                    <ProtectedRoute allowedRoles={['coach', 'admin']}>
+                        <ErrorBoundary><Subscriptions /></ErrorBoundary>
+                    </ProtectedRoute>
+                } />
                 <Route path="/leaderboard" element={
                     <ProtectedRoute allowedRoles={['coach', 'admin']}>
                         <ErrorBoundary><Leaderboard /></ErrorBoundary>

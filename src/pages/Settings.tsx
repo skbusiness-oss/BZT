@@ -24,7 +24,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import {
     Globe, Bell, LogOut, Shield, Sun, Moon, Edit2, Calendar, UserRound, Activity, Target, Award,
-    CheckCircle2, AlertCircle, Loader2, Send, Check, X as XIcon,
+    CheckCircle2, AlertCircle, Loader2, Send, Check, X as XIcon, CreditCard,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { onSnapshot, doc, updateDoc } from 'firebase/firestore';
@@ -301,6 +301,13 @@ export const Settings = () => {
                 />
             </section>
 
+            {/* ── Manage subscription (Stripe Customer Portal) ──────
+                Only shown for users who actually have a Stripe customer
+                (the webhook seeds stripeCustomerId on the user doc when
+                they first paid). Coaches don't see this — they don't
+                pay through Stripe themselves. */}
+            <ManageSubscriptionCard />
+
             {/* ── Push notifications diagnostic ─────────────────────── */}
             <NotificationsDiagnostic uid={user.id} />
 
@@ -402,6 +409,89 @@ function InfoValue({ children }: { children: React.ReactNode }) {
 // If (1-3) good but (4) returns successCount=0 → tokens stale, the
 // function prunes them and the next sign-in re-registers.
 // If (4) succeeds but no OS notification appears → OS-level mute / DnD.
+/**
+ * ManageSubscriptionCard — "Manage subscription" button card.
+ *
+ * Visible only for users with a stripeCustomerId on their user doc.
+ * Tapping the button calls our `createCustomerPortalSession` Cloud
+ * Function which returns a one-shot URL to Stripe's hosted Customer
+ * Portal. The user can cancel, update card, view invoices there, then
+ * Stripe redirects them back to /settings.
+ *
+ * Self-gates on stripeCustomerId — community members who pay through
+ * the landing page or upgrade flow get this; coaches and the legacy
+ * AddClient-created accounts (no payment) don't see the card.
+ */
+function ManageSubscriptionCard() {
+    const { user } = useAuth();
+    const { t } = useLanguage();
+    const [stripeCustomerId, setStripeCustomerId] = useState<string | null | undefined>(undefined);
+    const [opening, setOpening] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (!user) return;
+        const unsub = onSnapshot(doc(db, 'users', user.id),
+            (snap) => {
+                const data = snap.data();
+                setStripeCustomerId((data?.stripeCustomerId as string | undefined) ?? null);
+            },
+            () => setStripeCustomerId(null),
+        );
+        return () => unsub();
+    }, [user]);
+
+    if (!user) return null;
+    if (stripeCustomerId === undefined) return null; // initial load
+    if (!stripeCustomerId) return null;              // never paid → no portal
+
+    const handleManage = async () => {
+        setOpening(true);
+        setError(null);
+        try {
+            const call = httpsCallable<Record<string, never>, { url: string }>(functions, 'createCustomerPortalSession');
+            const res = await call({});
+            const url = res.data?.url;
+            if (!url) throw new Error('No portal URL returned.');
+            window.location.assign(url);
+        } catch (err) {
+            // eslint-disable-next-line no-console
+            console.error('[ManageSubscriptionCard] portal open failed:', err);
+            setError(t('subPortalOpenFailed') || 'Could not open subscription manager. Try again.');
+            setOpening(false);
+        }
+    };
+
+    return (
+        <section className="bg-surface-container-low rounded-2xl ghost-border overflow-hidden">
+            <div className="px-6 pt-6 pb-3">
+                <span className="font-label text-[10px] font-bold uppercase tracking-widest text-on-surface/55">
+                    {t('subPortalEyebrow')}
+                </span>
+                <p className="text-xs text-on-surface/55 mt-1 font-body leading-relaxed">
+                    {t('subPortalBlurb')}
+                </p>
+            </div>
+            <div className="px-6 pb-6">
+                <button
+                    type="button"
+                    onClick={handleManage}
+                    disabled={opening}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-surface-container-highest text-on-surface text-sm font-label font-bold uppercase tracking-widest hover:bg-surface-bright disabled:opacity-40 disabled:cursor-wait transition-all"
+                >
+                    {opening
+                        ? <Loader2 size={14} className="animate-spin" />
+                        : <CreditCard size={14} />}
+                    {opening ? t('subPortalOpening') : t('subPortalCta')}
+                </button>
+                {error && (
+                    <p className="mt-3 text-[12px] font-body text-rose-400">{error}</p>
+                )}
+            </div>
+        </section>
+    );
+}
+
 function NotificationsDiagnostic({ uid }: { uid: string }) {
     const { t } = useLanguage();
     const [permission, setPermission] = useState<NotificationPermission | 'unsupported'>(() =>
