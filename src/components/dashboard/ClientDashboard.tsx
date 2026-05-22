@@ -383,14 +383,35 @@ export const ClientDashboard = () => {
     };
 
     if (!client) {
-        // Hydration window: CoachingContext listener hasn't fired yet.
-        // Show a soft spinner instead of the "Client record not found"
-        // error so the user doesn't see a flash of failure text before
-        // the snapshot arrives.
+        // Hydration window: CoachingContext listener hasn't fired yet
+        // for this user (first sign-in OR account switch — the
+        // useEffect in CoachingContext resets loading=true on both).
+        // Show a centered branded loader so the experience reads as
+        // "still loading", not "broken". Same visual language as the
+        // FullScreenLoader so the transition is continuous.
         if (coachingLoading) {
             return (
-                <div className="flex items-center justify-center min-h-[60vh]">
-                    <Loader2 size={28} className="animate-spin text-primary" />
+                <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+                    <div
+                        className="relative w-12 h-12"
+                        aria-hidden
+                    >
+                        <div
+                            className="absolute inset-0 rounded-full"
+                            style={{
+                                background: 'radial-gradient(circle, rgb(var(--primary) / 0.35), transparent 65%)',
+                                filter: 'blur(10px)',
+                            }}
+                        />
+                        <Loader2
+                            size={36}
+                            className="absolute inset-0 m-auto animate-spin"
+                            style={{ color: 'rgb(var(--primary))' }}
+                        />
+                    </div>
+                    <span className="font-label text-[10px] font-extrabold uppercase tracking-[0.32em] text-on-surface/55">
+                        {t('loaderPreparing')}
+                    </span>
                 </div>
             );
         }

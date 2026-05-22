@@ -90,7 +90,28 @@ export const CoachingProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!user) { setLoading(false); return; }
+    if (!user) {
+      // Sign-out branch: wipe everything so the next sign-in starts
+      // from a clean state. Without this, a user signing back in
+      // would briefly see the previous user's clients/weeks before
+      // the new snapshot lands.
+      setClients([]);
+      setWeeks([]);
+      setLoading(false);
+      return;
+    }
+    // CRITICAL — reset loading + cached arrays at the START of every
+    // useEffect run. On user change (sign-out then sign-in, account
+    // switch, etc.) the previous run leaves loading=false and clients=
+    // [previous user's docs]. The dashboard then renders during the
+    // hydration window with stale data + ungated "Client record not
+    // found." text — the flash the founder reported. Resetting here
+    // means the gate (`coachingLoading ? spinner : "not found"`) does
+    // its job on every subsequent sign-in, not just the first one.
+    setLoading(true);
+    setClients([]);
+    setWeeks([]);
+
     const unsubs: (() => void)[] = [];
     let listenersReady = 0;
     const totalListeners = 2;
