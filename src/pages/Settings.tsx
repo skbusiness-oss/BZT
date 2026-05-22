@@ -81,7 +81,21 @@ export const Settings = () => {
         setNameSaving(true);
         setNameError(null);
         try {
-            await updateDoc(doc(db, 'users', user.id), { name: next });
+            // Write to BOTH `displayName` AND `name`.
+            //   - `displayName` is what AuthContext reads when building
+            //     the in-memory user object (see AuthContext.tsx line ~393:
+            //     `name: data.displayName || firebaseUser.displayName || …`).
+            //     Without this, the rename silently lands in a field
+            //     AuthContext never reads, and the displayed name falls
+            //     back to the email handle ("Medzakc90" for the coach).
+            //     That was the founder-reported bug — "name doesn't change".
+            //   - `name` is kept in sync so any UI code that reads
+            //     users/{uid}.name directly (Messages contact list,
+            //     broadcast senderName fallback) sees the new value too.
+            await updateDoc(doc(db, 'users', user.id), {
+                displayName: next,
+                name: next,
+            });
             setEditingName(false);
         } catch (err) {
             // eslint-disable-next-line no-console
