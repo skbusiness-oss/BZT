@@ -21,6 +21,8 @@ import { Profile } from './pages/Profile';
 import { Upgrade } from './pages/Upgrade';
 import { Broadcast } from './pages/Broadcast';
 import { Notifications } from './pages/Notifications';
+import { Welcome } from './pages/Welcome';
+import { UpgradeSuccess } from './pages/UpgradeSuccess';
 import { Messages } from './pages/Messages';
 import { Community } from './pages/Community';
 import { Leaderboard } from './pages/Leaderboard';
@@ -320,6 +322,16 @@ export const AppRoutes = () => {
         <Routes>
             <Route path="/login" element={<LoginRoute />} />
             <Route path="/pricing" element={<ErrorBoundary><Pricing /></ErrorBoundary>} />
+            {/* Stripe-redirect destinations — PUBLIC routes. Both are
+                landed on directly from Stripe Checkout after payment.
+                /welcome is for guest signups (the user doesn't have a
+                session yet — they're about to set their password via
+                the email link). /upgrade/success is for in-app
+                community→coaching upgrades (the user IS signed in but
+                we keep it public so a logged-out tab reload after
+                Stripe redirect still works). */}
+            <Route path="/welcome" element={<ErrorBoundary><Welcome /></ErrorBoundary>} />
+            <Route path="/upgrade/success" element={<ErrorBoundary><UpgradeSuccess /></ErrorBoundary>} />
             <Route path="/admin/setup" element={<ProtectedRoute allowedRoles={['admin']}><AdminSetup /></ProtectedRoute>} />
             <Route element={<ProtectedRoute><AuthenticatedShell /></ProtectedRoute>}>
                 <Route path="/" element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />

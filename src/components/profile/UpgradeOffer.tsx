@@ -40,30 +40,51 @@
  * Upgrade link routes there). Already-paying clients + coaches never
  * see this component.
  */
+import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
+import { httpsCallable } from 'firebase/functions';
+import { functions } from '../../lib/firebase';
 import {
-    Sparkles, ArrowRight, MessageSquare, ClipboardCheck, Calendar,
+    Sparkles, ArrowRight, MessageSquare, ClipboardCheck, Calendar, Loader2,
 } from 'lucide-react';
 
-// Same Stripe Payment Link the legacy /pricing page used. Kept in this
-// file as a constant rather than imported from the (now deprecated)
-// Pricing page so this component can stand alone.
-const STRIPE_COACHING_URL = 'https://buy.stripe.com/9B66oHexr8eOfNraEv0VO07';
-
 const COACHING_PRICE_USD = 149;
-
-function openCheckout() {
-    window.open(STRIPE_COACHING_URL, '_blank', 'noopener,noreferrer');
-}
 
 export function UpgradeOffer() {
     const { user } = useAuth();
     const { t, isRTL } = useLanguage();
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     // Defensive — Profile already gates on user, but this component
     // is reusable, so we re-check.
     if (!user || user.role !== 'community') return null;
+
+    // Tapping "Start coaching" calls the createUpgradeCheckout Cloud
+    // Function (NOT the static Payment Link anymore). The function
+    // generates a per-user Stripe Checkout Session pre-filled with
+    // this user's email + UID via client_reference_id — that way the
+    // webhook can update THIS Firebase account on completion instead
+    // of guessing by email match.
+    const handleUpgrade = async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            const call = httpsCallable<Record<string, never>, { url: string }>(functions, 'createUpgradeCheckout');
+            const res = await call({});
+            const url = res.data?.url;
+            if (!url) throw new Error('No checkout URL returned.');
+            // Send the browser to Stripe Checkout. After payment Stripe
+            // redirects back to /upgrade/success.
+            window.location.assign(url);
+        } catch (err) {
+            // eslint-disable-next-line no-console
+            console.error('[UpgradeOffer] checkout failed:', err);
+            setError(t('upgradeCheckoutFailed') || 'Could not open checkout. Try again.');
+            setLoading(false);
+        }
+    };
 
     // Three emotional benefits — each frames the unlock as a
     // transformation, not a feature. The 4th "priority response"
@@ -265,13 +286,26 @@ export function UpgradeOffer() {
                     </p>
 
                     <button
-                        onClick={openCheckout}
-                        className="bzt-press inline-flex items-center justify-center gap-2 w-full sm:w-auto px-7 py-4 rounded-2xl font-label text-[12px] font-extrabold uppercase tracking-[0.18em] bg-gradient-to-br from-primary to-primary-container text-on-primary transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+                        onClick={handleUpgrade}
+                        disabled={loading}
+                        className="bzt-press inline-flex items-center justify-center gap-2 w-full sm:w-auto px-7 py-4 rounded-2xl font-label text-[12px] font-extrabold uppercase tracking-[0.18em] bg-gradient-to-br from-primary to-primary-container text-on-primary transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:opacity-60 disabled:cursor-wait"
                         style={{ boxShadow: '0 14px 32px rgb(var(--primary) / 0.34)' }}
                     >
-                        {t('upgradeCta')}
-                        <ArrowRight size={16} className="-mb-0.5" />
+                        {loading ? (
+                            <>
+                                <Loader2 size={16} className="animate-spin" />
+                                {t('upgradeOpeningCheckout') || 'Opening checkout…'}
+                            </>
+                        ) : (
+                            <>
+                                {t('upgradeCta')}
+                                <ArrowRight size={16} className="-mb-0.5" />
+                            </>
+                        )}
                     </button>
+                    {error && (
+                        <p className="mt-3 text-[12px] font-body text-rose-400">{error}</p>
+                    )}
 
                     <p className="mt-5 text-[12px] font-body text-on-surface/55 flex items-center gap-2">
                         <Sparkles size={12} className="text-primary" />

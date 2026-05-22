@@ -1283,6 +1283,30 @@ export const translations = {
     continueLearningEyebrow:   { en: 'Continue learning',                   ar: 'تابع التعلّم' },
     continueNextLabel:         { en: 'Next',                                ar: 'التالي' },
 
+    // ─── Welcome page (post-payment landing for guest signups) ────
+    welcomePostPayEyebrow:     { en: 'Payment received',                    ar: 'تم استلام الدفع' },
+    welcomePostPayTitle:       { en: 'Check your email to start.',          ar: 'تحقّق من بريدك للبدء.' },
+    welcomePostPaySub:         { en: 'We just sent you a link to set your password. Once you do, sign in and your plan is ready.',
+                                 ar: 'أرسلنا لك للتو رابطاً لتعيين كلمة المرور. بمجرّد القيام بذلك، سجّل الدخول وستجد باقتك جاهزة.' },
+    welcomePostPayStep1:       { en: 'Open the email from BioZackTeam (check spam if you don\'t see it).',
+                                 ar: 'افتح البريد من بيوزاك تيم (تحقّق من البريد المزعج إن لم تجده).' },
+    welcomePostPayStep2:       { en: 'Click the link and choose your password.',
+                                 ar: 'اضغط على الرابط واختر كلمة المرور.' },
+    welcomePostPayStep3:       { en: 'Sign in here with your email + new password.',
+                                 ar: 'سجّل الدخول من هنا بالبريد وكلمة المرور الجديدة.' },
+    welcomePostPayCta:         { en: 'Go to sign in',                       ar: 'انتقل إلى تسجيل الدخول' },
+    welcomePostPaySupport:     { en: 'Didn\'t receive the email after a few minutes? Contact zack@biozack.com.',
+                                 ar: 'لم يصلك البريد بعد بضع دقائق؟ راسلنا على zack@biozack.com.' },
+
+    // ─── Upgrade success + checkout-open states ───────────────────
+    upgradeSuccessEyebrow:     { en: 'Welcome to coaching',                 ar: 'مرحباً بك في التدريب' },
+    upgradeSuccessTitle:       { en: 'You\'re in. Med is now your coach.',  ar: 'انضممت. ميد الآن مدرّبك.' },
+    upgradeSuccessSub:         { en: 'Direct messaging is unlocked, your weekly check-ins go straight to Med, and your dashboard now shows your coaching surface.',
+                                 ar: 'تم تفعيل المراسلة المباشرة، متابعاتك الأسبوعية تذهب مباشرةً إلى ميد، ولوحتك الآن تعرض واجهة التدريب الخاصة بك.' },
+    upgradeSuccessCta:         { en: 'Open dashboard',                      ar: 'افتح لوحتي' },
+    upgradeOpeningCheckout:    { en: 'Opening checkout…',                   ar: 'يتم فتح صفحة الدفع…' },
+    upgradeCheckoutFailed:     { en: 'Could not open checkout. Try again.', ar: 'تعذّر فتح صفحة الدفع. حاول مرة أخرى.' },
+
     // ─── Inline upgrade offer (Profile page, community users) ──────
     upgradeYourPlanEyebrow:    { en: 'Your plan',                            ar: 'باقتك الحالية' },
     upgradeOfferEyebrow:       { en: 'Your next chapter',                    ar: 'فصلك التالي' },
