@@ -24,10 +24,10 @@ import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import {
     Globe, Bell, LogOut, Shield, Sun, Moon, Edit2, Calendar, UserRound, Activity, Target, Award,
-    CheckCircle2, AlertCircle, Loader2, Send,
+    CheckCircle2, AlertCircle, Loader2, Send, Check, X as XIcon,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { onSnapshot, doc } from 'firebase/firestore';
+import { onSnapshot, doc, updateDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../lib/firebase';
 import { registerFcmToken, wipeAllFcmTokensAndRegister } from '../lib/fcm';
@@ -50,6 +50,47 @@ export const Settings = () => {
     const navigate = useNavigate();
     const [notificationsEnabled, setNotificationsEnabled] = useState(true);
     const [showBaseline, setShowBaseline] = useState(false);
+
+    // Inline display-name editor. Lets any user (including the coach
+    // who was stuck with the auto-derived "Medzakc90" handle) rename
+    // themselves without a Cloud Function round-trip — Firestore rules
+    // already permit owner writes to users/{uid}.name.
+    const [editingName, setEditingName] = useState(false);
+    const [nameDraft, setNameDraft] = useState('');
+    const [nameSaving, setNameSaving] = useState(false);
+    const [nameError, setNameError] = useState<string | null>(null);
+    useEffect(() => {
+        if (user && !editingName) setNameDraft(user.name);
+    }, [user, editingName]);
+
+    const handleSaveName = async () => {
+        if (!user) return;
+        const next = nameDraft.trim();
+        if (!next) {
+            setNameError(t('editNameEmptyError') || 'Name cannot be empty.');
+            return;
+        }
+        if (next === user.name) {
+            setEditingName(false);
+            return;
+        }
+        if (next.length > 60) {
+            setNameError(t('editNameTooLongError') || 'Name is too long.');
+            return;
+        }
+        setNameSaving(true);
+        setNameError(null);
+        try {
+            await updateDoc(doc(db, 'users', user.id), { name: next });
+            setEditingName(false);
+        } catch (err) {
+            // eslint-disable-next-line no-console
+            console.error('[settings] rename failed:', err);
+            setNameError(t('editNameFailedError') || 'Could not save. Try again.');
+        } finally {
+            setNameSaving(false);
+        }
+    };
 
     const handleLogout = async () => {
         await signOut();
@@ -93,9 +134,61 @@ export const Settings = () => {
                         </div>
                     </div>
                     <div className="min-w-0 flex-1">
-                        <h2 className="text-2xl md:text-3xl font-headline font-extrabold text-on-surface tracking-tight truncate">
-                            {user.name}
-                        </h2>
+                        {/* Display name — click the pencil to edit in
+                            place. On save, writes users/{uid}.name.
+                            Rules already allow owner-writes to that
+                            field. */}
+                        {editingName ? (
+                            <div className="mb-2">
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="text"
+                                        value={nameDraft}
+                                        onChange={(e) => setNameDraft(e.target.value.slice(0, 60))}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') { e.preventDefault(); void handleSaveName(); }
+                                            if (e.key === 'Escape') { setEditingName(false); setNameError(null); }
+                                        }}
+                                        maxLength={60}
+                                        autoFocus
+                                        className="flex-1 min-w-0 bg-surface-container-lowest border border-primary/40 outline-none focus:border-primary rounded-xl px-3 py-2 text-xl md:text-2xl font-headline font-extrabold text-on-surface"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => void handleSaveName()}
+                                        disabled={nameSaving}
+                                        aria-label={t('editNameSave') || 'Save'}
+                                        className="bzt-press w-9 h-9 rounded-xl bg-primary text-on-primary flex items-center justify-center disabled:opacity-50"
+                                    >
+                                        {nameSaving ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => { setEditingName(false); setNameError(null); }}
+                                        disabled={nameSaving}
+                                        aria-label={t('cancel') || 'Cancel'}
+                                        className="bzt-press w-9 h-9 rounded-xl bg-surface-container-highest text-on-surface flex items-center justify-center"
+                                    >
+                                        <XIcon size={16} />
+                                    </button>
+                                </div>
+                                {nameError && (
+                                    <p className="mt-2 text-[12px] text-rose-400 font-body">{nameError}</p>
+                                )}
+                            </div>
+                        ) : (
+                            <h2 className="text-2xl md:text-3xl font-headline font-extrabold text-on-surface tracking-tight truncate flex items-center gap-2.5">
+                                <span className="truncate">{user.name}</span>
+                                <button
+                                    type="button"
+                                    onClick={() => { setEditingName(true); setNameDraft(user.name); setNameError(null); }}
+                                    aria-label={t('editName') || 'Edit name'}
+                                    className="bzt-press shrink-0 w-7 h-7 rounded-lg bg-surface-container-highest text-on-surface/60 hover:text-primary hover:bg-surface-bright flex items-center justify-center transition-colors"
+                                >
+                                    <Edit2 size={13} />
+                                </button>
+                            </h2>
+                        )}
                         <p className="text-on-surface/60 font-body text-sm mb-3 truncate">{user.email}</p>
                         <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-surface-container-highest text-primary text-[10px] font-label font-bold uppercase tracking-widest border border-primary/20">
                             <Shield size={12} /> {t(user.role)}

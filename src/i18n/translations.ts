@@ -1159,6 +1159,13 @@ export const translations = {
                                  ar: 'لم يرسل كوتش زاكي أي إشعار بعد.' },
     dashCoachName:             { en: 'Coach Zaki',                           ar: 'كوتش زاكي' },
 
+    // Settings — display-name editor
+    editName:                  { en: 'Edit name',                            ar: 'تعديل الاسم' },
+    editNameSave:              { en: 'Save',                                 ar: 'حفظ' },
+    editNameEmptyError:        { en: 'Name cannot be empty.',                ar: 'لا يمكن أن يكون الاسم فارغاً.' },
+    editNameTooLongError:      { en: 'Name is too long (max 60 characters).', ar: 'الاسم طويل جداً (60 حرف كحد أقصى).' },
+    editNameFailedError:       { en: 'Could not save. Try again.',           ar: 'تعذّر الحفظ. حاول مجدداً.' },
+
     // ─── Inline upgrade offer (Profile page, community users) ──────
     upgradeYourPlanEyebrow:    { en: 'Your plan',                            ar: 'باقتك الحالية' },
     upgradeOfferEyebrow:       { en: 'Your next chapter',                    ar: 'فصلك التالي' },
