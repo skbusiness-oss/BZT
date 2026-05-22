@@ -46,7 +46,17 @@ const secondaryAuth = getAuth(secondaryApp);
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const IDLE_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
+// 14 days. The previous 30-minute timeout was the root cause of "no
+// notifications arrive." Sign-out calls unregisterFcmToken() which
+// removes this device's token from `users/{uid}.fcmTokens`, leaving
+// Cloud Functions with nothing to push to. Push notifications are
+// the most critical UX surface in this app (coach ↔ client messages,
+// check-in feedback, future live-session and news broadcasts), so
+// we keep the user signed in long enough that the FCM token stays
+// alive across normal "I opened the app this morning and again
+// tomorrow" usage. 14 days still reaps truly abandoned sessions
+// (e.g. a forgotten browser tab on a shared computer).
+const IDLE_TIMEOUT_MS = 14 * 24 * 60 * 60 * 1000; // 14 days
 const LAST_ACTIVE_KEY = 'bzt-lastActiveAt';
 /** Skip the visibility-driven token refresh for this many ms after a
  *  fresh sign-in. iOS PWAs flip visibility transiently during autofill
@@ -194,8 +204,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   // ── Idle timeout: check on mount, on visibility change, and on a 60s
-  //    interval so a long-foregrounded tab still gets signed out at 30 min.
-  //    Real interactivity (pointer / key / scroll) bumps the active stamp.
+  //    interval so a long-foregrounded tab still gets signed out once the
+  //    IDLE_TIMEOUT_MS window (14 days) lapses. Real interactivity
+  //    (pointer / key / scroll) bumps the active stamp, so any normal
+  //    "open the app each day" cadence keeps the session — and the FCM
+  //    token — alive indefinitely.
   useEffect(() => {
     const checkIdle = () => {
       try {
