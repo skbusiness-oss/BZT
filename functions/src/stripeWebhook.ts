@@ -139,30 +139,81 @@ function debugPriceIds(items: StripeLineItem[]): (string | undefined)[] {
 }
 
 /**
- * Idempotent processing gate. Creates a marker doc atomically; if the
- * doc already exists, we've processed this event before and skip.
- * Returns true if we should process, false if it's a duplicate.
+ * Idempotent processing gate. Reads (or creates) a marker doc with a
+ * `status` field. We process unless the doc says we've already
+ * SUCCEEDED — meaning a failed handler can be re-attempted later,
+ * but a successful one is never re-run on Stripe retries.
+ *
+ * Returns 'process' to indicate the caller should run the handler, or
+ * 'skip' to indicate the event was already handled successfully.
+ *
+ * BUGFIX: the original implementation marked every event "processed"
+ * before the handler ran. If the handler threw (e.g. 401 from Stripe
+ * API), the function returned 500 → Stripe retried → this gate said
+ * "already processed" → handler never re-ran → the event was lost
+ * forever. We saw this exact failure mode on the first test purchase
+ * (evt_1TZtYDGzjEKDFMPcgSv1ZvgP). Now we ONLY mark the doc as
+ * successfully processed AFTER the handler completes — failed
+ * attempts leave a 'failed' status that Stripe's retry will overwrite
+ * back to 'processed' once the underlying issue is fixed.
  */
-async function acquireLock(eventId: string): Promise<boolean> {
+type LockDecision = 'process' | 'skip';
+async function acquireLock(eventId: string, eventType: string): Promise<LockDecision> {
     const db = getFirestore();
     const ref = db.doc(`stripeWebhookEvents/${eventId}`);
-    try {
-        await ref.create({
-            processedAt: FieldValue.serverTimestamp(),
-        });
-        return true;
-    } catch (err) {
-        const code = (err as { code?: number })?.code;
-        // FAILED_PRECONDITION (gRPC code 9) = ALREADY_EXISTS for create()
-        if (code === 6 || code === 9 || (err as { code?: string })?.code === 'already-exists') {
-            return false;
+    const snap = await ref.get();
+    if (snap.exists) {
+        const data = snap.data() ?? {};
+        if (data.status === 'processed') {
+            // Already succeeded — don't run the handler again.
+            return 'skip';
         }
-        // Any other error → process anyway. Better to potentially double-
-        // process than to silently drop a real event.
-        // eslint-disable-next-line no-console
-        console.warn('[stripeWebhook] acquireLock unexpected error:', err);
-        return true;
+        // status was 'processing' or 'failed' — let the retry try again.
+        // We update the doc to record this new attempt.
+        await ref.set({
+            status: 'processing',
+            eventType,
+            attempts: FieldValue.increment(1),
+            lastAttemptAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+        return 'process';
     }
+    // First time we've seen this event.
+    await ref.create({
+        status: 'processing',
+        eventType,
+        attempts: 1,
+        firstSeenAt: FieldValue.serverTimestamp(),
+        lastAttemptAt: FieldValue.serverTimestamp(),
+    });
+    return 'process';
+}
+
+/**
+ * Mark a previously-locked event as fully processed. Called once the
+ * handler returns without throwing. Any future retries for the same
+ * event ID become no-ops.
+ */
+async function markProcessed(eventId: string): Promise<void> {
+    const db = getFirestore();
+    await db.doc(`stripeWebhookEvents/${eventId}`).set({
+        status: 'processed',
+        processedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+}
+
+/**
+ * Record a handler failure so the dedup doc shows why this event is
+ * stuck. Stripe will retry; on the next attempt acquireLock sees
+ * status='failed' and lets the handler run again.
+ */
+async function markFailed(eventId: string, err: unknown): Promise<void> {
+    const db = getFirestore();
+    await db.doc(`stripeWebhookEvents/${eventId}`).set({
+        status: 'failed',
+        lastErrorMessage: err instanceof Error ? err.message : String(err),
+        lastFailedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
 }
 
 /**
@@ -447,12 +498,15 @@ export const stripeWebhook = onRequest(
         }
 
         // Idempotency gate — Stripe retries on non-2xx, so we dedup by
-        // event.id. If we've already processed this one, return 200
-        // immediately (Stripe stops retrying when it sees 200).
-        const isFirstTime = await acquireLock(event.id);
-        if (!isFirstTime) {
+        // event.id. SUCCESSFULLY-processed events return 200 instantly
+        // (stops Stripe retrying). FAILED-or-in-progress events get
+        // another attempt — the previous version marked everything
+        // "processed" too early and a transient failure became
+        // permanent.
+        const decision = await acquireLock(event.id, event.type);
+        if (decision === 'skip') {
             // eslint-disable-next-line no-console
-            console.log(`[stripeWebhook] duplicate event ${event.id} (${event.type}) — skipping`);
+            console.log(`[stripeWebhook] duplicate event ${event.id} (${event.type}) — already processed successfully, skipping`);
             res.status(200).send('Already processed');
             return;
         }
@@ -475,13 +529,19 @@ export const stripeWebhook = onRequest(
                     // eslint-disable-next-line no-console
                     console.log(`[stripeWebhook] unhandled event type ${event.type}`);
             }
+            // Mark as successfully processed AFTER the handler returns
+            // cleanly — only then do we tell Stripe to stop retrying.
+            await markProcessed(event.id);
             res.status(200).send('OK');
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             // eslint-disable-next-line no-console
             console.error(`[stripeWebhook] handler ${event.type} threw:`, msg, err);
-            // Return 500 so Stripe retries. The lock prevents
-            // double-processing if the second attempt succeeds.
+            // Record the failure so the dedup doc reflects what
+            // happened. The status stays 'failed' so the next Stripe
+            // retry will be allowed to re-run the handler (vs the old
+            // bug where it got silently skipped as "duplicate").
+            await markFailed(event.id, err).catch(() => { /* non-fatal */ });
             res.status(500).send(`Handler error: ${msg}`);
         }
     },

@@ -197,19 +197,24 @@ service cloud.firestore {
     // ONLY through the callable functions.
     match /users/{uid} {
       allow read: if isSignedIn() && (isOwner(uid) || isCoach());
-      // Self-create is locked to a community-level seed doc — closes the
-      // privilege-escalation hole (a signed-in user could write
-      // role:'admin' to their own users doc and gain coach access via
-      // the rules' Firestore-role fallback). Coaches/admins keep wide
-      // create powers (used by the AddClient flow).
-      allow create: if isSignedIn() && (
-        (isOwner(uid)
-          && request.resource.data.role == 'community'
-          && request.resource.data.disabled != true
-          && (!('activityScore' in request.resource.data)
-              || request.resource.data.activityScore == 0))
-        || isCoach()
-      );
+
+      // Payment-gate: client-side self-create is BLOCKED. The only
+      // paths that can create a users/{uid} doc are:
+      //   1. The Stripe webhook (admin SDK — bypasses rules entirely)
+      //      on `checkout.session.completed`. Creates the doc with
+      //      role + Stripe IDs immediately after payment lands.
+      //   2. A coach via the AddClient flow (isCoach() branch below).
+      //
+      // The previous policy let any signed-in user self-create a
+      // `role: 'community'` doc, which combined with Firebase Auth's
+      // open REST signup endpoint meant a sophisticated attacker
+      // could POST to identitytoolkit.googleapis.com/v1/accounts:signUp
+      // (gets a Firebase user), then write their own users/{uid}
+      // doc → bypassed the $35 community paywall entirely. Locking
+      // create to isCoach() closes that path. New community + client
+      // accounts only materialize through Stripe.
+      allow create: if isSignedIn() && isCoach();
+
       allow delete: if false; // deletions go through deleteUser Cloud Function
       allow update: if isSignedIn() && isOwner(uid)
                     && !request.resource.data.diff(resource.data).affectedKeys()
