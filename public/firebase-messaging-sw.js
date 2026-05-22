@@ -24,6 +24,21 @@
 importScripts('https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.13.0/firebase-messaging-compat.js');
 
+// Take control immediately on install + activate. Without skipWaiting +
+// clients.claim, when this SW is updated (every deploy bumps the
+// firebase-messaging-sw.js file via cache-bust), the new version sits
+// in "waiting" state until every controlled tab closes. On iOS PWAs
+// that means: pushes during the wait window go to the OLD SW (or
+// nowhere), and the user gets the "I had to open the app and quit it
+// before notifications worked again" symptom. Activating immediately
+// keeps the FCM handler hot.
+self.addEventListener('install', () => {
+    self.skipWaiting();
+});
+self.addEventListener('activate', (event) => {
+    event.waitUntil(self.clients.claim());
+});
+
 // Mirror src/lib/firebase.ts. apiKey is safe to expose in client
 // surfaces (it's a project identifier, NOT an auth secret — actual
 // access is controlled by Firestore + Storage rules).

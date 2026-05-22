@@ -127,11 +127,35 @@ async function pushToUser(
         // = epoch seconds; using 0 would mean "drop if not deliverable
         // immediately". 10 minutes matches the Android/web TTL so all
         // three transports have the same staleness window.
+        //
+        // CRITICAL — `apns-push-type: alert` is REQUIRED by Apple for
+        // visible notifications since iOS 13 / WebKit Web Push (iOS
+        // 16.4+). Without it, Apple's gateway treats the push as a
+        // generic background event and may coalesce / delay / silently
+        // drop it. Symptom that pointed at this: "notifications are
+        // late, and only arrive after I open the app and quit it" —
+        // exactly the behavior of pushes that have to wait for the
+        // PWA to be foregrounded so iOS can decide they're meant to
+        // be visible.
+        //
+        // `apns-collapse-id` is set to the conversation key (when
+        // present) so multiple back-to-back messages in the same
+        // thread replace each other on the lock screen rather than
+        // piling up.
         apns: {
-            payload: { aps: { sound: 'default' } },
+            payload: {
+                aps: {
+                    sound: 'default',
+                    'mutable-content': 1, // enables iOS notification-service-extension rich content
+                },
+            },
             headers: {
+                'apns-push-type': 'alert',
                 'apns-priority': '10',
                 'apns-expiration': String(Math.floor(Date.now() / 1000) + 600),
+                ...(payload.data?.threadId
+                    ? { 'apns-collapse-id': String(payload.data.threadId).slice(0, 64) }
+                    : {}),
             },
         },
         });
@@ -217,6 +241,10 @@ export const onMessageCreated = onDocumentCreated(
                 // Deep-link target. Clicked notification opens this URL
                 // via the SW's notificationclick handler.
                 url: `/messages?to=${senderId}`,
+                // threadId drives apns-collapse-id in pushToUser — keeps
+                // multiple messages in the same conversation from piling
+                // up as separate lock-screen entries.
+                threadId: `msg:${senderId}:${receiverId}`,
             },
         });
     },
