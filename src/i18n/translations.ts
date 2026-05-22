@@ -1285,18 +1285,43 @@ export const translations = {
 
     // ─── Welcome page (post-payment landing for guest signups) ────
     welcomePostPayEyebrow:     { en: 'Payment received',                    ar: 'تم استلام الدفع' },
-    welcomePostPayTitle:       { en: 'Check your email to start.',          ar: 'تحقّق من بريدك للبدء.' },
-    welcomePostPaySub:         { en: 'We just sent you a link to set your password. Once you do, sign in and your plan is ready.',
-                                 ar: 'أرسلنا لك للتو رابطاً لتعيين كلمة المرور. بمجرّد القيام بذلك، سجّل الدخول وستجد باقتك جاهزة.' },
-    welcomePostPayStep1:       { en: 'Open the email from BioZackTeam (check spam if you don\'t see it).',
-                                 ar: 'افتح البريد من بيوزاك تيم (تحقّق من البريد المزعج إن لم تجده).' },
-    welcomePostPayStep2:       { en: 'Click the link and choose your password.',
-                                 ar: 'اضغط على الرابط واختر كلمة المرور.' },
-    welcomePostPayStep3:       { en: 'Sign in here with your email + new password.',
-                                 ar: 'سجّل الدخول من هنا بالبريد وكلمة المرور الجديدة.' },
-    welcomePostPayCta:         { en: 'Go to sign in',                       ar: 'انتقل إلى تسجيل الدخول' },
-    welcomePostPaySupport:     { en: 'Didn\'t receive the email after a few minutes? Contact zack@biozack.com.',
-                                 ar: 'لم يصلك البريد بعد بضع دقائق؟ راسلنا على zack@biozack.com.' },
+    welcomePostPayTitle:       { en: 'You\'re almost in.',                  ar: 'أنت على وشك الدخول.' },
+    welcomePostPaySub:         { en: 'We just created your account and sent you a link to set your password. Follow the four steps below — you\'ll be inside the app in under 2 minutes.',
+                                 ar: 'أنشأنا حسابك للتو وأرسلنا إليك رابطاً لتعيين كلمة المرور. اتبع الخطوات الأربع أدناه — ستكون داخل التطبيق في أقل من دقيقتين.' },
+
+    // Step 1 — check inbox
+    welcomeStep1Title:         { en: 'Check your inbox',                    ar: 'تحقّق من بريدك الإلكتروني' },
+    welcomeStep1Body:          { en: 'Look for an email from BioZackTeam titled "Reset your password". It usually arrives within 30 seconds of payment.',
+                                 ar: 'ابحث عن بريد من بيوزاك تيم بعنوان «إعادة تعيين كلمة المرور». يصل عادةً خلال 30 ثانية من الدفع.' },
+    welcomeStep1Hint:          { en: 'Don\'t see it? Check your spam or junk folder — the email comes from noreply@biozackteam-3d593.firebaseapp.com.',
+                                 ar: 'لم تجده؟ تحقّق من مجلد البريد المزعج أو الـ Junk — يأتي البريد من noreply@biozackteam-3d593.firebaseapp.com.' },
+
+    // Step 2 — set password
+    welcomeStep2Title:         { en: 'Set your password',                   ar: 'اختر كلمة المرور' },
+    welcomeStep2Body:          { en: 'Click the secure link inside the email and choose a password (at least 6 characters). Save it somewhere safe — a password manager is best.',
+                                 ar: 'اضغط على الرابط الآمن داخل البريد واختر كلمة مرور (6 أحرف على الأقل). احفظها في مكان آمن — يُفضّل استخدام مدير كلمات مرور.' },
+    welcomeStep2Hint:          { en: 'The link is one-time use and expires after 1 hour. If it expires, come back here and click "Resend".',
+                                 ar: 'الرابط للاستخدام مرة واحدة وينتهي بعد ساعة. إن انتهت صلاحيته، عُد إلى هنا واضغط «إعادة الإرسال».' },
+
+    // Step 3 — sign in
+    welcomeStep3Title:         { en: 'Sign in',                             ar: 'سجّل الدخول' },
+    welcomeStep3Body:          { en: 'Once your password is set, come back to this site and sign in with your email + new password. Tap the button at the bottom of this page to get there.',
+                                 ar: 'بمجرّد تعيين كلمة المرور، عُد إلى هذا الموقع وسجّل الدخول ببريدك الإلكتروني وكلمة المرور الجديدة. اضغط الزر أسفل هذه الصفحة للانتقال إلى تسجيل الدخول.' },
+    welcomeStep3Hint:          { en: 'Tip: bookmark app.biozackteam.com so you can come back in one tap from any device.',
+                                 ar: 'نصيحة: أضف app.biozackteam.com إلى المفضّلة لتعود في خطوة واحدة من أي جهاز.' },
+
+    // Step 4 — start using the app
+    welcomeStep4Title:         { en: 'You\'re in. Start training.',         ar: 'لقد دخلت. ابدأ التدريب.' },
+    welcomeStep4Body:          { en: 'Your plan is already active. Your dashboard will show your weekly check-in, training program, diet plan, and the academy — everything ready to go.',
+                                 ar: 'باقتك مفعّلة بالفعل. ستعرض لوحتك متابعتك الأسبوعية، برنامج التدريب، الخطّة الغذائية، والأكاديمية — كل شيء جاهز للاستخدام.' },
+    welcomeStep4Hint:          { en: 'When asked, allow notifications so you don\'t miss messages from Coach Med.',
+                                 ar: 'عند السؤال، اسمح بالإشعارات حتى لا تفوّتك رسائل الكوتش ميد.' },
+
+    // CTAs + support footer
+    welcomePostPayCta:         { en: 'Go to sign in',                       ar: 'الانتقال إلى تسجيل الدخول' },
+    welcomePostPaySupportTitle:{ en: 'Need help?',                          ar: 'تحتاج إلى مساعدة؟' },
+    welcomePostPaySupport:     { en: 'Email never arrived after 5 minutes, or stuck on any step? Email zack@biozack.com and we\'ll help right away.',
+                                 ar: 'لم يصل البريد بعد 5 دقائق، أو علقت في إحدى الخطوات؟ راسلنا على zack@biozack.com وسنساعدك فوراً.' },
 
     // ─── Upgrade success + checkout-open states ───────────────────
     upgradeSuccessEyebrow:     { en: 'Welcome to coaching',                 ar: 'مرحباً بك في التدريب' },
