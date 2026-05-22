@@ -30,7 +30,7 @@ import { useNavigate } from 'react-router-dom';
 import { onSnapshot, doc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../lib/firebase';
-import { registerFcmToken } from '../lib/fcm';
+import { registerFcmToken, wipeAllFcmTokensAndRegister } from '../lib/fcm';
 import { CommunityBaselineForm } from '../components/profile/CommunityBaselineForm';
 
 function calculateAge(birthdate: string): number {
@@ -371,6 +371,35 @@ function NotificationsDiagnostic({ uid }: { uid: string }) {
         }
     };
 
+    // Hard-clean recovery: wipes the entire fcmTokens array on the user
+    // doc and re-registers only this device. The 14-day token-rotation
+    // behavior + the older "Reset" bug let stale tokens accumulate; this
+    // gives the user a one-tap reset to a known-good state.
+    const doWipeAndRegister = async () => {
+        setRegistering(true);
+        setTestResult(null);
+        setTestOk(null);
+        try {
+            const result = await wipeAllFcmTokensAndRegister(uid);
+            setRegResult({
+                ok: result.ok,
+                detail: result.ok
+                    ? `Cleared all old tokens. Only this device is now registered (${result.tokenPreview}).`
+                    : `Step "${result.step}": ${result.detail ?? 'no detail'}`,
+            });
+            if (typeof Notification !== 'undefined') setPermission(Notification.permission);
+            if ('serviceWorker' in navigator) {
+                const reg = await navigator.serviceWorker.getRegistration('/firebase-messaging-sw.js').catch(() => null);
+                setSwRegistered(!!reg);
+            }
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            setRegResult({ ok: false, detail: `Unexpected error: ${msg}` });
+        } finally {
+            setRegistering(false);
+        }
+    };
+
     const handleSendTest = async () => {
         setTesting(true);
         setTestResult(null);
@@ -493,6 +522,16 @@ function NotificationsDiagnostic({ uid }: { uid: string }) {
                 >
                     {registering ? <Loader2 size={14} className="animate-spin" /> : <Bell size={14} />}
                     Reset &amp; re-register
+                </button>
+                <button
+                    type="button"
+                    onClick={doWipeAndRegister}
+                    disabled={registering || permission === 'unsupported'}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-rose-500/10 text-rose-300 border border-rose-500/30 text-sm font-label font-bold uppercase tracking-widest hover:bg-rose-500/15 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                    title="Clear EVERY token on this account, then register only this device. Use this if device count keeps growing."
+                >
+                    {registering ? <Loader2 size={14} className="animate-spin" /> : <Bell size={14} />}
+                    Wipe &amp; register only this device
                 </button>
                 <button
                     type="button"

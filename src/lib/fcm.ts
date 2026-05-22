@@ -157,9 +157,32 @@ export async function registerFcmToken(
     // mints a brand-new one. Useful for recovering from stuck stale
     // tokens (the legacy ones FCM keeps returning even after they've
     // been invalidated server-side).
+    //
+    // CRITICAL — before deleting, we read the device's current token
+    // and remove THAT exact value from the user doc. Without this
+    // step, deleteToken() drops the token from the browser's IDB but
+    // the stale string lingers in users/{uid}.fcmTokens forever,
+    // and the next arrayUnion() below just appends a new token on
+    // top. Cumulative result: every Reset & Re-register grows the
+    // array without shrinking it — exactly the bug the founder
+    // reported ("device count keeps going up").
     if (opts.forceRefresh) {
         try {
-            log('forceRefresh: deleting existing token…');
+            log('forceRefresh: reading current token before delete…');
+            const currentToken = await getToken(messaging, {
+                vapidKey: VAPID_KEY,
+            }).catch(() => null);
+            if (currentToken) {
+                log('forceRefresh: removing current token from user doc…');
+                await updateDoc(doc(db, 'users', uid), {
+                    fcmTokens: arrayRemove(currentToken),
+                }).catch((err) => {
+                    log('forceRefresh arrayRemove non-fatal:', err);
+                });
+            } else {
+                log('forceRefresh: no current token to remove from user doc');
+            }
+            log('forceRefresh: deleting browser token…');
             await deleteToken(messaging);
         } catch (err) {
             // Non-fatal — there might not be an existing token to delete.
@@ -237,6 +260,41 @@ export async function unregisterFcmToken(uid: string): Promise<void> {
     } catch {
         // Sign-out must not be blocked by token cleanup failures.
     }
+}
+
+/**
+ * Nuke EVERY fcmToken on the user doc, then register this device fresh.
+ * Use this when a user has accumulated stale tokens that the normal
+ * forceRefresh path can't catch (e.g. they signed in on five different
+ * browsers over time and most of the tokens are dead). The Cloud
+ * Function prunes on send-failure, but that requires the failed
+ * push to even land — and the founder reports tokens piling up faster
+ * than the prune-on-fail loop can clean them.
+ *
+ * After this returns successfully, users/{uid}.fcmTokens contains
+ * exactly one entry: this device's current token.
+ */
+export async function wipeAllFcmTokensAndRegister(uid: string): Promise<FcmRegistrationResult> {
+    try {
+        // eslint-disable-next-line no-console
+        console.log('[fcm] wipeAllFcmTokensAndRegister: clearing user doc array');
+        await updateDoc(doc(db, 'users', uid), {
+            fcmTokens: [],
+        });
+    } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn('[fcm] wipe failed (continuing to register anyway):', err);
+    }
+    // Also drop the device's IDB token so we re-mint on register.
+    try {
+        const messaging = await getFcmMessaging();
+        if (messaging) {
+            await deleteToken(messaging).catch(() => { /* non-fatal */ });
+        }
+    } catch {
+        // ignore
+    }
+    return registerFcmToken(uid, { forceRefresh: false });
 }
 
 /**
