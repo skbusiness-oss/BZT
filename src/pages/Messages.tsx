@@ -670,13 +670,24 @@ export const Messages = () => {
                                 const isMine = msg.senderId === user.id;
                                 const isSelected = selectedMessageId === msg.id;
                                 const isHighlighted = highlightedMessageId === msg.id;
-                                // RTL-aware side picking. In LTR: mine→right,
-                                // theirs→left. In Arabic the writing direction
-                                // flips, so the conventional "self" side flips
-                                // too: mine→left, theirs→right. XOR-style.
-                                const showOnEndSide = isRTL ? !isMine : isMine;
-                                // Bubble corner: the "tail" corner sits on the
-                                // side closest to the screen edge. Flip with RTL.
+                                // Side picking: rely on the browser to flip
+                                // justify-end / justify-start in RTL — we set
+                                // `document.documentElement.dir = 'rtl'` in
+                                // LanguageContext on language change, so flex
+                                // containers auto-mirror.
+                                //
+                                // In LTR: justify-end = right (mine), justify-start = left (theirs)
+                                // In RTL: justify-end = LEFT (mine, mirrored), justify-start = RIGHT
+                                //
+                                // A previous "RTL fix" added an XOR here on
+                                // top of the auto-flip, which double-flipped
+                                // and broke both the alignment AND the
+                                // swipe-to-reply gesture (the bubble ended
+                                // up on the opposite side from where the
+                                // direction-aware swipe logic expected it).
+                                // The tail-corner + swipe-direction logic
+                                // below stay as-is — both already account
+                                // for isRTL on the writing-direction side.
                                 const tailClass = isMine
                                     ? (isRTL ? 'rounded-bl-sm' : 'rounded-br-sm')
                                     : (isRTL ? 'rounded-br-sm' : 'rounded-bl-sm');
@@ -687,9 +698,9 @@ export const Messages = () => {
                                     <div
                                         key={msg.id}
                                         ref={(el) => { messageRefs.current[msg.id] = el; }}
-                                        className={`flex ${showOnEndSide ? 'justify-end' : 'justify-start'}`}
+                                        className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}
                                     >
-                                        <div className={`max-w-[75%] flex flex-col gap-1.5 ${showOnEndSide ? 'items-end' : 'items-start'}`}>
+                                        <div className={`max-w-[75%] flex flex-col gap-1.5 ${isMine ? 'items-end' : 'items-start'}`}>
                                             {/* Floating action toolbar — appears above the
                                                 bubble when selected. Reply + React for now;
                                                 Copy / Delete can slot in later. */}
@@ -842,7 +853,7 @@ export const Messages = () => {
                                                 under the bottom edge of the bubble (-mt-2)
                                                 so they read as "stuck" to the message. */}
                                             {msg.reactions && Object.keys(msg.reactions).length > 0 && (
-                                                <div className={`flex flex-wrap gap-1 -mt-2 ${showOnEndSide ? 'self-end justify-end' : 'self-start justify-start'}`}>
+                                                <div className={`flex flex-wrap gap-1 -mt-2 ${isMine ? 'self-end justify-end' : 'self-start justify-start'}`}>
                                                     {Object.entries(msg.reactions)
                                                         .filter(([, uids]) => uids.length > 0)
                                                         .map(([emoji, uids]) => {
