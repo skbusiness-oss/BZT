@@ -54,7 +54,7 @@ export function BrandLogo({ size = 'md', glow = false, className = '' }: Props) 
                 />
             )}
             <img
-                src="/brand-logo.png"
+                src="/brand-logo.png?v=3"
                 alt={t('brandLogoAlt') || 'BioZackTeam'}
                 width={px}
                 height={px}
