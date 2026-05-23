@@ -83,30 +83,21 @@ const EN: DocSet = {
                 body: [
                     'Access to the Service is offered through recurring subscription plans. Current plans include Community ($35 USD/month or $199 USD/year) and Coaching ($149 USD/month). Plan details and prices are subject to change with prior notice.',
                     'Payments are processed by Stripe, Inc. By subscribing you authorize us, through Stripe, to charge your selected payment method on the recurring billing date until you cancel.',
-                    'You may cancel your subscription at any time from your account Settings or via the Stripe Customer Portal. Cancellations take effect at the end of the current billing period, and you will retain access until that date. We do not provide refunds for partial billing periods unless required by applicable law.',
+                    'You may cancel your subscription at any time from your account Settings or via the Stripe Customer Portal. Cancellations take effect at the end of the current billing period, and you will retain access until that date.',
                     'If a payment fails, we will attempt to retry the charge over a period of approximately seven business days. If payment cannot be collected within that window, your subscription will be canceled and your access suspended until you provide a working payment method.',
                 ],
             },
             {
-                id: 'refunds',
-                heading: '6. Refunds',
-                body: [
-                    'We offer refunds at our sole discretion. To request a refund, contact us at billing@biozackteam.com within 7 days of the disputed charge with a clear description of the reason.',
-                    'Annual subscriptions may be eligible for a prorated refund within the first 14 days. Monthly subscriptions are generally non-refundable once the billing cycle has begun.',
-                    'Where required by applicable consumer protection law in your jurisdiction (for example, the EU 14-day withdrawal right), we will comply with statutory refund requirements.',
-                ],
-            },
-            {
                 id: 'acceptable-use',
-                heading: '7. Acceptable Use',
+                heading: '6. Acceptable Use',
                 body: [
                     'You agree not to: share or resell your account credentials; copy, reproduce, distribute, or create derivative works of any content within the Service (including videos, training programs, and diet plans) without our written permission; abuse the messaging or community features (spam, harassment, hate speech, illegal content); attempt to bypass payment, authentication, or security mechanisms; reverse engineer, decompile, or otherwise attempt to extract the source code of the Service.',
-                    'We may suspend or terminate your account immediately and without refund for any violation of this section.',
+                    'We may suspend or terminate your account immediately for any violation of this section.',
                 ],
             },
             {
                 id: 'ip',
-                heading: '8. Intellectual Property',
+                heading: '7. Intellectual Property',
                 body: [
                     'All content provided through the Service — including training programs, video lessons, diet plans, written materials, branding, and software — is the exclusive property of BioZackTeam or its licensors and is protected by copyright and other intellectual property laws.',
                     'Your subscription grants you a personal, non-transferable, non-exclusive license to access and use this content for your own personal fitness use only. You may not record, screen-capture, redistribute, or republish any content without our prior written consent.',
@@ -114,7 +105,7 @@ const EN: DocSet = {
             },
             {
                 id: 'user-content',
-                heading: '9. Your Content (Photos, Check-ins, Messages)',
+                heading: '8. Your Content (Photos, Check-ins, Messages)',
                 body: [
                     'You retain ownership of any content you upload to the Service, including progress photos, body measurements, weight logs, written notes, and private messages to your coach.',
                     'By uploading content you grant BioZackTeam a limited license to store, process, and display that content solely for the purpose of providing the Service to you. We will not publish or share your content publicly without your explicit consent.',
@@ -123,7 +114,7 @@ const EN: DocSet = {
             },
             {
                 id: 'disclaimer',
-                heading: '10. Health & Fitness Disclaimer',
+                heading: '9. Health & Fitness Disclaimer',
                 body: [
                     'BioZackTeam provides general fitness, nutrition, and educational information. We are not licensed medical professionals, and nothing in the Service constitutes medical advice, diagnosis, or treatment.',
                     'You should consult a qualified physician before starting any new exercise or nutrition program, especially if you have, or suspect you may have, a medical condition, are pregnant or nursing, are under 18 (and are using this Service in violation of the eligibility section), or are taking any medication.',
@@ -133,7 +124,7 @@ const EN: DocSet = {
             },
             {
                 id: 'liability',
-                heading: '11. Limitation of Liability',
+                heading: '10. Limitation of Liability',
                 body: [
                     'To the maximum extent permitted by applicable law, BioZackTeam, its founders, employees, and affiliates shall not be liable for any indirect, incidental, consequential, special, or punitive damages arising out of or related to your use of the Service.',
                     'Our total aggregate liability to you for any claim arising out of these Terms or the Service shall not exceed the total amount you have paid us in the twelve (12) months preceding the claim.',
@@ -141,7 +132,7 @@ const EN: DocSet = {
             },
             {
                 id: 'termination',
-                heading: '12. Termination',
+                heading: '11. Termination',
                 body: [
                     'You may stop using the Service at any time by canceling your subscription and requesting account deletion. We may suspend or terminate your access to the Service at our discretion for violations of these Terms, non-payment, or for any other lawful reason.',
                     'Provisions that by their nature should survive termination (including intellectual property, limitation of liability, and dispute resolution) shall survive.',
@@ -149,24 +140,24 @@ const EN: DocSet = {
             },
             {
                 id: 'changes',
-                heading: '13. Changes to These Terms',
+                heading: '12. Changes to These Terms',
                 body: [
                     'We may update these Terms from time to time. Material changes will be communicated via email or in-app notification at least 14 days before they take effect. Your continued use of the Service after the effective date constitutes acceptance of the updated Terms.',
                 ],
             },
             {
                 id: 'governing-law',
-                heading: '14. Governing Law and Disputes',
+                heading: '13. Governing Law and Disputes',
                 body: [
                     'These Terms are governed by the laws of the Kingdom of Morocco, without regard to its conflict-of-laws principles. Any disputes arising out of or in connection with these Terms shall be resolved through good-faith negotiation in the first instance. If a dispute cannot be resolved, it will be submitted to the competent courts of Casablanca, Morocco.',
                 ],
             },
             {
                 id: 'contact',
-                heading: '15. Contact',
+                heading: '14. Contact',
                 body: [
                     'Questions about these Terms? Email us at legal@biozackteam.com.',
-                    'For billing or refund requests: billing@biozackteam.com',
+                    'For billing or invoice questions: billing@biozackteam.com',
                     'For general support: support@biozackteam.com',
                 ],
             },
@@ -382,30 +373,21 @@ const AR: DocSet = {
                 body: [
                     'يُتاح الوصول إلى الخدمة عبر باقات اشتراك متكرّرة. الباقات الحالية تشمل: المجتمع (35 دولار شهرياً أو 199 دولار سنوياً) والتدريب (149 دولار شهرياً). تفاصيل الباقات والأسعار قابلة للتغيير بإشعار مسبق.',
                     'تُعالَج المدفوعات عبر شركة سترايب. بالاشتراك، فإنك تخوّلنا (عبر سترايب) بخصم المبلغ من وسيلة الدفع المختارة في تاريخ الفوترة المتكرّر حتى إلغائك.',
-                    'يمكنك إلغاء اشتراكك في أي وقت من إعدادات حسابك أو عبر بوابة سترايب للعملاء. تسري الإلغاءات في نهاية فترة الفوترة الحالية، وستحتفظ بالوصول حتى ذلك التاريخ. لا نقدّم استرداداً عن فترات فوترة جزئية ما لم يقتضِ القانون ذلك.',
+                    'يمكنك إلغاء اشتراكك في أي وقت من إعدادات حسابك أو عبر بوابة سترايب للعملاء. تسري الإلغاءات في نهاية فترة الفوترة الحالية، وستحتفظ بالوصول حتى ذلك التاريخ.',
                     'إذا فشلت الدفعة، سنحاول إعادة المحاولة على مدى نحو 7 أيام عمل. إذا تعذّر تحصيل الدفع خلال هذه المدة، يتمّ إلغاء اشتراكك وإيقاف وصولك حتى تُحدّث وسيلة دفع صالحة.',
                 ],
             },
             {
-                id: 'refunds',
-                heading: '6. الاسترداد',
-                body: [
-                    'نقدّم الاسترداد وفقاً لتقديرنا. لطلب استرداد، تواصل معنا على billing@biozackteam.com خلال 7 أيام من الخصم محل النزاع مع شرح واضح للسبب.',
-                    'قد تكون الاشتراكات السنوية مؤهّلة لاسترداد جزئي خلال أول 14 يوماً. الاشتراكات الشهرية عادةً غير قابلة للاسترداد بعد بدء دورة الفوترة.',
-                    'حيثما يتطلّب قانون حماية المستهلك في بلدك (مثل حق الانسحاب لمدة 14 يوماً في الاتحاد الأوروبي)، سنلتزم بمتطلبات الاسترداد القانونية.',
-                ],
-            },
-            {
                 id: 'acceptable-use',
-                heading: '7. الاستخدام المقبول',
+                heading: '6. الاستخدام المقبول',
                 body: [
                     'توافق على عدم: مشاركة أو إعادة بيع بيانات الدخول؛ نسخ أو إعادة توزيع أي محتوى داخل الخدمة (بما في ذلك الفيديوهات والبرامج التدريبية والخطط الغذائية) دون إذن خطّي منّا؛ إساءة استخدام ميزات المراسلة أو المجتمع (سبام، تحرّش، خطاب كراهية، محتوى غير قانوني)؛ محاولة تجاوز آليات الدفع أو المصادقة أو الأمان؛ الهندسة العكسية للخدمة.',
-                    'يمكننا تعليق أو إنهاء حسابك فوراً ودون استرداد عند أي مخالفة لهذا القسم.',
+                    'يمكننا تعليق أو إنهاء حسابك فوراً عند أي مخالفة لهذا القسم.',
                 ],
             },
             {
                 id: 'ip',
-                heading: '8. الملكية الفكرية',
+                heading: '7. الملكية الفكرية',
                 body: [
                     'جميع المحتويات المقدّمة عبر الخدمة — بما في ذلك البرامج التدريبية والفيديوهات والخطط الغذائية والعلامة والبرمجيات — هي ملكية حصرية لبيوزاك تيم أو مرخّصيها وتحميها قوانين حقوق النشر والملكية الفكرية.',
                     'يمنحك اشتراكك ترخيصاً شخصياً، غير قابل للنقل، وغير حصري للوصول إلى هذا المحتوى واستخدامه لأغراض اللياقة الشخصية فقط. لا يجوز تسجيل أو نشر أو إعادة توزيع أي محتوى دون موافقتنا الخطّية المسبقة.',
@@ -413,7 +395,7 @@ const AR: DocSet = {
             },
             {
                 id: 'user-content',
-                heading: '9. محتواك (الصور والمتابعات والرسائل)',
+                heading: '8. محتواك (الصور والمتابعات والرسائل)',
                 body: [
                     'تحتفظ بملكية أي محتوى ترفعه إلى الخدمة، بما في ذلك صور التقدم وقياسات الجسم وسجلات الوزن والملاحظات والرسائل الخاصة مع مدرّبك.',
                     'برفع المحتوى، فإنك تمنحنا ترخيصاً محدوداً لتخزينه ومعالجته وعرضه فقط لأغراض تقديم الخدمة لك. لن ننشر أو نشارك محتواك علناً دون موافقتك الصريحة.',
@@ -422,7 +404,7 @@ const AR: DocSet = {
             },
             {
                 id: 'disclaimer',
-                heading: '10. إخلاء المسؤولية الصحية',
+                heading: '9. إخلاء المسؤولية الصحية',
                 body: [
                     'يقدّم بيوزاك تيم معلومات عامة عن اللياقة والتغذية. لسنا أطبّاء مرخّصين ولا شيء في الخدمة يُعدّ نصيحة طبية أو تشخيصاً أو علاجاً.',
                     'يجب استشارة طبيب مؤهّل قبل بدء أي برنامج رياضي أو غذائي جديد، خاصةً إذا كانت لديك حالة طبية أو أنت حامل أو ترضعين أو تتناول دواءً ما.',
@@ -432,7 +414,7 @@ const AR: DocSet = {
             },
             {
                 id: 'liability',
-                heading: '11. تحديد المسؤولية',
+                heading: '10. تحديد المسؤولية',
                 body: [
                     'إلى أقصى حدّ يسمح به القانون، لن يكون بيوزاك تيم ومؤسّسوها وموظّفوها مسؤولين عن أي أضرار غير مباشرة أو عرضية أو تبعية أو خاصة أو عقابية ناشئة عن استخدامك للخدمة.',
                     'لن تتجاوز مسؤوليتنا الإجمالية تجاهك عن أي مطالبة إجمالي ما دفعته لنا خلال الاثني عشر شهراً السابقة للمطالبة.',
@@ -440,7 +422,7 @@ const AR: DocSet = {
             },
             {
                 id: 'termination',
-                heading: '12. الإنهاء',
+                heading: '11. الإنهاء',
                 body: [
                     'يمكنك التوقف عن استخدام الخدمة في أي وقت بإلغاء اشتراكك وطلب حذف الحساب. يمكننا تعليق أو إنهاء وصولك للخدمة وفقاً لتقديرنا في حالة مخالفة هذه الشروط أو عدم السداد أو لأي سبب قانوني آخر.',
                     'الأحكام التي تستمر طبيعتها بعد الإنهاء (مثل الملكية الفكرية وتحديد المسؤولية) تبقى سارية.',
@@ -448,24 +430,24 @@ const AR: DocSet = {
             },
             {
                 id: 'changes',
-                heading: '13. تغييرات على الشروط',
+                heading: '12. تغييرات على الشروط',
                 body: [
                     'قد نحدّث هذه الشروط من حين لآخر. سنبلّغك بالتغييرات الجوهرية عبر البريد أو إشعار داخل التطبيق قبل 14 يوماً على الأقل. استمرارك في استخدام الخدمة بعد تاريخ السريان يعني قبول الشروط المحدّثة.',
                 ],
             },
             {
                 id: 'governing-law',
-                heading: '14. القانون الحاكم والنزاعات',
+                heading: '13. القانون الحاكم والنزاعات',
                 body: [
                     'تخضع هذه الشروط لقوانين المملكة المغربية. تُحَلّ أي نزاعات أولاً عبر التفاوض بحسن نية. إن تعذّر ذلك، تُحال إلى المحاكم المختصة في الدار البيضاء بالمغرب.',
                 ],
             },
             {
                 id: 'contact',
-                heading: '15. تواصل معنا',
+                heading: '14. تواصل معنا',
                 body: [
                     'أسئلة حول هذه الشروط؟ راسلنا على legal@biozackteam.com',
-                    'استفسارات الفوترة والاسترداد: billing@biozackteam.com',
+                    'استفسارات الفوترة والفواتير: billing@biozackteam.com',
                     'الدعم العام: support@biozackteam.com',
                 ],
             },
