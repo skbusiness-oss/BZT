@@ -17,11 +17,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { collection, query, onSnapshot, where, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { httpsCallable, FunctionsError } from 'firebase/functions';
+import { db, functions } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
-import { describePriceId } from '../lib/stripePrices';
-import { CreditCard, ExternalLink, Lock, Unlock, Filter, Loader2 } from 'lucide-react';
+import { describePriceId, STRIPE_PRICE_META } from '../lib/stripePrices';
+import {
+    CreditCard, ExternalLink, Lock, Unlock, Filter, Loader2,
+    Link as LinkIcon, X, Copy, Check, Calendar,
+} from 'lucide-react';
 
 interface SubscriberRow {
     uid: string;
@@ -49,6 +53,7 @@ export const Subscriptions = () => {
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState<StatusFilter>('all');
     const [pendingToggle, setPendingToggle] = useState<string | null>(null);
+    const [showLinkModal, setShowLinkModal] = useState(false);
 
     // Coach-only gate. Non-coach hitting /subscriptions directly →
     // bounce home.
@@ -172,16 +177,31 @@ export const Subscriptions = () => {
 
     return (
         <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500 pt-4 pb-20" style={{ direction: isRTL ? 'rtl' : 'ltr' }}>
-            <header className="mb-2">
-                <span className="font-label text-[10px] font-bold uppercase tracking-widest text-primary block mb-2">
-                    {t('subEyebrow')}
-                </span>
-                <h1 className="font-headline font-extrabold text-4xl md:text-5xl text-on-surface tracking-tighter mb-3">
-                    {t('subPageTitle')}
-                </h1>
-                <p className="text-on-surface/60 font-body text-sm md:text-base leading-relaxed max-w-2xl">
-                    {t('subPageSub')}
-                </p>
+            <header className="mb-2 flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+                <div>
+                    <span className="font-label text-[10px] font-bold uppercase tracking-widest text-primary block mb-2">
+                        {t('subEyebrow')}
+                    </span>
+                    <h1 className="font-headline font-extrabold text-4xl md:text-5xl text-on-surface tracking-tighter mb-3">
+                        {t('subPageTitle')}
+                    </h1>
+                    <p className="text-on-surface/60 font-body text-sm md:text-base leading-relaxed max-w-2xl">
+                        {t('subPageSub')}
+                    </p>
+                </div>
+                {/* Link-existing-client button — opens a modal that
+                    calls the `linkClientToStripe` function. Used to
+                    migrate clients who paid in cash externally onto
+                    Stripe auto-billing with a trial-end set to the
+                    cash-paid period's expiry date. */}
+                <button
+                    type="button"
+                    onClick={() => setShowLinkModal(true)}
+                    className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl bg-primary/10 text-primary border border-primary/30 font-label text-[11px] font-bold uppercase tracking-widest hover:bg-primary/15 hover:border-primary/50 transition-all"
+                >
+                    <LinkIcon size={14} />
+                    {t('subLinkCashClient')}
+                </button>
             </header>
 
             {/* Status filter chips */}
@@ -367,9 +387,353 @@ export const Subscriptions = () => {
                     })}
                 </div>
             )}
+
+            {showLinkModal && (
+                <LinkCashClientModal
+                    onClose={() => setShowLinkModal(false)}
+                    existingSubscribers={rows}
+                />
+            )}
         </div>
     );
 };
+
+// ─────────────────────────────────────────────────────────────────
+// LinkCashClientModal — coach-only flow to migrate a cash-paying
+// client onto Stripe auto-billing. Calls the linkClientToStripe
+// Cloud Function, gets back a Checkout URL, presents it for the
+// coach to copy + share with the client (WhatsApp / SMS / in-app
+// message).
+// ─────────────────────────────────────────────────────────────────
+interface CandidateClient {
+    uid: string;
+    name: string;
+    email: string;
+    role: string;
+}
+
+function LinkCashClientModal({
+    onClose,
+    existingSubscribers,
+}: {
+    onClose: () => void;
+    existingSubscribers: SubscriberRow[];
+}) {
+    const { t } = useLanguage();
+    const [candidates, setCandidates] = useState<CandidateClient[]>([]);
+    const [loadingCandidates, setLoadingCandidates] = useState(true);
+    const [search, setSearch] = useState('');
+    const [pickedUid, setPickedUid] = useState<string>('');
+    const [priceId, setPriceId] = useState<string>('');
+    // Default billing start = 30 days from now. Coach can edit.
+    const [billingStartDate, setBillingStartDate] = useState<string>(() => {
+        const d = new Date();
+        d.setDate(d.getDate() + 30);
+        return d.toISOString().slice(0, 10);
+    });
+    const [note, setNote] = useState('');
+    const [submitting, setSubmitting] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [resultUrl, setResultUrl] = useState<string | null>(null);
+    const [copied, setCopied] = useState(false);
+
+    // Build a "subscribers I shouldn't double-link" set — anyone
+    // already on an active/trialing sub gets filtered from the
+    // candidate dropdown so the coach can't accidentally create a
+    // parallel subscription.
+    const activeSubUids = useMemo(() => {
+        const s = new Set<string>();
+        for (const r of existingSubscribers) {
+            if (r.subscriptionStatus === 'active' || r.subscriptionStatus === 'trialing') s.add(r.uid);
+        }
+        return s;
+    }, [existingSubscribers]);
+
+    // Real-time list of all users so coach can pick a target. We
+    // skip ones with an active sub. Coaches/admins also filtered
+    // since they're staff, not customers.
+    useEffect(() => {
+        const unsub = onSnapshot(collection(db, 'users'),
+            (snap) => {
+                const next: CandidateClient[] = [];
+                snap.forEach((d) => {
+                    const data = d.data() as Record<string, unknown>;
+                    const role = (data.role as string) || 'community';
+                    if (role === 'coach' || role === 'admin') return;
+                    if (activeSubUids.has(d.id)) return;
+                    next.push({
+                        uid: d.id,
+                        name: (data.displayName as string) || (data.name as string) || '(no name)',
+                        email: (data.email as string) || '',
+                        role,
+                    });
+                });
+                next.sort((a, b) => a.name.localeCompare(b.name));
+                setCandidates(next);
+                setLoadingCandidates(false);
+            },
+            (err) => {
+                // eslint-disable-next-line no-console
+                console.error('[LinkCashClientModal] users snapshot error:', err);
+                setLoadingCandidates(false);
+            },
+        );
+        return unsub;
+    }, [activeSubUids]);
+
+    // Filter candidates by the typed search string. Case-insensitive
+    // on both name and email.
+    const filteredCandidates = useMemo(() => {
+        const q = search.trim().toLowerCase();
+        if (!q) return candidates.slice(0, 50);
+        return candidates.filter(c =>
+            c.name.toLowerCase().includes(q) || c.email.toLowerCase().includes(q)
+        ).slice(0, 50);
+    }, [candidates, search]);
+
+    const handleSubmit = async () => {
+        if (!pickedUid || !priceId || !billingStartDate) {
+            setError(t('subLinkAllFieldsRequired') || 'Pick a client, a plan, and a start date.');
+            return;
+        }
+        setSubmitting(true);
+        setError(null);
+        try {
+            const call = httpsCallable<
+                { clientUid: string; priceId: string; billingStartDate: string; note?: string },
+                { url: string; customerId: string; expiresAt: number }
+            >(functions, 'linkClientToStripe');
+            const res = await call({
+                clientUid: pickedUid,
+                priceId,
+                billingStartDate,
+                ...(note.trim() ? { note: note.trim() } : {}),
+            });
+            const url = res.data?.url;
+            if (!url) throw new Error('Function returned no URL.');
+            setResultUrl(url);
+        } catch (err) {
+            const fnErr = err as FunctionsError;
+            // eslint-disable-next-line no-console
+            console.error('[LinkCashClientModal] link failed:', err);
+            setError(fnErr?.message || (t('subLinkFailed') || 'Could not generate link. Try again.'));
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    const handleCopy = async () => {
+        if (!resultUrl) return;
+        try {
+            await navigator.clipboard.writeText(resultUrl);
+            setCopied(true);
+            window.setTimeout(() => setCopied(false), 2000);
+        } catch {
+            // Some browsers / PWAs reject clipboard writes — fall back
+            // to selecting the input so the coach can copy manually.
+        }
+    };
+
+    return (
+        <div
+            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end md:items-center justify-center animate-in fade-in duration-200"
+            onClick={onClose}
+        >
+            <div
+                onClick={(e) => e.stopPropagation()}
+                className="w-full md:max-w-lg bg-surface-container rounded-t-3xl md:rounded-3xl p-6 max-h-[90vh] overflow-y-auto"
+                style={{ border: '1px solid rgb(var(--outline-variant) / 0.4)' }}
+            >
+                <div className="flex items-start justify-between mb-5">
+                    <div>
+                        <span className="font-label text-[10px] font-bold uppercase tracking-widest text-primary block mb-1">
+                            {t('subLinkEyebrow')}
+                        </span>
+                        <h2 className="font-headline font-extrabold text-xl text-on-surface tracking-tight">
+                            {t('subLinkTitle')}
+                        </h2>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="w-9 h-9 rounded-full bg-surface-container-high text-on-surface/60 hover:text-on-surface flex items-center justify-center shrink-0"
+                        aria-label={t('cancel') || 'Close'}
+                    >
+                        <X size={16} />
+                    </button>
+                </div>
+
+                {resultUrl ? (
+                    /* Success view — show the URL with copy button +
+                       a quick intro paragraph the coach can paste
+                       alongside the link. */
+                    <div className="space-y-4">
+                        <div className="rounded-2xl p-4 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300">
+                            <p className="text-[13px] font-body">
+                                {t('subLinkSuccessBlurb')}
+                            </p>
+                        </div>
+                        <div>
+                            <label className="block text-[10px] font-label font-bold uppercase tracking-widest text-on-surface/55 mb-2">
+                                {t('subLinkCheckoutUrl')}
+                            </label>
+                            <div className="flex gap-2">
+                                <input
+                                    readOnly
+                                    value={resultUrl}
+                                    onFocus={(e) => e.currentTarget.select()}
+                                    className="flex-1 min-w-0 bg-surface-container-lowest border border-outline-variant/40 rounded-xl px-3 py-2.5 text-[13px] font-mono text-on-surface"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={handleCopy}
+                                    className="px-4 py-2.5 rounded-xl bg-primary text-on-primary font-label text-[11px] font-bold uppercase tracking-widest inline-flex items-center gap-1.5 shrink-0"
+                                >
+                                    {copied ? <><Check size={12} /> {t('copied')}</> : <><Copy size={12} /> {t('copy')}</>}
+                                </button>
+                            </div>
+                            <p className="text-[11px] text-on-surface/50 mt-2 font-body leading-relaxed">
+                                {t('subLinkExpiresHint')}
+                            </p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="w-full mt-2 px-4 py-3 rounded-xl bg-surface-container-high text-on-surface font-label text-[11px] font-bold uppercase tracking-widest"
+                        >
+                            {t('done')}
+                        </button>
+                    </div>
+                ) : (
+                    /* Form view */
+                    <div className="space-y-5">
+                        {/* Client picker */}
+                        <div>
+                            <label className="block text-[10px] font-label font-bold uppercase tracking-widest text-on-surface/55 mb-2">
+                                {t('subLinkPickClient')}
+                            </label>
+                            <input
+                                type="text"
+                                placeholder={t('subLinkSearchPlaceholder') || 'Search by name or email…'}
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                                className="w-full bg-surface-container-lowest border border-outline-variant/40 rounded-xl px-3 py-2.5 text-sm font-body text-on-surface placeholder-on-surface/30 focus:border-primary outline-none mb-2"
+                            />
+                            <div className="max-h-48 overflow-y-auto rounded-xl border border-outline-variant/30 bg-surface-container-lowest">
+                                {loadingCandidates ? (
+                                    <div className="p-4 text-center text-on-surface/40 text-sm">
+                                        <Loader2 size={16} className="animate-spin mx-auto" />
+                                    </div>
+                                ) : filteredCandidates.length === 0 ? (
+                                    <div className="p-4 text-center text-on-surface/50 text-sm font-body">
+                                        {t('subLinkNoCandidates')}
+                                    </div>
+                                ) : (
+                                    filteredCandidates.map(c => (
+                                        <button
+                                            key={c.uid}
+                                            type="button"
+                                            onClick={() => setPickedUid(c.uid)}
+                                            className={`w-full text-start px-3 py-2.5 border-b border-outline-variant/15 last:border-b-0 transition-colors ${
+                                                pickedUid === c.uid
+                                                    ? 'bg-primary/12 text-on-surface'
+                                                    : 'hover:bg-surface-container text-on-surface/85'
+                                            }`}
+                                        >
+                                            <div className="font-headline font-bold text-[14px] truncate">{c.name}</div>
+                                            <div className="text-[12px] text-on-surface/55 truncate">{c.email} · {c.role}</div>
+                                        </button>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Plan picker */}
+                        <div>
+                            <label className="block text-[10px] font-label font-bold uppercase tracking-widest text-on-surface/55 mb-2">
+                                {t('subLinkPickPlan')}
+                            </label>
+                            <div className="grid grid-cols-1 gap-2">
+                                {Object.entries(STRIPE_PRICE_META).map(([pid, meta]) => (
+                                    <button
+                                        key={pid}
+                                        type="button"
+                                        onClick={() => setPriceId(pid)}
+                                        className={`text-start px-4 py-3 rounded-xl border transition-all ${
+                                            priceId === pid
+                                                ? 'bg-primary/12 border-primary text-on-surface'
+                                                : 'bg-surface-container-lowest border-outline-variant/30 text-on-surface/85 hover:border-primary/30'
+                                        }`}
+                                    >
+                                        <div className="flex items-center justify-between">
+                                            <div className="font-headline font-bold text-sm">{meta.label}</div>
+                                            <div className="font-body text-sm tabular-nums">
+                                                ${meta.amountUsd}/{meta.interval === 'month' ? 'mo' : 'yr'}
+                                            </div>
+                                        </div>
+                                        <div className="text-[11px] text-on-surface/45 font-body mt-0.5">
+                                            {meta.tier === 'client' ? t('subLinkPlanCoaching') : t('subLinkPlanCommunity')}
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Billing start date */}
+                        <div>
+                            <label className="block text-[10px] font-label font-bold uppercase tracking-widest text-on-surface/55 mb-2 flex items-center gap-1.5">
+                                <Calendar size={12} />
+                                {t('subLinkBillingStartDate')}
+                            </label>
+                            <input
+                                type="date"
+                                value={billingStartDate}
+                                min={new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10)}
+                                onChange={(e) => setBillingStartDate(e.target.value)}
+                                className="w-full bg-surface-container-lowest border border-outline-variant/40 rounded-xl px-3 py-2.5 text-sm font-body text-on-surface focus:border-primary outline-none"
+                            />
+                            <p className="text-[11px] text-on-surface/50 mt-2 font-body leading-relaxed">
+                                {t('subLinkBillingStartHint')}
+                            </p>
+                        </div>
+
+                        {/* Optional note */}
+                        <div>
+                            <label className="block text-[10px] font-label font-bold uppercase tracking-widest text-on-surface/55 mb-2">
+                                {t('subLinkNoteOptional')}
+                            </label>
+                            <input
+                                type="text"
+                                placeholder={t('subLinkNotePlaceholder') || 'e.g. paid 500 USD cash for 3 months'}
+                                value={note}
+                                onChange={(e) => setNote(e.target.value)}
+                                maxLength={480}
+                                className="w-full bg-surface-container-lowest border border-outline-variant/40 rounded-xl px-3 py-2.5 text-sm font-body text-on-surface placeholder-on-surface/30 focus:border-primary outline-none"
+                            />
+                        </div>
+
+                        {error && (
+                            <div className="rounded-xl p-3 bg-red-500/10 border border-red-500/30 text-red-300 text-[13px] font-body">
+                                {error}
+                            </div>
+                        )}
+
+                        <button
+                            type="button"
+                            onClick={handleSubmit}
+                            disabled={submitting || !pickedUid || !priceId || !billingStartDate}
+                            className="w-full px-4 py-3.5 rounded-xl bg-gradient-to-r from-primary to-primary-container text-on-primary font-label text-[11px] font-bold uppercase tracking-widest disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2 shadow-[0_10px_28px_rgba(230,195,100,0.30)]"
+                        >
+                            {submitting
+                                ? <Loader2 size={14} className="animate-spin" />
+                                : <><LinkIcon size={14} /> {t('subLinkGenerate')}</>}
+                        </button>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
 
 /** Convert a Firestore Timestamp / ISO string / Date to millis. */
 function tsToMillis(ts: unknown): number {

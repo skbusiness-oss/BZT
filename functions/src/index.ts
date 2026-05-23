@@ -22,3 +22,4 @@ export { stripeWebhook } from './stripeWebhook';
 export { createUpgradeCheckout } from './createUpgradeCheckout';
 export { createCustomerPortalSession } from './createCustomerPortalSession';
 export { createClientAccount } from './createClientAccount';
+export { linkClientToStripe } from './linkClientToStripe';
