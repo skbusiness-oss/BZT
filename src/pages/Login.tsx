@@ -30,6 +30,7 @@ import {
     GraduationCap, Dumbbell, Utensils, MessageSquare,
     ArrowRight, type LucideIcon,
 } from 'lucide-react';
+import { BrandLogo } from '../components/shared/BrandLogo';
 
 export const Login = () => {
     const { signIn, sendPasswordReset, authError, clearAuthError } = useAuth();
@@ -149,6 +150,13 @@ export const Login = () => {
 
                     {/* HERO + PILLS + STATS — left column */}
                     <div className="bzt-rise-in" style={{ animationDelay: '40ms' }}>
+                        {/* Brand mark — anchors the page identity before
+                            the headline. Halo'd so the dark logo card
+                            doesn't sit flat against the surrounding
+                            surface. */}
+                        <div className="mb-6">
+                            <BrandLogo size="md" glow />
+                        </div>
                         {/* Eyebrow */}
                         <div className="flex items-center gap-3 mb-5">
                             <span

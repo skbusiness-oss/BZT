@@ -1124,6 +1124,7 @@ export const translations = {
     msgPhotoFallback:          { en: 'Photo',                                ar: 'صورة' },
     msgRemoveImage:            { en: 'Remove image',                         ar: 'إزالة الصورة' },
     msgAttachImage:            { en: 'Attach image',                         ar: 'إرفاق صورة' },
+    brandLogoAlt:              { en: 'BioZackTeam',                          ar: 'بيوزاك تيم' },
     msgReply:                  { en: 'Reply',                                ar: 'رد' },
     msgReact:                  { en: 'React',                                ar: 'تفاعل' },
     msgReplyingTo:             { en: 'Replying to',                          ar: 'الرد على' },

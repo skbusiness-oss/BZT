@@ -1,5 +1,5 @@
 // Bump VERSION whenever the cache strategy changes so old installs purge.
-const VERSION = 'v86';
+const VERSION = 'v87';
 const STATIC_CACHE = `bzt-static-${VERSION}`;
 
 /**
@@ -29,6 +29,11 @@ const STATIC_CACHE = `bzt-static-${VERSION}`;
 // so total install warm-up is ~1.5 MB across all entries.
 const PREWARM_URLS = [
     '/',
+    // Brand mark — first thing on Login and Welcome, prewarm so the
+    // first paint feels designed-for-you, not "blank box → image".
+    '/brand-logo.png',
+    '/icon-192.png',
+    '/icon-512.png',
     '/dashboard-covers/coaching-journey.jpg',
     '/dashboard-covers/continue-learning.jpg',
     '/dashboard-covers/empty-diet.jpg',

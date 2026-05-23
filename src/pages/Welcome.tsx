@@ -27,6 +27,7 @@
 import { useLanguage } from '../context/LanguageContext';
 import { useNavigate } from 'react-router-dom';
 import { Mail, Key, LogIn, Sparkles, ArrowRight, LifeBuoy, type LucideIcon } from 'lucide-react';
+import { BrandLogo } from '../components/shared/BrandLogo';
 
 interface Step {
     Icon: LucideIcon;
@@ -76,15 +77,11 @@ export const Welcome = () => {
 
                 {/* ── Hero ─────────────────────────────────────────── */}
                 <div className="text-center mb-12 bzt-rise-in">
-                    <div
-                        className="w-16 h-16 mx-auto mb-6 rounded-2xl flex items-center justify-center"
-                        style={{
-                            background: 'rgb(var(--primary) / 0.16)',
-                            color: 'rgb(var(--primary))',
-                            border: '1px solid rgb(var(--primary) / 0.35)',
-                        }}
-                    >
-                        <Sparkles size={28} strokeWidth={2.2} />
+                    {/* Real brand mark replaces the generic Sparkles
+                        gold-box. First moment a newly-paid customer
+                        sees the app — should be unmistakably ours. */}
+                    <div className="mx-auto mb-6 flex justify-center">
+                        <BrandLogo size="md" glow />
                     </div>
                     <span className="block text-[10px] font-label font-extrabold uppercase tracking-[0.28em] text-primary mb-3">
                         {t('welcomePostPayEyebrow')}
