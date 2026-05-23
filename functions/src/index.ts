@@ -21,3 +21,4 @@ export { sendTestPush } from './sendTestPush';
 export { stripeWebhook } from './stripeWebhook';
 export { createUpgradeCheckout } from './createUpgradeCheckout';
 export { createCustomerPortalSession } from './createCustomerPortalSession';
+export { createClientAccount } from './createClientAccount';

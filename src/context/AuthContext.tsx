@@ -5,44 +5,25 @@
 
 import { createContext, useContext, useState, useEffect, useRef, useCallback, ReactNode } from 'react';
 import { User, Role } from '../types';
-import { auth, db } from '../lib/firebase';
+import { auth, db, functions } from '../lib/firebase';
 import {
   signInWithEmailAndPassword,
   signOut as firebaseSignOut,
   onAuthStateChanged,
-  updateProfile,
-  getAuth,
-  createUserWithEmailAndPassword,
   sendPasswordResetEmail,
 } from 'firebase/auth';
 import {
   doc,
-  setDoc,
   getDoc,
   onSnapshot,
-  serverTimestamp,
   Unsubscribe,
 } from 'firebase/firestore';
-import { initializeApp as initializeSecondaryApp } from 'firebase/app';
-import { DEFAULT_TARGETS } from '../lib/constants';
+import { httpsCallable, FunctionsError } from 'firebase/functions';
 import { registerFcmToken, unregisterFcmToken, attachFcmForegroundHandler } from '../lib/fcm';
 
-// ─── Secondary Firebase app for creating client accounts ───────────────────
-// When you call createUserWithEmailAndPassword on the main app,
-// Firebase automatically signs out the coach and signs in as the new user.
-// This secondary app instance prevents that — the coach stays logged in.
-const secondaryApp = initializeSecondaryApp(
-  {
-    apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-    appId: import.meta.env.VITE_FIREBASE_APP_ID,
-  },
-  'secondary' // name it so Firebase doesn't confuse it with the main app
-);
-const secondaryAuth = getAuth(secondaryApp);
+// The previous build-it-yourself secondary-app pattern for account
+// creation was retired in favor of the createClientAccount Cloud
+// Function. See the comment on createUserAccount() below for why.
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -598,7 +579,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   // ── Create client / community account (coach-only) ─────────────────────────
-  // Uses a secondary Firebase app so the coach's session is NOT interrupted
+  //
+  // Hands off to the `createClientAccount` Cloud Function, which uses
+  // the Admin SDK to create the Auth user + write the Firestore profile
+  // doc in a single server-side step. Reasons we don't do this on the
+  // client anymore (see functions/src/createClientAccount.ts for full
+  // detail):
+  //
+  //   1. Firebase Auth's client-side createUserWithEmailAndPassword is
+  //      blocked when self-signup is disabled in the Firebase Console
+  //      (a sensible launch-hardening step). Admin SDK bypasses that.
+  //   2. The payment-gate Firestore rule on users/{uid} requires
+  //      isCoach(), and the multi-app pattern caused the Firestore
+  //      gRPC channel to briefly evaluate the request as the *new*
+  //      user instead of the coach — denying the write. Admin SDK
+  //      bypasses Firestore rules entirely.
+  //   3. The previous flow could leak orphan Auth users if the
+  //      Firestore write failed after the Auth create. The function
+  //      rolls back the Auth user on Firestore failure.
+  //
+  // Surface area for callers stays identical: `{ uid?, error? }`.
   const createUserAccount = async (
     email: string,
     password: string,
@@ -606,34 +606,38 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     role: Role
   ): Promise<{ uid?: string; error?: string }> => {
     try {
-      const safeEmail = email.toLowerCase().trim();
-      // Create the Auth user on the secondary app (coach stays signed in on main app)
-      const credential = await createUserWithEmailAndPassword(secondaryAuth, safeEmail, password);
-      const newUid = credential.user.uid;
-
-      // Set display name on the new user
-      await updateProfile(credential.user, { displayName: name });
-
-      // Sign the secondary app out immediately so it doesn't linger
-      await firebaseSignOut(secondaryAuth);
-
-      // Write the user profile to Firestore (main db — no auth needed, coach writes it)
-      await setDoc(doc(db, 'users', newUid), {
-        displayName: name,
-        email: safeEmail,
-        role, // 'client' or 'community'
-        createdAt: serverTimestamp(),
-        macros: role === 'client' ? DEFAULT_TARGETS : null,
-        stripeCustomerId: null,
-      });
-
-      return { uid: newUid };
+      const call = httpsCallable<
+        { email: string; password: string; name: string; role: Role },
+        { uid: string }
+      >(functions, 'createClientAccount');
+      const result = await call({ email, password, name, role });
+      const uid = result.data?.uid;
+      if (!uid) return { error: 'Account was created but no ID was returned. Please refresh and check the client list.' };
+      return { uid };
     } catch (error: unknown) {
-      const code = (error as { code?: string })?.code ?? '';
-      if (code === 'auth/email-already-in-use') {
+      // httpsCallable wraps errors as FunctionsError. We surface the
+      // function's `message` so the modal can show the specific reason
+      // (already-exists, weak-password, etc.) rather than a generic
+      // "Authentication error: …" string.
+      const fnErr = error as FunctionsError;
+      if (fnErr?.code === 'functions/already-exists') {
         return { error: 'A user with this email already exists.' };
       }
-      return { error: getFirebaseErrorMessage(code) };
+      if (fnErr?.code === 'functions/invalid-argument' && fnErr.message) {
+        return { error: fnErr.message };
+      }
+      if (fnErr?.code === 'functions/permission-denied') {
+        return { error: 'Only coaches can create accounts. Please sign in again.' };
+      }
+      if (fnErr?.code === 'functions/resource-exhausted') {
+        return { error: 'Too many accounts created in a short time. Wait a few minutes and try again.' };
+      }
+      if (fnErr?.code === 'functions/unauthenticated') {
+        return { error: 'Your session expired. Please sign in again.' };
+      }
+      // eslint-disable-next-line no-console
+      console.error('[createUserAccount] callable failed:', error);
+      return { error: fnErr?.message || 'Could not create account. Please try again.' };
     }
   };
 
