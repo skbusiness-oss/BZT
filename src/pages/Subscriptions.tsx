@@ -449,9 +449,17 @@ function LinkCashClientModal({
         return s;
     }, [existingSubscribers]);
 
-    // Real-time list of all users so coach can pick a target. We
-    // skip ones with an active sub. Coaches/admins also filtered
-    // since they're staff, not customers.
+    // Real-time list of all non-staff users so coach can pick a target.
+    // IMPORTANT: this effect does NOT depend on activeSubUids — that
+    // would tear down + rebuild the snapshot listener every time the
+    // parent's `rows` snapshot fires (which is constant in real-time),
+    // because activeSubUids is a fresh Set on every parent re-render.
+    // The thrashing caused the candidates list to flicker AND, more
+    // visibly, swallow clicks: a user tapping a row could have the
+    // DOM node replaced mid-tap by the re-render, so the click never
+    // registered on the target. Filter activeSubUids at render time
+    // in `filteredCandidates` instead — the listener stays alive for
+    // the modal's whole lifetime.
     useEffect(() => {
         const unsub = onSnapshot(collection(db, 'users'),
             (snap) => {
@@ -460,7 +468,6 @@ function LinkCashClientModal({
                     const data = d.data() as Record<string, unknown>;
                     const role = (data.role as string) || 'community';
                     if (role === 'coach' || role === 'admin') return;
-                    if (activeSubUids.has(d.id)) return;
                     next.push({
                         uid: d.id,
                         name: (data.displayName as string) || (data.name as string) || '(no name)',
@@ -479,17 +486,18 @@ function LinkCashClientModal({
             },
         );
         return unsub;
-    }, [activeSubUids]);
+    }, []);
 
-    // Filter candidates by the typed search string. Case-insensitive
-    // on both name and email.
+    // Filter at render time: drop anyone already on an active/trialing
+    // subscription, then narrow by the typed search string.
     const filteredCandidates = useMemo(() => {
         const q = search.trim().toLowerCase();
-        if (!q) return candidates.slice(0, 50);
-        return candidates.filter(c =>
+        const eligible = candidates.filter(c => !activeSubUids.has(c.uid));
+        if (!q) return eligible.slice(0, 50);
+        return eligible.filter(c =>
             c.name.toLowerCase().includes(q) || c.email.toLowerCase().includes(q)
         ).slice(0, 50);
-    }, [candidates, search]);
+    }, [candidates, activeSubUids, search]);
 
     const handleSubmit = async () => {
         if (!pickedUid || !priceId || !billingStartDate) {

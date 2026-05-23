@@ -240,13 +240,25 @@ export const Layout = () => {
                 }}
             >
                 <div className={clsx("flex-1 overflow-y-auto min-h-0 px-4", isRTL ? "pr-4" : "pl-4")} style={{ paddingTop: '4.25rem' }}>
-                    {/* Wordmark */}
+                    {/* Brand mark — the real BZT logo. mix-blend-mode:screen
+                        drops the logo image's black background by treating
+                        black as transparent against any darker surface,
+                        so the gold mark "floats" on the sidebar tone.
+                        Falls back gracefully on light theme too (the
+                        sidebar bg is light, so screen blend just reads
+                        as "logo with slight haze"). */}
                     <div className="flex items-center gap-3 mb-6 px-2">
-                        <div className="w-10 h-10 rounded-[12px] flex items-center justify-center font-black text-on-primary text-base gold-gradient shadow-clay-gold">
-                            B
-                        </div>
+                        <img
+                            src="/brand-logo.png?v=4"
+                            alt="BioZackTeam"
+                            width={40}
+                            height={40}
+                            className="w-10 h-10 rounded-[12px] object-contain"
+                            style={{ mixBlendMode: 'screen' }}
+                            draggable={false}
+                        />
                         <h1 className="text-[17px] font-headline font-bold tracking-tight text-on-surface">
-                            Biozackteam
+                            BioZackTeam
                         </h1>
                     </div>
 

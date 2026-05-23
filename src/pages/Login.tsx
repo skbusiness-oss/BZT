@@ -30,7 +30,6 @@ import {
     GraduationCap, Dumbbell, Utensils, MessageSquare,
     ArrowRight, type LucideIcon,
 } from 'lucide-react';
-import { BrandLogo } from '../components/shared/BrandLogo';
 
 export const Login = () => {
     const { signIn, sendPasswordReset, authError, clearAuthError } = useAuth();
@@ -148,15 +147,14 @@ export const Login = () => {
             <div className="max-w-7xl mx-auto px-5 md:px-10 lg:px-14 min-h-screen flex flex-col justify-center pt-24 pb-12 relative z-10">
                 <div className="w-full grid grid-cols-1 lg:grid-cols-[1.3fr_1fr] gap-10 lg:gap-14">
 
-                    {/* HERO + PILLS + STATS — left column */}
+                    {/* HERO + PILLS + STATS — left column.
+                        Brand mark intentionally NOT shown here on the
+                        public Login page — the marketing site / SEO
+                        snapshot for app.biozackteam.com should feel
+                        like a fitness-app landing, not a logo wall.
+                        The brand identity lives in the sidebar +
+                        loading splash, where signed-in users see it. */}
                     <div className="bzt-rise-in" style={{ animationDelay: '40ms' }}>
-                        {/* Brand mark — anchors the page identity before
-                            the headline. Halo'd so the dark logo card
-                            doesn't sit flat against the surrounding
-                            surface. */}
-                        <div className="mb-6">
-                            <BrandLogo size="md" glow />
-                        </div>
                         {/* Eyebrow */}
                         <div className="flex items-center gap-3 mb-5">
                             <span
