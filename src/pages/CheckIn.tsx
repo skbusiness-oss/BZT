@@ -5,6 +5,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { DayEntry, WeekPhotos } from '../types';
 import { awardXp, XP_SOURCE } from '../lib/activityScore';
 import { DailyTrackingTable } from '../components/checkin/DailyTrackingTable';
+import { CheckInWizard } from '../components/checkin/CheckInWizard';
 import {
     ChevronLeft,
     ChevronRight,
@@ -257,6 +258,37 @@ export const CheckIn = () => {
                     );
                 })()}
 
+                {/* ── Step-by-step Wizard (pending weeks only) ──
+                    For weeks the client is actively filling, we use
+                    the wizard instead of the long-scroll flat layout
+                    so daily entries are the FIRST visible step and
+                    no section is buried below 2-3 screens of coach
+                    panels. Submitted / reviewed / locked weeks still
+                    render the flat layout below so scrolling back
+                    through history stays scannable. */}
+                {weekData.status === 'pending' && (
+                    <CheckInWizard
+                        targets={weekData.activeTargets}
+                        coachFeedback={weekData.coachFeedback ?? null}
+                        entries={entries}
+                        setEntries={setEntries}
+                        photos={photos}
+                        setPhotos={setPhotos}
+                        strength={strength}             setStrength={setStrength}
+                        hunger={hunger}                 setHunger={setHunger}
+                        energy={energy}                 setEnergy={setEnergy}
+                        cardioCalories={cardioCalories} setCardioCalories={setCardioCalories}
+                        summary={summary}               setSummary={setSummary}
+                        onPhotoUpload={handlePhotoUpload}
+                        onPhotoRemove={removePhoto}
+                        uploadingAngle={uploadingAngle}
+                        onPhotoTap={setPhotoModal}
+                        onSaveDraft={handleSave}
+                        onSubmit={handleSubmit}
+                    />
+                )}
+
+                {weekData.status !== 'pending' && (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
                     {/* ── LEFT COLUMN — Coach Zone ── */}
@@ -562,6 +594,7 @@ export const CheckIn = () => {
                         )}
                     </div>
                 </div>
+                )}
 
             </div>
 
