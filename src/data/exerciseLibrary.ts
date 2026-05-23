@@ -1221,94 +1221,15 @@ const FIT_DISTANCE_VIDEOS: Record<string, string> = {
     'Farmers Walk': '1uOs1hP3u4A',                    // Generic YouTube form tutorial
     'Bicycle Crunch': '1we3bh9uhqY',                  // Generic YouTube form tutorial
 
-    // ───── Cardio + HIIT additions (2026-05-23) ─────
-    // Sourced via WebSearch through reputable fitness channels
-    // (Athlean-X, Jeff Nippard, Buff Dudes, Onnit, Jump Rope Dudes,
-    //  NASM, The Body Coach, Peter Attia MD). All entries verified
-    //  as currently-published YouTube videos with embedding allowed.
-    //  Tabata / "— Max" / variant labels alias to the same root video
-    //  since the movement is identical — only the prescription differs.
-
-    // Core cardio movements
-    'Burpee':                      'xmTrNUR3BpE',     // Athlean-X — How To Do Burpees
-    'Burpees — Tabata':            'xmTrNUR3BpE',     // alias
-    'Mountain Climbers':           'ixxk9Qfn61o',     // Buff Dudes — Mountain Climbers
-    'Mountain Climber':            'ixxk9Qfn61o',     // alias (singular form)
-    'Mountain Climbers — Tabata':  'ixxk9Qfn61o',     // alias
-    'Jump Squat':                  'DeTBwEL4m7s',     // Buff Dudes — Squat Jump
-    'Squat Jump':                  'DeTBwEL4m7s',     // alias
-    'Jump Squats — Tabata':        'DeTBwEL4m7s',     // alias
-    'High Knees':                  'D0GwAezTvtg',     // Generic tutorial — proper High Knees
-    'High Knees — Tabata':         'D0GwAezTvtg',     // alias
-    'Battle Ropes':                'pQb2xIGioyQ',     // Onnit — Battle Ropes for Beginners
-    'Box Jump':                    'YLPQsdRDmB0',     // Garage Strength — Box Jump
-    'Walking Lunge':               'Pbmj6xPo-Hw',     // Buff Dudes — Walking Lunges
-    'Walking Lunges':              'Pbmj6xPo-Hw',     // alias
-    'Lunge Jump':                  '_5kDxC0flg0',     // NASM — Lunge Jump form
-    'Wall Sit':                    'JaZNYM3zAP0',     // Well+Good — Wall Sit
-    'Wall Sit Max':                'JaZNYM3zAP0',     // alias (Max = same movement, longer hold)
-    'Plank to Push-Up':            '56vUOad6Irs',     // Athlean-X — Plank to Push-Up
-    'Skater Jumps':                '9_jLW6VkU8A',     // BuiltLean — Speed Skaters
-    'Sled Push':                   '9XRRXaUpnLk',     // Live Lean TV — Sled Push
-    'Jump Rope':                   's-8tbwbEZ68',     // Jump Rope Dudes — Form Fundamentals
-    'DB Thruster':                 'LA885CMp1yw',     // Ironmaster — Dumbbell Thruster
-    'Thruster':                    'LA885CMp1yw',     // alias
-
-    // Cardio-machine prescriptions
-    'Treadmill HIIT':              'dkikq_fYBNw',     // The Body Coach — Treadmill HIIT
-    'Incline Treadmill':           'dkikq_fYBNw',     // alias (closest match)
-    'HIIT Intervals':              'dkikq_fYBNw',     // alias (generic HIIT structure)
-    'Stairmaster':                 'xSB39wbMz4w',     // How To Use The Stairmaster Properly
-    'Stairmaster Intervals':       'xSB39wbMz4w',     // alias
-    'Sprint Intervals':            '6m_fjNhRhkY',     // Garage Strength — Proper Sprinting Form
-    'Sprint Interval':             '6m_fjNhRhkY',     // alias
-
-    // Strength gaps not covered earlier in the map
-    'Dumbbell Chest Press':        'KRbyo0jj2ao',     // Buff Dudes — Dumbbell Chest Press
-    'DB Press Timed':              'KRbyo0jj2ao',     // alias
-    'Barbell Front Squat':         'v-mQm_droHg',     // Jeff Nippard — Front Squat
-    'Barbell Push Press':          'a8HQo8z20Uo',     // MSP Fitness — Push Press
-    'Chin-Up (Max Reps)':          'dYDJpuDiJGc',     // Athlean-X — Chinups
-    'Weighted Chin-Up':            'dYDJpuDiJGc',     // alias
-    'Pulldown':                    'SALxEARiMkw',     // Athlean-X — Lat Pulldowns
-    'DB Row':                      'nMFCMNKnLgQ',     // Buff Dudes — Single Arm DB Row
-
-    // Aliases to entries already in this map (zero new searches needed)
-    'Push-Ups':                    'IODxDxX7oi4',     // alias to Push-Up
-    'Push-Ups Max':                'IODxDxX7oi4',     // alias
-    'Push-Ups — Tabata':           'IODxDxX7oi4',     // alias
-    'Plank Variations':            'fldSXH9ZCtI',     // alias to Plank
-    'Step-Up':                     'yoquxWRdJO0',     // alias to Box Step-Up
-    'Deadlift':                    'DKKILCl2f7A',     // alias to Conventional Deadlift
-    'DB Squat':                    'sNFAfq2vV8g',     // alias to Goblet Squat
-    'Squat':                       'cnYy6JPmXVg',     // alias to Barbell Back Squat
-    'Barbell Box Squat':           'cnYy6JPmXVg',     // alias (variant of back squat)
-    'Standing Cable Chest Fly':    'lbUErGoYl4U',     // alias to Cable Chest Fly
-    'Weighted Parallel Bar Dips':  'fAjgb38Kku0',     // alias to Parallel Bar Dips
-    'Seated Barbell Military Press': 'Sadx09VPulo',   // alias to Barbell Overhead Press
-    'Seated Press':                'Sadx09VPulo',     // alias to Barbell Overhead Press
-    'Core Circuit':                'fldSXH9ZCtI',     // closest single-video match (Plank)
-    'Core Circuit (Plank / Crunch / Leg Raise)': 'fldSXH9ZCtI',
-
-    // ───── Zone-2 / steady-state cardio aggregate ─────
-    // Peter Attia's "What Zone 2 training looks like" — used as the
-    // single canonical reference for any prescribed steady-state /
-    // zone-2 / sustained / low-intensity cardio block. The video
-    // explains the methodology that covers all of these variants.
-    'Zone 2 Steady State Cardio':       '1RqY5EYOM0k',
-    'Zone 2 Sustained':                 '1RqY5EYOM0k',
-    'Zone 2-3 Sustained Cardio':        '1RqY5EYOM0k',
-    'Zone 2 Cardio Warm-Up':            '1RqY5EYOM0k',
-    'Steady State Cardio':              '1RqY5EYOM0k',
-    'Low Intensity Steady State Cardio': '1RqY5EYOM0k',
-    'Low Intensity Cardio Warm-Up':     '1RqY5EYOM0k',
-    'Moderate Steady State Cardio':     '1RqY5EYOM0k',
-    'Long Distance Sustained':          '1RqY5EYOM0k',
-    'Tempo Effort':                     '1RqY5EYOM0k',
-    'Progressive Intervals':            '1RqY5EYOM0k',
-    'Lactate Threshold Intervals':      '1RqY5EYOM0k',
-    'Intensity Burst':                  '1RqY5EYOM0k',
-    'Bike: Sprint / Easy':              '1RqY5EYOM0k',
+    // NOTE — an earlier patch added ~25 talking-head tutorials from
+    // named influencer channels (Athlean-X, Jeff Nippard, Buff Dudes,
+    // Onnit, Peter Attia, etc.) for cardio/HIIT moves. Reverted per
+    // founder direction: brand should never embed third-party
+    // personality content (copyright + brand-recognition risk). All
+    // cardio/HIIT exercises now fall through to the ExerciseDB GIF or
+    // the "Find tutorial on YouTube" card. Only silent, anonymous
+    // demonstration videos (like the existing fit-distance French
+    // channel entries above) should ever be added here going forward.
 };
 
 for (const [key, videoId] of Object.entries(FIT_DISTANCE_VIDEOS)) {
