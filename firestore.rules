@@ -363,10 +363,23 @@ service cloud.firestore {
                     && request.resource.data.senderName is string
                     && isValidMessageBody();
 
-      // Only mark-as-read updates allowed for the receiver.
+      // Two narrow update paths:
+      //   1. The receiver can mark a message as read.
+      //   2. Either participant (sender OR receiver) — or a coach —
+      //      can toggle their own emoji reaction on it. The
+      //      `reactions` field is a map of emoji → uid array; we
+      //      restrict which KEY can change so reaction writes can't
+      //      piggyback other field edits.
       allow update: if isCoachingTier()
-                    && resource.data.receiverId == request.auth.uid
-                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+                    && (
+                      (resource.data.receiverId == request.auth.uid
+                       && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']))
+                      ||
+                      ((isCoach()
+                         || resource.data.senderId == request.auth.uid
+                         || resource.data.receiverId == request.auth.uid)
+                       && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions']))
+                    );
 
       allow delete: if isSignedIn() && isCoach();
     }

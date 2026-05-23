@@ -487,13 +487,19 @@ export interface Message {
      *  message is later deleted, the quote box still renders.
      *  messageId is used to scroll the original into view when the
      *  reader taps the quote. */
-    replyTo?: {
+     replyTo?: {
         messageId: string;
         senderId: string;
         senderName: string;
         snippet: string;   // first ~120 chars of original text, or "Photo" if image-only
         wasImage?: boolean;
     };
+    /** Map of emoji → array of uids who have reacted with that emoji.
+     *  e.g. { '👍': ['uid1', 'uid2'], '🔥': ['uid1'] }
+     *  Toggled by tapping a reaction chip; the chip removes the
+     *  tapper's uid from the array, and removes the emoji key
+     *  entirely if the array becomes empty. */
+    reactions?: Record<string, string[]>;
 }
 
 // --- Community ---

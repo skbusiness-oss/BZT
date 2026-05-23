@@ -24,7 +24,7 @@ export const Messages = () => {
     // "Coach Zaki" also sees their pre-fix admin history, and so the
     // coach sees every message involving the selected client regardless
     // of which staff UID was the recipient.
-    const { clients, messages, sendMessage, markMessagesRead } = useData();
+    const { clients, messages, sendMessage, toggleReaction, markMessagesRead } = useData();
     const { t, isRTL } = useLanguage();
     const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
     const [text, setText] = useState('');
@@ -232,7 +232,27 @@ export const Messages = () => {
         setSelectedMessageId(null);
         setShowEmojiPicker(false);
         setHighlightedMessageId(null);
+        setReactionPickerForMsgId(null);
     }, [selectedUserId]);
+
+    // ── Reactions ────────────────────────────────────────────────
+    // When the user taps "React" in the action toolbar above a
+    // bubble, we open a small emoji popup anchored to that message.
+    // Tapping an emoji toggles it on the message via the
+    // toggleReaction callable in MessagesContext.
+    const [reactionPickerForMsgId, setReactionPickerForMsgId] = useState<string | null>(null);
+
+    const handleToggleReaction = async (msgId: string, emoji: string) => {
+        if (!user) return;
+        try {
+            await toggleReaction(msgId, emoji, user.id);
+        } catch (err) {
+            // eslint-disable-next-line no-console
+            console.error('[Messages.toggleReaction] failed:', err);
+        }
+        setReactionPickerForMsgId(null);
+        setSelectedMessageId(null);
+    };
 
     // Mark messages read when conversation is opened
     useEffect(() => {
@@ -671,7 +691,7 @@ export const Messages = () => {
                                     >
                                         <div className={`max-w-[75%] flex flex-col gap-1.5 ${showOnEndSide ? 'items-end' : 'items-start'}`}>
                                             {/* Floating action toolbar — appears above the
-                                                bubble when selected. Just "Reply" for now;
+                                                bubble when selected. Reply + React for now;
                                                 Copy / Delete can slot in later. */}
                                             {isSelected && (
                                                 <div className="flex items-center gap-1 bzt-rise-in">
@@ -682,6 +702,42 @@ export const Messages = () => {
                                                     >
                                                         <Reply size={12} /> {t('msgReply')}
                                                     </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setReactionPickerForMsgId(prev => prev === msg.id ? null : msg.id)}
+                                                        className="px-3 py-1.5 rounded-full bg-surface-container-highest text-on-surface text-[11px] font-label font-bold uppercase tracking-widest flex items-center gap-1.5 hover:bg-primary/20 hover:text-primary transition-colors shadow-[0_4px_14px_rgba(0,0,0,0.25)]"
+                                                    >
+                                                        <Smile size={12} /> {t('msgReact')}
+                                                    </button>
+                                                </div>
+                                            )}
+
+                                            {/* Reaction picker popup — appears below the
+                                                action toolbar, anchored to this message.
+                                                Same emoji set as the input picker. */}
+                                            {reactionPickerForMsgId === msg.id && (
+                                                <div
+                                                    className="rounded-2xl bg-surface-container border border-outline-variant/40 shadow-[0_12px_30px_rgba(0,0,0,0.45)] bzt-rise-in p-2 z-10"
+                                                    style={{ animationDuration: '140ms' }}
+                                                >
+                                                    <div className="grid grid-cols-8 gap-1">
+                                                        {QUICK_EMOJIS.slice(0, 8).map(emoji => {
+                                                            const mineHere = !!(msg.reactions?.[emoji]?.includes(user.id));
+                                                            return (
+                                                                <button
+                                                                    key={emoji}
+                                                                    type="button"
+                                                                    onClick={() => handleToggleReaction(msg.id, emoji)}
+                                                                    className={`text-xl rounded-lg active:scale-90 transition-all aspect-square flex items-center justify-center ${
+                                                                        mineHere ? 'bg-primary/20' : 'hover:bg-surface-container-highest'
+                                                                    }`}
+                                                                    aria-label={mineHere ? `Remove ${emoji}` : `React with ${emoji}`}
+                                                                >
+                                                                    {emoji}
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
                                                 </div>
                                             )}
 
@@ -777,6 +833,43 @@ export const Messages = () => {
                                                     {formatTime(msg.timestamp)}
                                                 </p>
                                             </button>
+
+                                            {/* Reaction chips — render whichever emojis
+                                                have reactions, each as a small chip with
+                                                emoji + count. Tap your own chip to remove
+                                                your reaction; tap someone else's emoji to
+                                                add yours alongside. Chips sit half-tucked
+                                                under the bottom edge of the bubble (-mt-2)
+                                                so they read as "stuck" to the message. */}
+                                            {msg.reactions && Object.keys(msg.reactions).length > 0 && (
+                                                <div className={`flex flex-wrap gap-1 -mt-2 ${showOnEndSide ? 'self-end justify-end' : 'self-start justify-start'}`}>
+                                                    {Object.entries(msg.reactions)
+                                                        .filter(([, uids]) => uids.length > 0)
+                                                        .map(([emoji, uids]) => {
+                                                            const mineHere = uids.includes(user.id);
+                                                            return (
+                                                                <button
+                                                                    key={emoji}
+                                                                    type="button"
+                                                                    onClick={() => handleToggleReaction(msg.id, emoji)}
+                                                                    className={`px-2 py-0.5 rounded-full text-[12px] font-body flex items-center gap-1 transition-all active:scale-95 ${
+                                                                        mineHere
+                                                                            ? 'bg-primary/25 text-primary border border-primary/45'
+                                                                            : 'bg-surface-container-highest text-on-surface/85 border border-outline-variant/40 hover:border-primary/30'
+                                                                    }`}
+                                                                    aria-label={mineHere ? `Remove your ${emoji} reaction` : `Add ${emoji} reaction`}
+                                                                >
+                                                                    <span>{emoji}</span>
+                                                                    {uids.length > 1 && (
+                                                                        <span className="text-[10px] font-bold tabular-nums">
+                                                                            {uids.length}
+                                                                        </span>
+                                                                    )}
+                                                                </button>
+                                                            );
+                                                        })}
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 );

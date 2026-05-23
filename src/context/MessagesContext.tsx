@@ -24,6 +24,11 @@ export interface MessagesContextType {
   messages: Message[];
   loading: boolean;
   sendMessage: (senderId: string, receiverId: string, senderName: string, text: string, imageFile?: File | null, replyTo?: Message['replyTo']) => Promise<void>;
+  /** Toggle a single emoji reaction on a message for `myUid`. If the
+   *  uid is already present under that emoji it's removed; otherwise
+   *  it's added. Empty arrays delete the key entirely so we don't
+   *  accumulate dead emoji entries. */
+  toggleReaction: (messageId: string, emoji: string, myUid: string) => Promise<void>;
   markMessagesRead: (userId: string, otherUserId: string) => Promise<void>;
   getConversation: (userId1: string, userId2: string) => Message[];
   getUnreadCount: (userId: string) => number;
@@ -320,6 +325,33 @@ export const MessagesProvider = ({ children }: { children: ReactNode }) => {
     await Promise.all(unread.map((m) => updateDoc(doc(db, 'messages', m.id), { read: true })));
   }, [messages]);
 
+  const toggleReaction = useCallback(async (messageId: string, emoji: string, myUid: string) => {
+    // Read the current reactions from local state instead of round-
+    // tripping to Firestore — the snapshot is real-time so it's
+    // already fresh. This makes the toggle feel instant.
+    const msg = messages.find(m => m.id === messageId);
+    const current = (msg?.reactions ?? {}) as Record<string, string[]>;
+    const next: Record<string, string[]> = {};
+    // Copy all OTHER emoji entries unchanged.
+    for (const [k, uids] of Object.entries(current)) {
+      if (k !== emoji) next[k] = uids;
+    }
+    const currUids = current[emoji] ?? [];
+    const without = currUids.filter(u => u !== myUid);
+    if (without.length === currUids.length) {
+      // I wasn't in the list — add myself.
+      next[emoji] = [...currUids, myUid];
+    } else if (without.length > 0) {
+      // I was in the list — remove me, but keep the emoji entry
+      // because others still reacted.
+      next[emoji] = without;
+    }
+    // (If `without.length === 0` after removing me, we drop the
+    // emoji key entirely — falling through without writing it to
+    // `next` does exactly that.)
+    await updateDoc(doc(db, 'messages', messageId), { reactions: next });
+  }, [messages]);
+
   const getConversation = useCallback((userId1: string, userId2: string): Message[] =>
     messages
       .filter((m) => (m.senderId === userId1 && m.receiverId === userId2) || (m.senderId === userId2 && m.receiverId === userId1))
@@ -333,7 +365,7 @@ export const MessagesProvider = ({ children }: { children: ReactNode }) => {
   );
 
   return (
-    <MessagesContext.Provider value={{ messages, loading, sendMessage, markMessagesRead, getConversation, getUnreadCount }}>
+    <MessagesContext.Provider value={{ messages, loading, sendMessage, toggleReaction, markMessagesRead, getConversation, getUnreadCount }}>
       {children}
     </MessagesContext.Provider>
   );

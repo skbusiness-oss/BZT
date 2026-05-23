@@ -1125,6 +1125,7 @@ export const translations = {
     msgRemoveImage:            { en: 'Remove image',                         ar: 'إزالة الصورة' },
     msgAttachImage:            { en: 'Attach image',                         ar: 'إرفاق صورة' },
     msgReply:                  { en: 'Reply',                                ar: 'رد' },
+    msgReact:                  { en: 'React',                                ar: 'تفاعل' },
     msgReplyingTo:             { en: 'Replying to',                          ar: 'الرد على' },
     msgCancelReply:            { en: 'Cancel reply',                         ar: 'إلغاء الرد' },
     msgEmojiPicker:            { en: 'Emojis',                               ar: 'الرموز التعبيرية' },
