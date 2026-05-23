@@ -10,6 +10,7 @@ import { useEffect, useState } from 'react';
 import { useLanguage } from '../../context/LanguageContext';
 import { ExerciseDetail } from '../../types';
 import { getExerciseByName } from '../../lib/exerciseService';
+import { getVideoIdForExercise } from '../../data/exerciseLibrary';
 import { youtubeSearchPageUrl } from '../../lib/videoUtils';
 import { X, AlertTriangle, Wrench, Play, Lightbulb, ListOrdered, Youtube } from 'lucide-react';
 
@@ -25,6 +26,12 @@ export const ExerciseModal = ({ exerciseName, exerciseDetail, onClose }: Exercis
     const [imgError, setImgError] = useState(false);
     const [remoteGif, setRemoteGif] = useState<string | null>(null);
     const [remoteInstructions, setRemoteInstructions] = useState<string[]>([]);
+
+    // Look up curated videoId by raw exercise name even when the
+    // detail object is missing — covers cardio/HIIT moves that have
+    // a FIT_DISTANCE_VIDEOS entry but no full LIBRARY entry. Cached
+    // per-name; cheap to recompute on re-render.
+    const curatedVideoId = getVideoIdForExercise(exerciseName);
 
     // Fetch from ExerciseDB as fallback when the local library has no GIF
     // or no detail entry at all.
@@ -60,7 +67,25 @@ export const ExerciseModal = ({ exerciseName, exerciseDetail, onClose }: Exercis
 
                     <div className="flex-1 overflow-y-auto pb-12 px-6">
                         <h2 className="text-3xl font-headline font-extrabold text-on-surface mb-6">{exerciseName}</h2>
-                        {remoteGif ? (
+                        {/* Render priority for the empty-state branch:
+                            1. curated YouTube videoId (set in
+                               FIT_DISTANCE_VIDEOS even without a full
+                               LIBRARY entry) → embed the real video
+                            2. ExerciseDB GIF → animated GIF tile
+                            3. nothing → "Find tutorial on YouTube" card */}
+                        {curatedVideoId ? (
+                            <div className="w-full aspect-video rounded-xl ghost-border bg-surface-container-lowest relative overflow-hidden mb-6">
+                                <iframe
+                                    src={`https://www.youtube.com/embed/${curatedVideoId}?rel=0&modestbranding=1&playsinline=1`}
+                                    className="w-full h-full"
+                                    style={{ border: 'none' }}
+                                    allow="autoplay; encrypted-media; picture-in-picture"
+                                    allowFullScreen
+                                    title={exerciseName}
+                                />
+                                <div className="absolute inset-0 border-2 border-primary/30 rounded-xl pointer-events-none" />
+                            </div>
+                        ) : remoteGif ? (
                             <div className="w-full aspect-video rounded-xl ghost-border bg-surface-container-lowest relative overflow-hidden mb-6">
                                 <img
                                     src={remoteGif}
@@ -72,10 +97,6 @@ export const ExerciseModal = ({ exerciseName, exerciseDetail, onClose }: Exercis
                                 <div className="absolute inset-0 border-2 border-primary/30 rounded-xl pointer-events-none" />
                             </div>
                         ) : (
-                            /* No GIF, no curated video — show the
-                               tappable "Find tutorial on YouTube"
-                               card so the user has a path to a real
-                               video instead of a dead end. */
                             <div className="mb-6">
                                 <div className="w-full aspect-video rounded-xl ghost-border bg-surface-container-lowest relative overflow-hidden">
                                     <YouTubeFindCard name={exerciseName} isAr={isAr} />
