@@ -43,6 +43,15 @@ import {
 import clsx from 'clsx';
 
 interface Props {
+    /** When true, the wizard renders a read-only "tour" of a past
+     *  week — every input disabled, no Submit, no Save Draft. The
+     *  client can still step through and review what they logged
+     *  + the coach's feedback. Used for submitted / reviewed /
+     *  locked week states. */
+    readOnly: boolean;
+    /** Status of the week — used in read-only mode to render the
+     *  right status badge at the top of each step. */
+    weekStatus: 'pending' | 'submitted' | 'reviewed' | 'locked';
     /** Active week macro targets prescribed by the coach. */
     targets: MacroTargets;
     /** Coach's review note from the previous reviewed week (or null). */
@@ -87,7 +96,11 @@ export function CheckInWizard(props: Props) {
     const [step, setStep] = useState(1);
     const [saving, setSaving] = useState(false);
     const [submitting, setSubmitting] = useState(false);
-    const [coachOpen, setCoachOpen] = useState(false);
+    // Coach panel default state: collapsed for pending (filling)
+    // weeks so the coach reference doesn't fight for attention,
+    // pre-expanded for reviewed weeks so the coach's feedback is
+    // visible the moment the client opens their past week.
+    const [coachOpen, setCoachOpen] = useState(props.weekStatus === 'reviewed');
 
     // When the parent loads a different week's data (entries reset),
     // start from step 1. Otherwise the wizard could land on Step 3
@@ -97,12 +110,15 @@ export function CheckInWizard(props: Props) {
     }, [props.entries.length === 7 && props.entries.every(e => !e.weight && !e.carbs)]); // crude reset signal
 
     const goNext = async () => {
-        // Auto-save the draft on every Continue tap so progress is
-        // never lost. We catch errors silently — the user will see
-        // the failure when they tap Submit on the final step.
-        setSaving(true);
-        try { await props.onSaveDraft(); } catch { /* draft save is best-effort */ }
-        setSaving(false);
+        // Auto-save the draft on every Continue tap (only in pending
+        // mode — for read-only weeks there's nothing to save). Best-
+        // effort: we catch errors silently. Failures surface on the
+        // final Submit instead.
+        if (!props.readOnly) {
+            setSaving(true);
+            try { await props.onSaveDraft(); } catch { /* best-effort */ }
+            setSaving(false);
+        }
         setStep(s => Math.min(s + 1, STEPS.length));
     };
     const goBack = () => setStep(s => Math.max(s - 1, 1));
@@ -180,17 +196,28 @@ export function CheckInWizard(props: Props) {
                 </div>
             </div>
 
+            {/* ── Status banner (read-only weeks only) ──────────
+                When the client is reviewing a past week, every step
+                shows a banner explaining the lock state so they
+                always know "I can't edit this — it's already
+                submitted/reviewed/locked". For pending weeks the
+                banner is suppressed (no need to remind them they
+                can edit). */}
+            {props.readOnly && <ReadOnlyStatusBanner status={props.weekStatus} />}
+
             {/* ── Step body ────────────────────────────────────── */}
             <div className="bzt-rise-in" key={step} style={{ animationDuration: '320ms' }}>
                 {step === 1 && <StepDailyLog
                     entries={props.entries}
                     setEntries={props.setEntries}
+                    readOnly={props.readOnly}
                 />}
                 {step === 2 && <StepHowYouFelt
                     strength={props.strength}             setStrength={props.setStrength}
                     hunger={props.hunger}                 setHunger={props.setHunger}
                     energy={props.energy}                 setEnergy={props.setEnergy}
                     cardioCalories={props.cardioCalories} setCardioCalories={props.setCardioCalories}
+                    readOnly={props.readOnly}
                 />}
                 {step === 3 && <StepPhotos
                     photos={props.photos}
@@ -198,6 +225,7 @@ export function CheckInWizard(props: Props) {
                     onRemove={props.onPhotoRemove}
                     uploadingAngle={props.uploadingAngle}
                     onTap={props.onPhotoTap}
+                    readOnly={props.readOnly}
                 />}
                 {step === 4 && <StepReflectAndSubmit
                     summary={props.summary}
@@ -209,6 +237,7 @@ export function CheckInWizard(props: Props) {
                     energy={props.energy}
                     cardioCalories={props.cardioCalories}
                     onJumpToStep={setStep}
+                    readOnly={props.readOnly}
                 />}
             </div>
 
@@ -240,6 +269,21 @@ export function CheckInWizard(props: Props) {
                                 ? <Loader2 size={14} className="animate-spin" />
                                 : <>{t('checkInWizContinue')} {isRTL ? <ChevronLeft size={14} /> : <ArrowRight size={14} />}</>}
                         </button>
+                    ) : props.readOnly ? (
+                        // Last step in read-only mode: no submit.
+                        // Just a "Done" affordance that scrolls back
+                        // to the top so the client can re-read or
+                        // switch weeks via the picker above.
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setStep(1);
+                                window.scrollTo({ top: 0, behavior: 'smooth' });
+                            }}
+                            className="bzt-press flex items-center gap-2 px-6 py-3 rounded-xl bg-surface-container-high text-on-surface text-[12px] font-label font-bold uppercase tracking-widest hover:bg-surface-container-highest transition-all"
+                        >
+                            <CheckCircle size={14} /> {t('done')}
+                        </button>
                     ) : (
                         <button
                             type="button"
@@ -254,9 +298,9 @@ export function CheckInWizard(props: Props) {
                     )}
                 </div>
                 {/* Save-draft secondary action under the bar.
-                    Shown for steps 1-3 (step 4 uses Submit which
-                    already persists everything). */}
-                {step < STEPS.length && (
+                    Shown only when editable AND not on the final
+                    step (step 4's Submit already persists). */}
+                {!props.readOnly && step < STEPS.length && (
                     <div className="flex justify-center pt-2">
                         <button
                             type="button"
@@ -396,13 +440,15 @@ function MacroBlock({ label, t, accent }: { label: string; t: MacroTarget; accen
 //  Step 1 — Daily log (the 7-day table)
 // ─────────────────────────────────────────────────────────────────
 function StepDailyLog({
-    entries, setEntries,
+    entries, setEntries, readOnly,
 }: {
     entries: DayEntry[];
     setEntries: (next: DayEntry[]) => void;
+    readOnly: boolean;
 }) {
     const { t } = useLanguage();
     const handleEntryChange = (index: number, field: keyof DayEntry, value: number) => {
+        if (readOnly) return;
         const next = [...entries];
         next[index] = { ...next[index], [field]: value };
         setEntries(next);
@@ -411,10 +457,10 @@ function StepDailyLog({
         <div className="space-y-4">
             <StepHeader
                 title={t('checkInWizStepLogTitle')}
-                description={t('checkInWizStepLogHint')}
+                description={readOnly ? t('checkInWizStepLogHintReadOnly') : t('checkInWizStepLogHint')}
             />
             <div className="bg-surface-container-low rounded-2xl p-4 sm:p-6 ghost-border">
-                <DailyTrackingTable entries={entries} readOnly={false} onChange={handleEntryChange} />
+                <DailyTrackingTable entries={entries} readOnly={readOnly} onChange={handleEntryChange} />
             </div>
         </div>
     );
@@ -425,19 +471,20 @@ function StepDailyLog({
 // ─────────────────────────────────────────────────────────────────
 function StepHowYouFelt({
     strength, setStrength, hunger, setHunger,
-    energy, setEnergy, cardioCalories, setCardioCalories,
+    energy, setEnergy, cardioCalories, setCardioCalories, readOnly,
 }: {
     strength: number; setStrength: (n: number) => void;
     hunger: number; setHunger: (n: number) => void;
     energy: number; setEnergy: (n: number) => void;
     cardioCalories: number; setCardioCalories: (n: number) => void;
+    readOnly: boolean;
 }) {
     const { t } = useLanguage();
     return (
         <div className="space-y-4">
             <StepHeader
                 title={t('checkInWizStepFeltTitle')}
-                description={t('checkInWizStepFeltHint')}
+                description={readOnly ? t('checkInWizStepFeltHintReadOnly') : t('checkInWizStepFeltHint')}
             />
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <SliderCard
@@ -447,6 +494,7 @@ function StepHowYouFelt({
                     onChange={setStrength}
                     min={0} max={10} step={1} suffix="/10"
                     minLabel={t('weak')} maxLabel={t('strong')}
+                    readOnly={readOnly}
                 />
                 <SliderCard
                     label={t('hungerScale')}
@@ -454,6 +502,7 @@ function StepHowYouFelt({
                     onChange={setHunger}
                     min={0} max={10} step={1} suffix="/10"
                     minLabel={t('noHunger')} maxLabel={t('starving')}
+                    readOnly={readOnly}
                 />
                 <SliderCard
                     label={t('energyScale')}
@@ -462,6 +511,7 @@ function StepHowYouFelt({
                     onChange={setEnergy}
                     min={0} max={10} step={1} suffix="/10"
                     minLabel={t('noEnergy')} maxLabel={t('fullEnergy')}
+                    readOnly={readOnly}
                 />
                 <SliderCard
                     label={t('cardioCalories')}
@@ -470,6 +520,7 @@ function StepHowYouFelt({
                     onChange={setCardioCalories}
                     min={0} max={2000} step={50} suffix=" kcal"
                     minLabel="0" maxLabel="2000"
+                    readOnly={readOnly}
                 />
             </div>
         </div>
@@ -477,7 +528,7 @@ function StepHowYouFelt({
 }
 
 function SliderCard({
-    label, icon: Icon, value, onChange, min, max, step, suffix, minLabel, maxLabel,
+    label, icon: Icon, value, onChange, min, max, step, suffix, minLabel, maxLabel, readOnly,
 }: {
     label: string;
     icon?: LucideIcon;
@@ -485,6 +536,7 @@ function SliderCard({
     onChange: (n: number) => void;
     min: number; max: number; step: number; suffix: string;
     minLabel: string; maxLabel: string;
+    readOnly: boolean;
 }) {
     return (
         <div className="bg-surface-container-low rounded-2xl p-5 ghost-border">
@@ -502,7 +554,8 @@ function SliderCard({
                 min={min} max={max} step={step}
                 value={value}
                 onChange={(e) => onChange(parseInt(e.target.value))}
-                className="w-full h-1.5 rounded-full appearance-none cursor-pointer bg-surface-container-highest accent-primary"
+                disabled={readOnly}
+                className="w-full h-1.5 rounded-full appearance-none cursor-pointer bg-surface-container-highest accent-primary disabled:opacity-60 disabled:cursor-not-allowed"
             />
             <div className="flex justify-between text-[10px] font-label uppercase tracking-widest text-on-surface/40 mt-2">
                 <span>{minLabel}</span>
@@ -516,20 +569,21 @@ function SliderCard({
 //  Step 3 — Progress photos
 // ─────────────────────────────────────────────────────────────────
 function StepPhotos({
-    photos, onUpload, onRemove, uploadingAngle, onTap,
+    photos, onUpload, onRemove, uploadingAngle, onTap, readOnly,
 }: {
     photos: WeekPhotos;
     onUpload: (angle: keyof WeekPhotos, file: File) => Promise<void>;
     onRemove: (angle: keyof WeekPhotos) => void;
     uploadingAngle: string | null;
     onTap: (url: string) => void;
+    readOnly: boolean;
 }) {
     const { t } = useLanguage();
     return (
         <div className="space-y-4">
             <StepHeader
                 title={t('checkInWizStepPhotosTitle')}
-                description={t('checkInWizStepPhotosHint')}
+                description={readOnly ? t('checkInWizStepPhotosHintReadOnly') : t('checkInWizStepPhotosHint')}
             />
             <div className="bg-surface-container-low rounded-2xl p-5 ghost-border">
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -544,12 +598,23 @@ function StepPhotos({
                                         onClick={() => onTap(photos[angle]!)}
                                     />
                                     <div className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-surface/80 backdrop-blur-sm text-[10px] font-label uppercase tracking-widest text-on-surface/60 capitalize">{angle}</div>
-                                    <button
-                                        onClick={() => onRemove(angle)}
-                                        className="absolute top-2 right-2 w-7 h-7 rounded-full bg-red-500/80 text-on-surface flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                                    >
-                                        <X size={12} />
-                                    </button>
+                                    {!readOnly && (
+                                        <button
+                                            onClick={() => onRemove(angle)}
+                                            className="absolute top-2 right-2 w-7 h-7 rounded-full bg-red-500/80 text-on-surface flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                                        >
+                                            <X size={12} />
+                                        </button>
+                                    )}
+                                </div>
+                            ) : readOnly ? (
+                                // Read-only empty slot: no upload affordance,
+                                // just a faint "—" so the client knows they
+                                // didn't upload this angle that week.
+                                <div className="aspect-[3/4] rounded-xl bg-surface-container-lowest border border-dashed border-outline-variant/25 flex flex-col items-center justify-center gap-1 text-on-surface/25">
+                                    <Camera size={20} />
+                                    <span className="text-[10px] font-label uppercase tracking-widest capitalize">{angle}</span>
+                                    <span className="text-[9px] font-body italic">{t('checkInWizPhotoNotUploaded')}</span>
                                 </div>
                             ) : (
                                 <label className="aspect-[3/4] rounded-xl bg-surface-container-lowest border border-dashed border-outline-variant/40 hover:border-primary/50 hover:text-primary flex flex-col items-center justify-center gap-2 text-on-surface/35 transition-all cursor-pointer">
@@ -573,10 +638,12 @@ function StepPhotos({
                         </div>
                     ))}
                 </div>
-                <p className="text-[11px] text-on-surface/45 font-body mt-4 leading-relaxed inline-flex items-start gap-2">
-                    <Info size={11} className="text-on-surface/40 mt-0.5 shrink-0" />
-                    {t('checkInWizPhotosOptionalHint')}
-                </p>
+                {!readOnly && (
+                    <p className="text-[11px] text-on-surface/45 font-body mt-4 leading-relaxed inline-flex items-start gap-2">
+                        <Info size={11} className="text-on-surface/40 mt-0.5 shrink-0" />
+                        {t('checkInWizPhotosOptionalHint')}
+                    </p>
+                )}
             </div>
         </div>
     );
@@ -586,12 +653,13 @@ function StepPhotos({
 //  Step 4 — Reflect & submit
 // ─────────────────────────────────────────────────────────────────
 function StepReflectAndSubmit({
-    summary, setSummary, entries, photos, strength, hunger, energy, cardioCalories, onJumpToStep,
+    summary, setSummary, entries, photos, strength, hunger, energy, cardioCalories, onJumpToStep, readOnly,
 }: {
     summary: string; setSummary: (s: string) => void;
     entries: DayEntry[]; photos: WeekPhotos;
     strength: number; hunger: number; energy: number; cardioCalories: number;
     onJumpToStep: (n: number) => void;
+    readOnly: boolean;
 }) {
     const { t } = useLanguage();
     // Count filled days for the review summary so the client can see
@@ -602,26 +670,35 @@ function StepReflectAndSubmit({
     return (
         <div className="space-y-4">
             <StepHeader
-                title={t('checkInWizStepReflectTitle')}
-                description={t('checkInWizStepReflectHint')}
+                title={readOnly ? t('checkInWizStepReflectTitleReadOnly') : t('checkInWizStepReflectTitle')}
+                description={readOnly ? t('checkInWizStepReflectHintReadOnly') : t('checkInWizStepReflectHint')}
             />
 
             {/* Reflection textarea — primary content of this step */}
             <div className="bg-surface-container-low rounded-2xl p-5 ghost-border">
                 <h3 className="font-headline font-bold text-on-surface text-sm mb-3">{t('weeklySummary')}</h3>
-                <textarea
-                    value={summary}
-                    onChange={(e) => setSummary(e.target.value)}
-                    placeholder={t('weeklyReflectionPlaceholder')}
-                    className="w-full h-32 bg-surface-container-lowest rounded-xl p-4 text-on-surface placeholder-on-surface/30 resize-none border-none outline-none focus:ring-1 focus:ring-primary/30 font-body text-sm transition-all"
-                />
+                {readOnly && !summary ? (
+                    <p className="text-on-surface/40 text-[13px] font-body italic">
+                        {t('checkInWizNoReflectionFiled')}
+                    </p>
+                ) : (
+                    <textarea
+                        value={summary}
+                        onChange={(e) => setSummary(e.target.value)}
+                        disabled={readOnly}
+                        placeholder={t('weeklyReflectionPlaceholder')}
+                        className="w-full h-32 bg-surface-container-lowest rounded-xl p-4 text-on-surface placeholder-on-surface/30 resize-none border-none outline-none focus:ring-1 focus:ring-primary/30 font-body text-sm transition-all disabled:opacity-80 disabled:cursor-default"
+                    />
+                )}
             </div>
 
-            {/* Read-back summary — what the client just filled.
-                Tap any row to jump back to that step and edit. */}
+            {/* Read-back summary — what the client filled.
+                Tap any row to jump back to that step (even in
+                read-only mode, jumping is useful — they can re-read
+                a specific section). */}
             <div className="bg-surface-container-low rounded-2xl p-5 ghost-border space-y-2">
                 <h3 className="font-label text-[10px] font-bold uppercase tracking-widest text-on-surface/55 mb-3">
-                    {t('checkInWizReviewHeading')}
+                    {readOnly ? t('checkInWizReviewHeadingReadOnly') : t('checkInWizReviewHeading')}
                 </h3>
                 <ReviewRow
                     label={t('dailyEntries')}
@@ -629,11 +706,13 @@ function StepReflectAndSubmit({
                         ?.replace('{n}', String(loggedDays))
                         ?? `${loggedDays} / 7 days logged`}
                     onClick={() => onJumpToStep(1)}
+                    readOnly={readOnly}
                 />
                 <ReviewRow
                     label={t('checkInWizSlidersLabel')}
                     value={`💪 ${strength}/10 · 🍽 ${hunger}/10 · ⚡ ${energy}/10 · 🔥 ${cardioCalories} kcal`}
                     onClick={() => onJumpToStep(2)}
+                    readOnly={readOnly}
                 />
                 <ReviewRow
                     label={t('progressPhotos')}
@@ -641,13 +720,14 @@ function StepReflectAndSubmit({
                         ?.replace('{n}', String(photoCount))
                         ?? `${photoCount} / 4 uploaded`}
                     onClick={() => onJumpToStep(3)}
+                    readOnly={readOnly}
                 />
             </div>
         </div>
     );
 }
 
-function ReviewRow({ label, value, onClick }: { label: string; value: string; onClick: () => void }) {
+function ReviewRow({ label, value, onClick, readOnly }: { label: string; value: string; onClick: () => void; readOnly: boolean }) {
     const { t } = useLanguage();
     return (
         <button
@@ -660,9 +740,30 @@ function ReviewRow({ label, value, onClick }: { label: string; value: string; on
                 <div className="text-[13px] font-body text-on-surface truncate">{value}</div>
             </div>
             <span className="text-[10px] font-label font-bold uppercase tracking-widest text-primary/70 hover:text-primary shrink-0">
-                {t('checkInWizReviewEdit')}
+                {readOnly ? t('checkInWizReviewView') : t('checkInWizReviewEdit')}
             </span>
         </button>
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────
+//  Read-only status banner — sits above the step body for any week
+//  that's been submitted/reviewed/locked. Tells the client at a
+//  glance "you can't edit this — here's why".
+// ─────────────────────────────────────────────────────────────────
+function ReadOnlyStatusBanner({ status }: { status: 'pending' | 'submitted' | 'reviewed' | 'locked' }) {
+    const { t } = useLanguage();
+    const config = status === 'reviewed'
+        ? { bg: 'bg-emerald-500/8', border: 'border-emerald-500/25', text: 'text-emerald-400', icon: CheckCircle, msg: t('weekReviewedByCoachMsg') }
+        : status === 'submitted'
+            ? { bg: 'bg-primary/8', border: 'border-primary/20', text: 'text-primary', icon: CheckCircle, msg: t('weekSubmittedPending') }
+            : { bg: 'bg-surface-container-low', border: 'border-outline-variant/30', text: 'text-on-surface/55', icon: Info, msg: t('weekCompletedLocked') };
+    const Icon = config.icon;
+    return (
+        <div className={`rounded-2xl p-4 flex items-center gap-3 ${config.bg} border ${config.border} ${config.text}`}>
+            <Icon size={18} className="shrink-0" />
+            <p className="font-body text-[13px] leading-relaxed">{config.msg}</p>
+        </div>
     );
 }
 

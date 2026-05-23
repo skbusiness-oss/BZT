@@ -141,6 +141,21 @@ export const translations = {
     checkInWizStepReflectHint:  { en: 'Add a short note about how the week went so Coach Med has context. Then submit — your coach will reply within a few days.',
                                   ar: 'أضف ملاحظة قصيرة عن كيف سار الأسبوع ليكون لدى الكوتش ميد سياق. ثم أرسل — سيرد عليك مدرّبك خلال أيام قليلة.' },
 
+    // Read-only versions of the step hints + titles
+    checkInWizStepLogHintReadOnly:    { en: 'Here\'s the daily log you submitted this week. It\'s locked for editing.',
+                                        ar: 'هذا هو سجلّك اليومي الذي أرسلته هذا الأسبوع. مغلق للتعديل.' },
+    checkInWizStepFeltHintReadOnly:   { en: 'How you rated your strength, hunger, and energy this week.',
+                                        ar: 'كيف قيّمت قوّتك، جوعك، وطاقتك هذا الأسبوع.' },
+    checkInWizStepPhotosHintReadOnly: { en: 'The progress photos you uploaded this week. Tap any photo to view it full size.',
+                                        ar: 'صور التقدّم التي رفعتها هذا الأسبوع. اضغط على أي صورة لعرضها بحجم كامل.' },
+    checkInWizStepReflectTitleReadOnly: { en: 'Your reflection',                ar: 'تأمّلك' },
+    checkInWizStepReflectHintReadOnly:  { en: 'The note you wrote for your coach this week — and the coach\'s feedback if they\'ve already reviewed.',
+                                          ar: 'الملاحظة التي كتبتها لمدرّبك هذا الأسبوع — وملاحظات المدرّب إن كان قد راجع الأسبوع.' },
+    checkInWizReviewHeadingReadOnly:    { en: 'What you logged this week',     ar: 'ما سجّلته هذا الأسبوع' },
+    checkInWizReviewView:              { en: 'View',                            ar: 'عرض' },
+    checkInWizNoReflectionFiled:        { en: 'You didn\'t leave a reflection this week.', ar: 'لم تكتب تأمّلاً هذا الأسبوع.' },
+    checkInWizPhotoNotUploaded:         { en: 'not uploaded',                   ar: 'غير مرفوعة' },
+
     // Step titles for the progress-indicator chip (short variants)
     checkInWizSteplogTitle:     { en: 'Daily log',                           ar: 'سجلّ يومي' },
     checkInWizStepfeltTitle:    { en: 'How you felt',                        ar: 'كيف شعرت' },
