@@ -1221,15 +1221,80 @@ const FIT_DISTANCE_VIDEOS: Record<string, string> = {
     'Farmers Walk': '1uOs1hP3u4A',                    // Generic YouTube form tutorial
     'Bicycle Crunch': '1we3bh9uhqY',                  // Generic YouTube form tutorial
 
-    // NOTE — an earlier patch added ~25 talking-head tutorials from
-    // named influencer channels (Athlean-X, Jeff Nippard, Buff Dudes,
-    // Onnit, Peter Attia, etc.) for cardio/HIIT moves. Reverted per
-    // founder direction: brand should never embed third-party
-    // personality content (copyright + brand-recognition risk). All
-    // cardio/HIIT exercises now fall through to the ExerciseDB GIF or
-    // the "Find tutorial on YouTube" card. Only silent, anonymous
-    // demonstration videos (like the existing fit-distance French
-    // channel entries above) should ever be added here going forward.
+    // ───── Cardio + HIIT additions — Fit'distance silent demos ─────
+    // All entries below sourced from the Fit'distance French channel
+    // (the same source as the strength entries above). Each videoId
+    // was verified via YouTube's oEmbed API as `author_name:
+    // "Fit'distance"`. These are silent, anonymous, pure-execution
+    // demonstrations — on-brand and copyright-safe.
+    //
+    // An earlier patch added influencer tutorials (Athlean-X, Jeff
+    // Nippard, etc.) for these same exercises — reverted because
+    // talking-head third-party personality content violates the
+    // brand-recognition + copyright posture. ONLY silent /
+    // anonymous demo videos belong in this map.
+    //
+    // Tabata / "— Max" / DB-vs-bodyweight name variants alias to the
+    // same root videoId since the movement is identical and only the
+    // prescription differs.
+
+    'Burpee':                      'e-VGNR7HaGc',     // Burpee
+    'Burpees — Tabata':            'e-VGNR7HaGc',     // alias
+    'Mountain Climbers':           'XY59LUt1mO8',     // Mountain Climbers
+    'Mountain Climber':            'XY59LUt1mO8',     // alias (singular)
+    'Mountain Climbers — Tabata':  'XY59LUt1mO8',     // alias
+    'Jump Squat':                  'IvfegbxOhHc',     // Squats sautés au poids du corps
+    'Squat Jump':                  'IvfegbxOhHc',     // alias
+    'Jump Squats — Tabata':        'IvfegbxOhHc',     // alias
+    'High Knees':                  'AVV7XVht0ZA',     // Course à pied sur place
+    'High Knees — Tabata':         'AVV7XVht0ZA',     // alias
+    'Battle Ropes':                'e0hspbddKSM',     // Corde de combat alternée (Battling Rope)
+    'Box Jump':                    '8XRwW2VOD6U',     // Saut sur box de crossfit
+    'Walking Lunge':               'o5wYX--IX4A',     // Fentes marchées au poids du corps (bodyweight)
+    'Walking Lunges':              'o5wYX--IX4A',     // alias
+    'Lunge Jump':                  'zW9c8zUbyFc',     // Fentes sautées alternées
+    'Skater Jumps':                'aHS_HJraF1g',     // Sauts du patineur
+    'Sled Push':                   'PNOFQMYSDUs',     // Poussée de traîneau sled machine
+    'Jump Rope':                   'B93wv70WkEg',     // Corde à sauter
+    'Chin-Up (Max Reps)':          'skRWYYBju3Q',     // Chin Ups (supination grip — distinct from Pull-Ups pronation)
+    'Weighted Chin-Up':            'skRWYYBju3Q',     // alias
+    'DB Row':                      'EhblQZefBVU',     // Rowing unilatéral avec haltères (true single-arm)
+
+    // Aliases against entries already in this map — no new IDs needed
+    'Push-Ups':                    'IODxDxX7oi4',     // alias to Push-Up
+    'Push-Ups Max':                'IODxDxX7oi4',     // alias
+    'Push-Ups — Tabata':           'IODxDxX7oi4',     // alias
+    'Plank Variations':            'fldSXH9ZCtI',     // alias to Plank
+    'Step-Up':                     'yoquxWRdJO0',     // alias to Box Step-Up
+    'Deadlift':                    'DKKILCl2f7A',     // alias to Conventional Deadlift
+    'DB Squat':                    'sNFAfq2vV8g',     // alias to Goblet Squat
+    'Squat':                       'cnYy6JPmXVg',     // alias to Barbell Back Squat
+    'Barbell Box Squat':           'cnYy6JPmXVg',     // alias (back-squat variant)
+    'Standing Cable Chest Fly':    'lbUErGoYl4U',     // alias to Cable Chest Fly
+    'Weighted Parallel Bar Dips':  'fAjgb38Kku0',     // alias to Parallel Bar Dips
+    'Seated Barbell Military Press': 'Sadx09VPulo',   // alias to Barbell Overhead Press
+    'Seated Press':                'Sadx09VPulo',     // alias to Barbell Overhead Press
+    'Dumbbell Chest Press':        'FymkWalUino',     // alias to existing Flat Dumbbell Press
+    'DB Press Timed':              'FymkWalUino',     // alias
+    'Barbell Front Squat':         'Fy0fJFoIov4',     // alias to existing Front Squat
+    'Pulldown':                    'tTB2bvHsUdU',     // alias to Wide Grip Lat Pulldown
+
+    // NOT ON Fit'distance channel — intentionally NOT mapped so they
+    // fall through to ExerciseDB GIF / "Find on YouTube" card.
+    // Adding non-Fit'distance videos here would violate the brand
+    // posture established above:
+    //   Wall Sit / Wall Sit Max
+    //   Plank to Push-Up
+    //   Thruster / DB Thruster
+    //   Barbell Push Press
+    //   Treadmill HIIT, Incline Treadmill, HIIT Intervals
+    //   Stairmaster, Stairmaster Intervals
+    //   Sprint Intervals, Sprint Interval
+    //   Zone-2 / Steady-State / Tempo / Lactate-Threshold cardio
+    //   Warm-Up / Cool Down / Stretch / Foam Roll / Mobility Work
+    //   Row Warm Up / Row High Effort / Row Recovery / Row Sprint Finale
+    //   Bike: Sprint / Easy
+    //   Core Circuit / Curl + Triceps SS
 };
 
 for (const [key, videoId] of Object.entries(FIT_DISTANCE_VIDEOS)) {
