@@ -265,44 +265,84 @@ export const Subscriptions = () => {
                         return (
                             <div
                                 key={row.uid}
-                                className="grid gap-4 px-5 py-4 items-center text-[13px] font-body"
+                                // Mobile-first: stacked card. md+: 6-column grid.
+                                // The inline `gridTemplateColumns` only takes
+                                // effect once md:grid switches display to grid;
+                                // below md it's display:block (Tailwind default
+                                // when no explicit display class) and the cells
+                                // flow vertically as block-level children.
+                                //
+                                // Each cell uses md:hidden labels so on mobile
+                                // the row reads as "Tier: Community / Status:
+                                // Active / Started: …" instead of a cryptic
+                                // strip of unlabeled values. Date cells get
+                                // whitespace-nowrap so "May 2026" can't wrap
+                                // mid-pair.
+                                className="block md:grid md:gap-4 px-5 py-5 md:py-4 md:items-center text-[13px] font-body"
                                 style={{
                                     gridTemplateColumns: 'minmax(0, 1.6fr) minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 0.9fr) minmax(0, 0.9fr) minmax(0, 1.1fr)',
                                     borderBottom: '1px solid rgb(var(--outline-variant) / 0.20)',
                                 }}
                             >
                                 {/* Member */}
-                                <div className="min-w-0">
-                                    <div className="font-headline font-bold text-on-surface text-[14px] truncate">{row.name}</div>
+                                <div className="min-w-0 mb-3 md:mb-0">
+                                    <div className="font-headline font-bold text-on-surface text-[15px] md:text-[14px] truncate">{row.name}</div>
                                     <div className="text-on-surface/55 text-[12px] truncate">{row.email}</div>
                                 </div>
+
                                 {/* Tier */}
-                                <div className="text-on-surface/80 truncate">{describePriceId(row.stripePriceId)}</div>
-                                {/* Status badge */}
-                                <div>
-                                    <span
-                                        className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-label font-bold uppercase tracking-[0.12em]"
-                                        style={{ background: badge.bg, color: badge.fg, border: `1px solid ${badge.border}` }}
-                                    >
-                                        {badge.label}
+                                <div className="flex items-center justify-between md:block py-1.5 md:py-0 border-t md:border-t-0 border-outline-variant/15">
+                                    <span className="text-on-surface/45 text-[10px] font-label font-bold uppercase tracking-widest md:hidden">
+                                        {t('subColTier')}
                                     </span>
-                                    {row.cancelAtPeriodEnd && !row.disabled && (
-                                        <div className="text-[10px] text-on-surface/45 mt-1 italic">
-                                            {t('subCancelsAtPeriodEnd')}
-                                        </div>
-                                    )}
+                                    <span className="text-on-surface/80 truncate text-[13px] md:max-w-full max-w-[60%] text-end md:text-start">
+                                        {describePriceId(row.stripePriceId)}
+                                    </span>
                                 </div>
+
+                                {/* Status badge */}
+                                <div className="flex items-center justify-between md:block py-1.5 md:py-0 border-t md:border-t-0 border-outline-variant/15">
+                                    <span className="text-on-surface/45 text-[10px] font-label font-bold uppercase tracking-widest md:hidden">
+                                        {t('subColStatus')}
+                                    </span>
+                                    <div className="text-end md:text-start">
+                                        <span
+                                            className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-label font-bold uppercase tracking-[0.12em]"
+                                            style={{ background: badge.bg, color: badge.fg, border: `1px solid ${badge.border}` }}
+                                        >
+                                            {badge.label}
+                                        </span>
+                                        {row.cancelAtPeriodEnd && !row.disabled && (
+                                            <div className="text-[10px] text-on-surface/45 mt-1 italic">
+                                                {t('subCancelsAtPeriodEnd')}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
                                 {/* Started */}
-                                <div className="text-on-surface/70">{fmtDate(row.createdAt)}</div>
+                                <div className="flex items-center justify-between md:block py-1.5 md:py-0 border-t md:border-t-0 border-outline-variant/15">
+                                    <span className="text-on-surface/45 text-[10px] font-label font-bold uppercase tracking-widest md:hidden">
+                                        {t('subColStarted')}
+                                    </span>
+                                    <span className="text-on-surface/70 whitespace-nowrap">{fmtDate(row.createdAt)}</span>
+                                </div>
+
                                 {/* Next bill */}
-                                <div className="text-on-surface/70">{fmtDate(row.currentPeriodEnd)}</div>
+                                <div className="flex items-center justify-between md:block py-1.5 md:py-0 border-t md:border-t-0 border-outline-variant/15">
+                                    <span className="text-on-surface/45 text-[10px] font-label font-bold uppercase tracking-widest md:hidden">
+                                        {t('subColNextBill')}
+                                    </span>
+                                    <span className="text-on-surface/70 whitespace-nowrap">{fmtDate(row.currentPeriodEnd)}</span>
+                                </div>
+
                                 {/* Actions */}
-                                <div className="flex items-center justify-end gap-2">
+                                <div className="flex items-center md:justify-end gap-2 pt-3 md:pt-0 mt-2 md:mt-0 border-t md:border-t-0 border-outline-variant/20">
                                     <a
                                         href={`https://dashboard.stripe.com/customers/${row.stripeCustomerId}`}
                                         target="_blank"
                                         rel="noreferrer"
-                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-label font-bold uppercase tracking-widest bg-surface-container-low border border-outline-variant/40 text-on-surface/70 hover:text-on-surface hover:bg-surface-container transition-all"
+                                        className="flex-1 md:flex-initial inline-flex items-center justify-center gap-1.5 px-3 py-2 md:py-1.5 rounded-lg text-[11px] font-label font-bold uppercase tracking-widest bg-surface-container-low border border-outline-variant/40 text-on-surface/70 hover:text-on-surface hover:bg-surface-container transition-all"
                                         title={t('subActionStripe')}
                                     >
                                         <ExternalLink size={11} />
@@ -312,7 +352,7 @@ export const Subscriptions = () => {
                                         type="button"
                                         onClick={() => handleToggleDisabled(row)}
                                         disabled={isToggling}
-                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-label font-bold uppercase tracking-widest border transition-all"
+                                        className="flex-1 md:flex-initial inline-flex items-center justify-center gap-1.5 px-3 py-2 md:py-1.5 rounded-lg text-[11px] font-label font-bold uppercase tracking-widest border transition-all"
                                         style={row.disabled
                                             ? { background: 'rgb(16 185 129 / 0.12)', color: '#6ee7b7', borderColor: 'rgb(16 185 129 / 0.35)' }
                                             : { background: 'rgb(244 63 94 / 0.10)', color: '#fda4af', borderColor: 'rgb(244 63 94 / 0.35)' }}
