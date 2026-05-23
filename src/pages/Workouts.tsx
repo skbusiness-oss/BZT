@@ -73,7 +73,14 @@ export const Workouts = () => {
     // renders now. Each section auto-shows when there's content for
     // the picked category.
     const [search, setSearch]             = useState('');
-    const [categoryFilter, setCategoryFilter] = useState(() => searchParams.get('category') || 'All');
+    // categoryFilter is the active category name, or '' for "nothing
+    // selected" (which shows the empty state — pick a category to
+    // start browsing). Legacy ?category=All URLs are normalized to ''
+    // in the effect below.
+    const [categoryFilter, setCategoryFilter] = useState(() => {
+        const c = searchParams.get('category') || '';
+        return c === 'All' ? '' : c;
+    });
     const [goalFilter, setGoalFilter]     = useState<'all' | WorkoutGoal>('all');
     const [expandedProgram, setExpandedProgram] = useState<string | null>(null);
     const [expandedWorkout, setExpandedWorkout] = useState<string | null>(null);
@@ -92,7 +99,8 @@ export const Workouts = () => {
     // `?view=` was removed alongside the view-mode tabs.
     useEffect(() => {
         const category = searchParams.get('category');
-        if (category) setCategoryFilter(category);
+        if (category === 'All') setCategoryFilter('');
+        else if (category) setCategoryFilter(category);
     }, [searchParams]);
 
     // ── Editor handlers ────────────────────────────────────────
@@ -120,7 +128,7 @@ export const Workouts = () => {
         ALL_PROGRAMS.filter(p => {
             const matchSearch = p.name.toLowerCase().includes(search.toLowerCase()) ||
                                 p.description.toLowerCase().includes(search.toLowerCase());
-            const matchCat  = categoryFilter === 'All' || p.split === categoryFilter;
+            const matchCat  = !categoryFilter || p.split === categoryFilter;
             const matchGoal = goalFilter === 'all' || p.goal === goalFilter;
             return matchSearch && matchCat && matchGoal;
         }),
@@ -132,7 +140,7 @@ export const Workouts = () => {
             if (isCustom(w)) return false;
             const matchSearch = w.name.toLowerCase().includes(search.toLowerCase()) ||
                                 w.description.toLowerCase().includes(search.toLowerCase());
-            const matchCat  = categoryFilter === 'All' || w.category === categoryFilter;
+            const matchCat  = !categoryFilter || w.category === categoryFilter;
             const matchGoal = goalFilter === 'all' || w.goal === goalFilter;
             return matchSearch && matchCat && matchGoal;
         }),
@@ -144,7 +152,7 @@ export const Workouts = () => {
             if (!isCustom(w)) return false;
             const matchSearch = w.name.toLowerCase().includes(search.toLowerCase()) ||
                                 w.description.toLowerCase().includes(search.toLowerCase());
-            const matchCat  = categoryFilter === 'All' || w.category === categoryFilter;
+            const matchCat  = !categoryFilter || w.category === categoryFilter;
             const matchGoal = goalFilter === 'all' || w.goal === goalFilter;
             return matchSearch && matchCat && matchGoal;
         }),
@@ -155,17 +163,24 @@ export const Workouts = () => {
 
     const groupedPrograms = useMemo(() => groupItems(filteredPrograms, p => p.split), [filteredPrograms]);
     const groupedLibraryWorkouts = useMemo(() => groupItems(libraryWorkouts, w => w.category), [libraryWorkouts]);
-    const allCategories = ['All', ...Array.from(new Set([...ALL_PROGRAMS.map(p => p.split), ...workoutCategories, ...workouts.map(w => w.category)]))];
+    // No "All" bubble — the user picks a specific category to start
+    // browsing, otherwise we render the empty state. Removing "All"
+    // also leaves an even bubble count (8 → 4 pairs on phone) which
+    // grids more nicely than the old odd count.
+    const allCategories = Array.from(new Set([
+        ...ALL_PROGRAMS.map(p => p.split),
+        ...workoutCategories,
+        ...workouts.map(w => w.category),
+    ]));
 
-    // Per-category count for the card grid. Counts a category as the
-    // sum of static programs whose split matches + workout-library
-    // entries whose category matches. So "Full Body" surfaces both
-    // the Full Body training programs and standalone Full Body
-    // workouts as one number — what the user expects to see.
+    // Per-category count for the bubble. Sum of static programs whose
+    // split matches + workout-library entries whose category matches.
+    // So "Full Body" surfaces both the Full Body training programs and
+    // standalone Full Body workouts as one number — what the user
+    // expects to see.
     const categoryCounts = useMemo(() => {
-        const counts: Record<string, number> = { All: ALL_PROGRAMS.length + workouts.length };
+        const counts: Record<string, number> = {};
         for (const cat of allCategories) {
-            if (cat === 'All') continue;
             const programs = ALL_PROGRAMS.filter(p => p.split === cat).length;
             const wks = workouts.filter(w => w.category === cat).length;
             counts[cat] = programs + wks;
@@ -248,94 +263,104 @@ export const Workouts = () => {
                 category is selected, every section that has matching
                 content for that category renders below. */}
 
-            {/* ── Categories + Goal filter ─────────────────────
-                Category browsing replaces the old chip strip with a
-                card grid: same data, visual treatment that scans
-                faster and matches the collection-card pattern used
-                on the University page. Active card is gold-bordered;
-                count under each name is the combined programs +
-                library workouts for that split. */}
-            <div className="bg-surface-container-low rounded-2xl p-6 ghost-border space-y-6">
-                    <div>
-                        <div className="flex items-baseline justify-between gap-3 mb-4">
-                            <span className="font-label text-[10px] font-bold uppercase tracking-widest text-on-surface/40 block">{t('filterByCategory')}</span>
-                            {categoryFilter !== 'All' && (
-                                <button
-                                    onClick={() => handleCategoryFilter('All')}
-                                    className="text-[10px] font-label font-bold uppercase tracking-widest text-primary hover:underline"
-                                >
-                                    Show all
-                                </button>
-                            )}
-                        </div>
-                        {/* Apple-Watch-style bubble cloud — circular
-                            bubbles sized by workout count (more workouts
-                            = bigger bubble = visually "more important").
-                            "All" is always the largest so it anchors
-                            the grid; specialty categories with few
-                            entries (e.g. "Stretching" with 4) shrink
-                            to a small bubble. The flex-wrap layout
-                            lets them flow organically across rows
-                            instead of locking into a rigid grid. */}
-                        <div className="relative">
-                            {/* Soft gold halo behind the cloud — gives the
-                                active bubble somewhere to glow into. Pure
-                                decoration; pointer-events-none. */}
-                            <div
-                                aria-hidden
-                                className="absolute inset-0 pointer-events-none"
-                                style={{
-                                    background: 'radial-gradient(circle at center, rgb(var(--primary) / 0.06) 0%, transparent 65%)',
-                                    filter: 'blur(20px)',
-                                }}
-                            />
-                            <div className="relative flex flex-wrap items-center justify-center gap-3 sm:gap-4 py-4">
-                                {allCategories.map(cat => (
-                                    <CategoryBrowserCard
-                                        key={cat}
-                                        label={cat}
-                                        count={categoryCounts[cat] ?? 0}
-                                        size={bubbleSize(cat, categoryCounts)}
-                                        active={categoryFilter === cat}
-                                        onClick={() => handleCategoryFilter(cat)}
-                                    />
-                                ))}
-                            </div>
-                        </div>
-                    </div>
+            {/* ── Categories + (scoped) Goal filter ─────────────
+                Bubble grid replaces the old card grid. The "All"
+                bubble was removed: it was visually heaviest but
+                semantically meant "nothing selected", which is
+                confusing, and removing it leaves an even bubble count
+                that pairs cleanly across rows. To reset the filter,
+                use the "Show all" link in the header.
 
-                    <div>
-                        <span className="font-label text-[10px] font-bold uppercase tracking-widest text-on-surface/40 block mb-3">Filter by Goal</span>
-                        <div className="flex gap-2 flex-wrap">
+                Goals filter is hidden until a category is selected.
+                Picking "Push / Pull / Legs" reveals the goal chips
+                scoped to that category — "Filter goals in Push /
+                Pull / Legs" — instead of a global goal strip that
+                competed with the category bubble grid for attention. */}
+            <div className="bg-surface-container-low rounded-2xl p-6 ghost-border space-y-6">
+                <div>
+                    <div className="flex items-baseline justify-between gap-3 mb-4">
+                        <span className="font-label text-[10px] font-bold uppercase tracking-widest text-on-surface/40 block">{t('filterByCategory')}</span>
+                        {categoryFilter && (
                             <button
-                                onClick={() => setGoalFilter('all')}
-                                className={clsx(
-                                    'px-4 py-2 rounded-lg text-xs font-headline font-bold transition-colors border',
-                                    goalFilter === 'all' ? 'bg-surface-container-highest text-on-surface border-outline-variant/50' : 'bg-surface-container-lowest text-on-surface/50 border-outline-variant/30 hover:text-on-surface'
-                                )}
+                                onClick={() => handleCategoryFilter('')}
+                                className="text-[10px] font-label font-bold uppercase tracking-widest text-primary hover:underline"
                             >
-                                All Goals
+                                Show all
                             </button>
-                            {(Object.keys(GOAL_CONFIG) as WorkoutGoal[]).map(g => {
-                                const GoalIcon = GOAL_CONFIG[g].icon;
-                                return (
-                                    <button
-                                        key={g}
-                                        onClick={() => setGoalFilter(g)}
-                                        className={clsx(
-                                            'px-4 py-2 rounded-lg text-xs font-headline font-bold transition-colors flex items-center gap-2 border',
-                                            goalFilter === g
-                                                ? `${GOAL_CONFIG[g].bgColor} ${GOAL_CONFIG[g].color} border-current/20`
-                                                : 'bg-surface-container-lowest text-on-surface/50 border-outline-variant/30 hover:text-on-surface hover:bg-surface-container'
-                                        )}
-                                    >
-                                        <GoalIcon size={14} /> {GOAL_CONFIG[g].label}
-                                    </button>
-                                );
-                            })}
+                        )}
+                    </div>
+                    {/* Tidy paired grid — 2 bubbles per row on phone,
+                        3 on small tablets, 4 on desktop. Uniform size
+                        keeps the visual rhythm balanced (the previous
+                        size-by-popularity variation looked organic but
+                        made the page feel asymmetric on small screens).
+                        Soft gold halo underneath the grid gives the
+                        active bubble somewhere to glow into. */}
+                    <div className="relative">
+                        <div
+                            aria-hidden
+                            className="absolute inset-0 pointer-events-none"
+                            style={{
+                                background: 'radial-gradient(circle at center, rgb(var(--primary) / 0.06) 0%, transparent 65%)',
+                                filter: 'blur(20px)',
+                            }}
+                        />
+                        <div className="relative grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 place-items-center gap-x-3 gap-y-4 sm:gap-x-4 sm:gap-y-5 py-3">
+                            {allCategories.map(cat => (
+                                <CategoryBrowserCard
+                                    key={cat}
+                                    label={cat}
+                                    count={categoryCounts[cat] ?? 0}
+                                    active={categoryFilter === cat}
+                                    onClick={() => handleCategoryFilter(cat)}
+                                />
+                            ))}
                         </div>
                     </div>
                 </div>
+
+                {/* Goal filter — only when a category is picked.
+                    Without a category selected, goal filtering has
+                    nothing to scope (the list area is empty anyway),
+                    so showing the chips would just be decoration. */}
+                {categoryFilter && (
+                    <div className="bzt-rise-in" style={{ animationDelay: '40ms' }}>
+                        <div className="border-t border-outline-variant/20 pt-5">
+                            <span className="font-label text-[10px] font-bold uppercase tracking-widest text-on-surface/40 block mb-3">
+                                Filter goals in <span className="text-primary">{categoryFilter}</span>
+                            </span>
+                            <div className="flex gap-2 flex-wrap">
+                                <button
+                                    onClick={() => setGoalFilter('all')}
+                                    className={clsx(
+                                        'px-4 py-2 rounded-lg text-xs font-headline font-bold transition-colors border',
+                                        goalFilter === 'all' ? 'bg-surface-container-highest text-on-surface border-outline-variant/50' : 'bg-surface-container-lowest text-on-surface/50 border-outline-variant/30 hover:text-on-surface'
+                                    )}
+                                >
+                                    All Goals
+                                </button>
+                                {(Object.keys(GOAL_CONFIG) as WorkoutGoal[]).map(g => {
+                                    const GoalIcon = GOAL_CONFIG[g].icon;
+                                    return (
+                                        <button
+                                            key={g}
+                                            onClick={() => setGoalFilter(g)}
+                                            className={clsx(
+                                                'px-4 py-2 rounded-lg text-xs font-headline font-bold transition-colors flex items-center gap-2 border',
+                                                goalFilter === g
+                                                    ? `${GOAL_CONFIG[g].bgColor} ${GOAL_CONFIG[g].color} border-current/20`
+                                                    : 'bg-surface-container-lowest text-on-surface/50 border-outline-variant/30 hover:text-on-surface hover:bg-surface-container'
+                                            )}
+                                        >
+                                            <GoalIcon size={14} /> {GOAL_CONFIG[g].label}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
 
             {/* ═══════════════════════════════════════════════
                 EMPTY STATE — when no category is picked, the list
@@ -344,15 +369,15 @@ export const Workouts = () => {
                 category cards. Picking a card opens the matching
                 list (programs / library / custom) below.
             ════════════════════════════════════════════════ */}
-            {categoryFilter === 'All' && (
+            {!categoryFilter && (
                 <div className="bg-surface-container-low rounded-2xl p-10 md:p-16 text-center ghost-border">
                     <Dumbbell size={36} className="mx-auto mb-4 text-on-surface/30" />
                     <h3 className="font-headline font-extrabold text-lg text-on-surface mb-2">
                         Pick a category to browse
                     </h3>
                     <p className="text-on-surface/55 font-body text-sm max-w-md mx-auto">
-                        Tap one of the cards above (Full Body, PPL, Stretching, …) to see the
-                        programs and workouts in that category.
+                        Tap one of the bubbles above (Full Body, PPL, Stretching, …) to see
+                        the programs and workouts inside it.
                     </p>
                 </div>
             )}
@@ -850,82 +875,45 @@ export const Workouts = () => {
 };
 
 // ─────────────────────────────────────────────────────────────────────
-// CategoryBrowserCard — circular "bubble cloud" picker. Apple-Watch
-// home-screen aesthetic: bubbles sized by workout count, arranged in
-// a flowing flex-wrap layout instead of a rigid grid. Active bubble
-// gets a gold ring + soft halo glow.
-//
-// Why circles + size variation: a category with 48 entries SHOULD
-// feel visually heavier than one with 4, so the user's eye lands on
-// the categories with the most content first. This also packs more
-// data per row than the previous rectangular cards (smaller bubbles
-// fit 2-3 per phone row vs. 2 fixed cards).
-//
-// Sizing tiers (sm / md / lg) are computed in bubbleSize() at the
-// call site, based on each category's count relative to the largest
-// non-"All" category. "All" is always the largest — it's the
-// default/reset bubble and serves as the visual anchor.
+// CategoryBrowserCard — circular bubble category picker. Uniform size
+// across all categories (the size-by-popularity variant looked organic
+// but threw the page off-balance on narrow screens — founder wanted
+// the bubbles to "pair next to each other" cleanly, so uniform wins).
+// Active bubble gets a gold ring + soft halo glow + 1.06x scale.
 // ─────────────────────────────────────────────────────────────────────
-
-type BubbleSize = 'sm' | 'md' | 'lg';
-
-/** Pick a size tier for a category bubble based on its workout count
- *  relative to the busiest category. "All" always wins to anchor the
- *  cloud. New/empty categories fall to 'sm' so they don't shout. */
-function bubbleSize(cat: string, counts: Record<string, number>): BubbleSize {
-    if (cat === 'All') return 'lg';
-    let max = 1;
-    for (const [k, v] of Object.entries(counts)) {
-        if (k === 'All') continue;
-        if (v > max) max = v;
-    }
-    const c = counts[cat] ?? 0;
-    if (c >= max * 0.65) return 'lg';
-    if (c >= max * 0.30) return 'md';
-    return 'sm';
-}
 
 function CategoryBrowserCard({
     label,
     count,
-    size = 'md',
     active,
     onClick,
 }: {
     label: string;
     count: number;
-    size?: BubbleSize;
     active: boolean;
     onClick: () => void;
 }) {
-    const isAll = label === 'All';
-    // Pixel sizes. Tuned so 'lg' is comfortable but not overwhelming
-    // on a phone (≈ 1/3 of viewport width on 360px screens), 'sm'
-    // stays tappable (≥ 80px / 44pt touch target).
-    const DIAMETER: Record<BubbleSize, number> = { sm: 92, md: 112, lg: 132 };
-    const ICON_PX:  Record<BubbleSize, number> = { sm: 18, md: 22, lg: 26 };
-    const LABEL_CLS: Record<BubbleSize, string> = {
-        sm: 'text-[11px]',
-        md: 'text-[12.5px]',
-        lg: 'text-[14px]',
-    };
-    const px = DIAMETER[size];
+    // 112px diameter — fits 2 per phone row with breathing room around
+    // them (a 360px viewport easily seats 2 × 112 + 12 gap + padding),
+    // and the 22px icon stays well above the 16px-text accessibility
+    // floor. Touch target is comfortably above Apple's 44pt minimum.
+    const DIAMETER = 112;
+    const ICON_PX = 22;
 
     // Lightweight icon-by-name map. Falls back to the generic
     // dumbbell when a category is custom (coach-added) and so doesn't
     // match a known split.
     const iconFor = (name: string) => {
         const n = name.toLowerCase();
-        const s = ICON_PX[size];
-        if (n.includes('full body')) return <Activity size={s} strokeWidth={2.2} />;
-        if (n.includes('upper') || n.includes('lower')) return <Repeat size={s} strokeWidth={2.2} />;
-        if (n.includes('push') || n.includes('pull') || n.includes('legs') || n.includes('ppl')) return <Zap size={s} strokeWidth={2.2} />;
-        if (n.includes('bro')) return <Award size={s} strokeWidth={2.2} />;
-        if (n.includes('hiit') || n.includes('cardio')) return <Heart size={s} strokeWidth={2.2} />;
-        if (n.includes('stretch') || n.includes('mobility') || n.includes('recovery')) return <Moon size={s} strokeWidth={2.2} />;
-        if (n.includes('strength') || n.includes('power')) return <Shield size={s} strokeWidth={2.2} />;
-        if (n.includes('endurance')) return <RotateCcw size={s} strokeWidth={2.2} />;
-        return <Dumbbell size={s} strokeWidth={2.2} />;
+        if (n.includes('full body')) return <Activity size={ICON_PX} strokeWidth={2.2} />;
+        if (n.includes('upper') || n.includes('lower')) return <Repeat size={ICON_PX} strokeWidth={2.2} />;
+        if (n.includes('push') || n.includes('pull') || n.includes('legs') || n.includes('ppl')) return <Zap size={ICON_PX} strokeWidth={2.2} />;
+        if (n.includes('bro')) return <Award size={ICON_PX} strokeWidth={2.2} />;
+        if (n.includes('hiit') || n.includes('cardio')) return <Heart size={ICON_PX} strokeWidth={2.2} />;
+        if (n.includes('stretch') || n.includes('mobility') || n.includes('recovery')) return <Moon size={ICON_PX} strokeWidth={2.2} />;
+        if (n.includes('strength') || n.includes('power')) return <Shield size={ICON_PX} strokeWidth={2.2} />;
+        if (n.includes('endurance')) return <RotateCcw size={ICON_PX} strokeWidth={2.2} />;
+        return <Dumbbell size={ICON_PX} strokeWidth={2.2} />;
     };
 
     return (
@@ -935,11 +923,8 @@ function CategoryBrowserCard({
             aria-pressed={active}
             aria-label={`${label} — ${count} workouts`}
             style={{
-                width: px,
-                height: px,
-                // Active bubble grows slightly so the gold ring catches
-                // the eye even when the size tier already matches a
-                // neighbour. Keeps the cloud asymmetric and alive.
+                width: DIAMETER,
+                height: DIAMETER,
                 transform: active ? 'scale(1.06)' : undefined,
             }}
             className={clsx(
@@ -951,23 +936,20 @@ function CategoryBrowserCard({
                     : 'bg-surface-container-lowest border border-outline-variant/30 hover:border-primary/40 hover:bg-surface-container hover:shadow-[0_8px_22px_rgba(0,0,0,0.25)]'
             )}
         >
-            {/* Icon */}
             <span
                 className={clsx(
                     'flex items-center justify-center transition-colors',
                     active ? 'text-primary' : 'text-on-surface/55 group-hover:text-primary'
                 )}
             >
-                {isAll ? <Target size={ICON_PX[size]} strokeWidth={2.2} /> : iconFor(label)}
+                {iconFor(label)}
             </span>
 
-            {/* Label — kept tight so even the longest category
-                ("Push / Pull / Legs") fits without overflow on the
-                small bubble. Centered, two lines max. */}
+            {/* Label — line-clamped to 2 so "Push / Pull / Legs"
+                wraps cleanly inside the 112px disc. */}
             <span
                 className={clsx(
-                    'font-headline font-bold leading-[1.05] tracking-tight text-center px-2',
-                    LABEL_CLS[size],
+                    'font-headline font-bold leading-[1.05] tracking-tight text-center px-2 text-[12.5px]',
                     active ? 'text-on-surface' : 'text-on-surface/90'
                 )}
                 style={{
@@ -980,13 +962,12 @@ function CategoryBrowserCard({
                 {label}
             </span>
 
-            {/* Count — small numeric pill underneath. Gold when active
-                so the user's eye lands on "this is what's selected"
-                without needing a separate "Active" badge. */}
+            {/* Count — small numeric line under the label. Gold +
+                bold when active so the picked bubble reads at a
+                glance without needing a separate "Active" badge. */}
             <span
                 className={clsx(
-                    'font-body leading-none tabular-nums',
-                    size === 'sm' ? 'text-[9.5px]' : 'text-[10.5px]',
+                    'font-body leading-none tabular-nums text-[10.5px]',
                     active ? 'text-primary/85 font-bold' : 'text-on-surface/40'
                 )}
             >
