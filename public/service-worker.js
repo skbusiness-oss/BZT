@@ -1,5 +1,5 @@
 // Bump VERSION whenever the cache strategy changes so old installs purge.
-const VERSION = 'v81';
+const VERSION = 'v82';
 const STATIC_CACHE = `bzt-static-${VERSION}`;
 
 /**
@@ -39,6 +39,18 @@ const PREWARM_URLS = [
     '/university/level-beginner.jpg',
     '/university/level-intermediate.jpg',
     '/university/level-advanced.jpg',
+    // Workout category-bubble backgrounds. 8 images, ≈40-60 KB each
+    // after the optimize-images.mjs pass. Without these prewarmed,
+    // the bubble carousel on /workouts fires 8 parallel image
+    // requests on first visit, which is the most visible new surface
+    // for any returning user.
+    '/workout-hero.jpg',
+    '/workout-covers/goal-strength.jpg',
+    '/workout-covers/goal-muscle-gain.jpg',
+    '/workout-covers/goal-recomp.jpg',
+    '/workout-covers/goal-fat-loss.jpg',
+    '/workout-covers/goal-endurance.jpg',
+    '/workout-covers/goal-rest.jpg',
 ];
 
 // Predicate for routes that should use stale-while-revalidate (covers,

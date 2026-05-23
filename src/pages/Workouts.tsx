@@ -1033,6 +1033,27 @@ function CategoryCarousel({
 // Active bubble gets a gold ring + soft halo glow + 1.06x scale.
 // ─────────────────────────────────────────────────────────────────────
 
+/** Pick the best-fit background image for a category bubble.
+ *  We reuse the existing /workout-covers/goal-*.jpg assets (already
+ *  optimised + pre-warmed by the SW). The mapping is "what photo
+ *  best evokes this style of training" — not exact, intentionally
+ *  a bit aspirational (e.g. Powerlifting → strength shot, Stretching
+ *  → rest/recovery). Falls back to the workout hero for anything
+ *  unrecognised (coach-added custom categories). */
+function imageFor(name: string): string {
+    const n = name.toLowerCase();
+    if (n.includes('full body')) return '/workout-hero.jpg';
+    if (n.includes('upper') || n.includes('lower')) return '/workout-covers/goal-strength.jpg';
+    if (n.includes('push') || n.includes('pull') || n.includes('legs') || n.includes('ppl')) return '/workout-covers/goal-muscle-gain.jpg';
+    if (n.includes('bro')) return '/workout-covers/goal-recomp.jpg';
+    if (n.includes('powerlifting') || n.includes('strength') || n.includes('power')) return '/workout-covers/goal-strength.jpg';
+    if (n.includes('hiit') || n.includes('circuit')) return '/workout-covers/goal-fat-loss.jpg';
+    if (n.includes('cardio')) return '/workout-covers/goal-endurance.jpg';
+    if (n.includes('stretch') || n.includes('mobility') || n.includes('recovery')) return '/workout-covers/goal-rest.jpg';
+    if (n.includes('endurance')) return '/workout-covers/goal-endurance.jpg';
+    return '/workout-hero.jpg';
+}
+
 function CategoryBrowserCard({
     label,
     count,
@@ -1050,10 +1071,12 @@ function CategoryBrowserCard({
     // floor. Touch target is comfortably above Apple's 44pt minimum.
     const DIAMETER = 112;
     const ICON_PX = 22;
+    const imgSrc = imageFor(label);
 
     // Lightweight icon-by-name map. Falls back to the generic
     // dumbbell when a category is custom (coach-added) and so doesn't
-    // match a known split.
+    // match a known split. Rendered over the image with a tinted
+    // backdrop so it stays legible on any photo.
     const iconFor = (name: string) => {
         const n = name.toLowerCase();
         if (n.includes('full body')) return <Activity size={ICON_PX} strokeWidth={2.2} />;
@@ -1079,30 +1102,57 @@ function CategoryBrowserCard({
                 transform: active ? 'scale(1.06)' : undefined,
             }}
             className={clsx(
-                'group relative shrink-0 rounded-full flex flex-col items-center justify-center gap-1 transition-all duration-200',
+                'group relative shrink-0 rounded-full flex flex-col items-center justify-center gap-1 transition-all duration-200 overflow-hidden',
                 'hover:-translate-y-1 active:scale-95',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-container-low',
                 active
-                    ? 'bg-gradient-to-br from-primary/22 via-primary/14 to-primary-container/10 border-2 border-primary shadow-[0_10px_30px_rgba(230,195,100,0.42),inset_0_1px_0_rgba(255,255,255,0.06)]'
-                    : 'bg-surface-container-lowest border border-outline-variant/30 hover:border-primary/40 hover:bg-surface-container hover:shadow-[0_8px_22px_rgba(0,0,0,0.25)]'
+                    ? 'border-2 border-primary shadow-[0_10px_30px_rgba(230,195,100,0.42),inset_0_1px_0_rgba(255,255,255,0.08)]'
+                    : 'border border-outline-variant/40 hover:border-primary/50 hover:shadow-[0_8px_22px_rgba(0,0,0,0.30)]'
             )}
         >
+            {/* Background image — fills the bubble. Lazy-loaded;
+                decoding async so we don't block the carousel paint
+                while the JPEG decodes. */}
+            <img
+                src={imgSrc}
+                alt=""
+                aria-hidden
+                loading="lazy"
+                decoding="async"
+                className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                draggable={false}
+            />
+
+            {/* Dark gradient overlay — bottom-heavy so the label +
+                count near the bottom of the disc are always legible.
+                Active bubble gets a gold-tinted overlay instead so
+                the gold ring + glow read consistently. */}
+            <div
+                aria-hidden
+                className="absolute inset-0 pointer-events-none transition-colors duration-200"
+                style={{
+                    background: active
+                        ? 'linear-gradient(180deg, rgba(0,0,0,0.10) 0%, rgba(0,0,0,0.30) 35%, rgba(230,195,100,0.30) 100%)'
+                        : 'linear-gradient(180deg, rgba(0,0,0,0.20) 0%, rgba(0,0,0,0.55) 60%, rgba(0,0,0,0.75) 100%)',
+                }}
+            />
+
+            {/* Icon — small chip near the top of the disc so it
+                doesn't fight the label for reading order. */}
             <span
                 className={clsx(
-                    'flex items-center justify-center transition-colors',
-                    active ? 'text-primary' : 'text-on-surface/55 group-hover:text-primary'
+                    'relative z-10 flex items-center justify-center mt-1 transition-colors',
+                    active ? 'text-primary' : 'text-white/95 drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]'
                 )}
             >
                 {iconFor(label)}
             </span>
 
             {/* Label — line-clamped to 2 so "Push / Pull / Legs"
-                wraps cleanly inside the 112px disc. */}
+                wraps cleanly inside the 112px disc. White over the
+                image gradient instead of on-surface. */}
             <span
-                className={clsx(
-                    'font-headline font-bold leading-[1.05] tracking-tight text-center px-2 text-[12.5px]',
-                    active ? 'text-on-surface' : 'text-on-surface/90'
-                )}
+                className="relative z-10 font-headline font-bold leading-[1.05] tracking-tight text-center px-2 text-[12px] text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.7)]"
                 style={{
                     display: '-webkit-box',
                     WebkitLineClamp: 2,
@@ -1115,11 +1165,11 @@ function CategoryBrowserCard({
 
             {/* Count — small numeric line under the label. Gold +
                 bold when active so the picked bubble reads at a
-                glance without needing a separate "Active" badge. */}
+                glance. */}
             <span
                 className={clsx(
-                    'font-body leading-none tabular-nums text-[10.5px]',
-                    active ? 'text-primary/85 font-bold' : 'text-on-surface/40'
+                    'relative z-10 font-body leading-none tabular-nums text-[10.5px] drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]',
+                    active ? 'text-primary font-bold' : 'text-white/75'
                 )}
             >
                 {count}
