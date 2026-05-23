@@ -268,16 +268,39 @@ export const Workouts = () => {
                                 </button>
                             )}
                         </div>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                            {allCategories.map(cat => (
-                                <CategoryBrowserCard
-                                    key={cat}
-                                    label={cat}
-                                    count={categoryCounts[cat] ?? 0}
-                                    active={categoryFilter === cat}
-                                    onClick={() => handleCategoryFilter(cat)}
-                                />
-                            ))}
+                        {/* Apple-Watch-style bubble cloud — circular
+                            bubbles sized by workout count (more workouts
+                            = bigger bubble = visually "more important").
+                            "All" is always the largest so it anchors
+                            the grid; specialty categories with few
+                            entries (e.g. "Stretching" with 4) shrink
+                            to a small bubble. The flex-wrap layout
+                            lets them flow organically across rows
+                            instead of locking into a rigid grid. */}
+                        <div className="relative">
+                            {/* Soft gold halo behind the cloud — gives the
+                                active bubble somewhere to glow into. Pure
+                                decoration; pointer-events-none. */}
+                            <div
+                                aria-hidden
+                                className="absolute inset-0 pointer-events-none"
+                                style={{
+                                    background: 'radial-gradient(circle at center, rgb(var(--primary) / 0.06) 0%, transparent 65%)',
+                                    filter: 'blur(20px)',
+                                }}
+                            />
+                            <div className="relative flex flex-wrap items-center justify-center gap-3 sm:gap-4 py-4">
+                                {allCategories.map(cat => (
+                                    <CategoryBrowserCard
+                                        key={cat}
+                                        label={cat}
+                                        count={categoryCounts[cat] ?? 0}
+                                        size={bubbleSize(cat, categoryCounts)}
+                                        active={categoryFilter === cat}
+                                        onClick={() => handleCategoryFilter(cat)}
+                                    />
+                                ))}
+                            </div>
                         </div>
                     </div>
 
@@ -827,80 +850,148 @@ export const Workouts = () => {
 };
 
 // ─────────────────────────────────────────────────────────────────────
-// CategoryBrowserCard — compact card used in the workouts category
-// browser. Visually mirrors the University page's collection cards
-// but smaller because the category list can run to ~10 entries.
-// Active card is gold-bordered so the current filter reads at a
-// glance without a separate "Selected: Full Body" pill.
+// CategoryBrowserCard — circular "bubble cloud" picker. Apple-Watch
+// home-screen aesthetic: bubbles sized by workout count, arranged in
+// a flowing flex-wrap layout instead of a rigid grid. Active bubble
+// gets a gold ring + soft halo glow.
+//
+// Why circles + size variation: a category with 48 entries SHOULD
+// feel visually heavier than one with 4, so the user's eye lands on
+// the categories with the most content first. This also packs more
+// data per row than the previous rectangular cards (smaller bubbles
+// fit 2-3 per phone row vs. 2 fixed cards).
+//
+// Sizing tiers (sm / md / lg) are computed in bubbleSize() at the
+// call site, based on each category's count relative to the largest
+// non-"All" category. "All" is always the largest — it's the
+// default/reset bubble and serves as the visual anchor.
 // ─────────────────────────────────────────────────────────────────────
+
+type BubbleSize = 'sm' | 'md' | 'lg';
+
+/** Pick a size tier for a category bubble based on its workout count
+ *  relative to the busiest category. "All" always wins to anchor the
+ *  cloud. New/empty categories fall to 'sm' so they don't shout. */
+function bubbleSize(cat: string, counts: Record<string, number>): BubbleSize {
+    if (cat === 'All') return 'lg';
+    let max = 1;
+    for (const [k, v] of Object.entries(counts)) {
+        if (k === 'All') continue;
+        if (v > max) max = v;
+    }
+    const c = counts[cat] ?? 0;
+    if (c >= max * 0.65) return 'lg';
+    if (c >= max * 0.30) return 'md';
+    return 'sm';
+}
+
 function CategoryBrowserCard({
     label,
     count,
+    size = 'md',
     active,
     onClick,
 }: {
     label: string;
     count: number;
+    size?: BubbleSize;
     active: boolean;
     onClick: () => void;
 }) {
     const isAll = label === 'All';
+    // Pixel sizes. Tuned so 'lg' is comfortable but not overwhelming
+    // on a phone (≈ 1/3 of viewport width on 360px screens), 'sm'
+    // stays tappable (≥ 80px / 44pt touch target).
+    const DIAMETER: Record<BubbleSize, number> = { sm: 92, md: 112, lg: 132 };
+    const ICON_PX:  Record<BubbleSize, number> = { sm: 18, md: 22, lg: 26 };
+    const LABEL_CLS: Record<BubbleSize, string> = {
+        sm: 'text-[11px]',
+        md: 'text-[12.5px]',
+        lg: 'text-[14px]',
+    };
+    const px = DIAMETER[size];
+
     // Lightweight icon-by-name map. Falls back to the generic
     // dumbbell when a category is custom (coach-added) and so doesn't
-    // match a known split. Keeps the visual interesting without
-    // requiring per-category illustration assets.
+    // match a known split.
     const iconFor = (name: string) => {
         const n = name.toLowerCase();
-        if (n.includes('full body')) return <Activity size={16} />;
-        if (n.includes('upper') || n.includes('lower')) return <Repeat size={16} />;
-        if (n.includes('push') || n.includes('pull') || n.includes('legs') || n.includes('ppl')) return <Zap size={16} />;
-        if (n.includes('bro')) return <Award size={16} />;
-        if (n.includes('hiit') || n.includes('cardio')) return <Heart size={16} />;
-        if (n.includes('stretch') || n.includes('mobility') || n.includes('recovery')) return <Moon size={16} />;
-        if (n.includes('strength') || n.includes('power')) return <Shield size={16} />;
-        if (n.includes('endurance')) return <RotateCcw size={16} />;
-        return <Dumbbell size={16} />;
+        const s = ICON_PX[size];
+        if (n.includes('full body')) return <Activity size={s} strokeWidth={2.2} />;
+        if (n.includes('upper') || n.includes('lower')) return <Repeat size={s} strokeWidth={2.2} />;
+        if (n.includes('push') || n.includes('pull') || n.includes('legs') || n.includes('ppl')) return <Zap size={s} strokeWidth={2.2} />;
+        if (n.includes('bro')) return <Award size={s} strokeWidth={2.2} />;
+        if (n.includes('hiit') || n.includes('cardio')) return <Heart size={s} strokeWidth={2.2} />;
+        if (n.includes('stretch') || n.includes('mobility') || n.includes('recovery')) return <Moon size={s} strokeWidth={2.2} />;
+        if (n.includes('strength') || n.includes('power')) return <Shield size={s} strokeWidth={2.2} />;
+        if (n.includes('endurance')) return <RotateCcw size={s} strokeWidth={2.2} />;
+        return <Dumbbell size={s} strokeWidth={2.2} />;
     };
 
     return (
         <button
             type="button"
             onClick={onClick}
+            aria-pressed={active}
+            aria-label={`${label} — ${count} workouts`}
+            style={{
+                width: px,
+                height: px,
+                // Active bubble grows slightly so the gold ring catches
+                // the eye even when the size tier already matches a
+                // neighbour. Keeps the cloud asymmetric and alive.
+                transform: active ? 'scale(1.06)' : undefined,
+            }}
             className={clsx(
-                'group relative overflow-hidden rounded-xl p-4 text-left transition-all duration-200 hover:-translate-y-0.5',
+                'group relative shrink-0 rounded-full flex flex-col items-center justify-center gap-1 transition-all duration-200',
+                'hover:-translate-y-1 active:scale-95',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-container-low',
                 active
-                    ? 'bg-primary/10 border-2 border-primary shadow-[0_8px_20px_rgba(230,195,100,0.25)]'
-                    : 'bg-surface-container-lowest border border-outline-variant/30 hover:bg-surface-container hover:border-primary/30'
+                    ? 'bg-gradient-to-br from-primary/22 via-primary/14 to-primary-container/10 border-2 border-primary shadow-[0_10px_30px_rgba(230,195,100,0.42),inset_0_1px_0_rgba(255,255,255,0.06)]'
+                    : 'bg-surface-container-lowest border border-outline-variant/30 hover:border-primary/40 hover:bg-surface-container hover:shadow-[0_8px_22px_rgba(0,0,0,0.25)]'
             )}
         >
-            <div className="flex items-center justify-between gap-2 mb-3">
-                <span
-                    className={clsx(
-                        'w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-colors',
-                        active
-                            ? 'bg-primary/20 text-primary'
-                            : 'bg-surface-container text-on-surface/60 group-hover:text-primary'
-                    )}
-                >
-                    {isAll ? <Target size={16} /> : iconFor(label)}
-                </span>
-                {active && (
-                    <span className="text-[9px] font-label font-bold uppercase tracking-widest text-primary">
-                        Active
-                    </span>
+            {/* Icon */}
+            <span
+                className={clsx(
+                    'flex items-center justify-center transition-colors',
+                    active ? 'text-primary' : 'text-on-surface/55 group-hover:text-primary'
                 )}
-            </div>
-            <div>
-                <h3 className={clsx(
-                    'font-headline font-bold text-sm leading-tight transition-colors',
-                    active ? 'text-on-surface' : 'text-on-surface group-hover:text-primary'
-                )}>
-                    {label}
-                </h3>
-                <p className="text-[11px] text-on-surface/45 font-body mt-1">
-                    {count} {count === 1 ? 'workout' : 'workouts'}
-                </p>
-            </div>
+            >
+                {isAll ? <Target size={ICON_PX[size]} strokeWidth={2.2} /> : iconFor(label)}
+            </span>
+
+            {/* Label — kept tight so even the longest category
+                ("Push / Pull / Legs") fits without overflow on the
+                small bubble. Centered, two lines max. */}
+            <span
+                className={clsx(
+                    'font-headline font-bold leading-[1.05] tracking-tight text-center px-2',
+                    LABEL_CLS[size],
+                    active ? 'text-on-surface' : 'text-on-surface/90'
+                )}
+                style={{
+                    display: '-webkit-box',
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: 'vertical',
+                    overflow: 'hidden',
+                }}
+            >
+                {label}
+            </span>
+
+            {/* Count — small numeric pill underneath. Gold when active
+                so the user's eye lands on "this is what's selected"
+                without needing a separate "Active" badge. */}
+            <span
+                className={clsx(
+                    'font-body leading-none tabular-nums',
+                    size === 'sm' ? 'text-[9.5px]' : 'text-[10.5px]',
+                    active ? 'text-primary/85 font-bold' : 'text-on-surface/40'
+                )}
+            >
+                {count}
+            </span>
         </button>
     );
 }
