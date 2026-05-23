@@ -56,7 +56,7 @@ interface DataContextType {
   removeVideoPdf: (videoId: string, pdfUrl: string) => Promise<void>;
   extendProgram: (clientId: string, additionalWeeks: number, targets: MacroTargets) => Promise<void>;
 
-  sendMessage: (senderId: string, receiverId: string, senderName: string, text: string, imageFile?: File | null) => Promise<void>;
+  sendMessage: (senderId: string, receiverId: string, senderName: string, text: string, imageFile?: File | null, replyTo?: Message['replyTo']) => Promise<void>;
   markMessagesRead: (userId: string, otherUserId: string) => Promise<void>;
   getConversation: (userId1: string, userId2: string) => Message[];
   getUnreadCount: (userId: string) => number;

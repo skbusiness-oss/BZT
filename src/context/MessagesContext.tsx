@@ -23,7 +23,7 @@ function docToObj<T>(snap: QueryDocumentSnapshot<DocumentData>): T {
 export interface MessagesContextType {
   messages: Message[];
   loading: boolean;
-  sendMessage: (senderId: string, receiverId: string, senderName: string, text: string, imageFile?: File | null) => Promise<void>;
+  sendMessage: (senderId: string, receiverId: string, senderName: string, text: string, imageFile?: File | null, replyTo?: Message['replyTo']) => Promise<void>;
   markMessagesRead: (userId: string, otherUserId: string) => Promise<void>;
   getConversation: (userId1: string, userId2: string) => Message[];
   getUnreadCount: (userId: string) => number;
@@ -261,7 +261,7 @@ export const MessagesProvider = ({ children }: { children: ReactNode }) => {
   // FCM and the service worker own BACKGROUND notifications (app closed).
   // The effect above handles foreground delivery as a defense-in-depth
   // fallback so users see new messages even when FCM is failing.
-  const sendMessage = async (senderId: string, receiverId: string, senderName: string, text: string, imageFile?: File | null) => {
+  const sendMessage = async (senderId: string, receiverId: string, senderName: string, text: string, imageFile?: File | null, replyTo?: Message['replyTo']) => {
     // Client-side rate limit: 10 messages/minute
     if (!rateLimits.message(senderId)) {
       throw new Error('You are sending messages too fast. Please wait a moment.');
@@ -305,6 +305,11 @@ export const MessagesProvider = ({ children }: { children: ReactNode }) => {
       senderId, receiverId, senderName,
       text: trimmed,
       ...imagePayload,
+      // Only attach `replyTo` if the user actually picked a message
+      // to quote — Firestore can't store `undefined`, and writing
+      // null on every send wastes a field. The Message type marks it
+      // optional, so consumers handle absence cleanly.
+      ...(replyTo ? { replyTo } : {}),
       timestamp: serverTimestamp(),
       read: false,
     });

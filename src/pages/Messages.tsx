@@ -3,8 +3,19 @@ import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { useLanguage } from '../context/LanguageContext';
-import { Send, MessageSquare, ArrowLeft, ImagePlus, X, Loader2 } from 'lucide-react';
+import { Send, MessageSquare, ArrowLeft, ImagePlus, X, Loader2, Reply, Smile, CornerUpLeft } from 'lucide-react';
 import { tsToDate, tsToMillis } from '../lib/firestoreTime';
+import type { Message } from '../types';
+
+/** Compact emoji palette — covers reactions, encouragement, fitness
+ *  context, and general chat tone. Kept inline (no external picker
+ *  library) so the bundle stays small and the UI matches our gold-
+ *  on-dark aesthetic. Tap one to insert at the end of the message. */
+const QUICK_EMOJIS = [
+    '👍', '❤️', '😂', '😍', '🔥', '💪', '🙏', '🎉',
+    '👏', '🙌', '💯', '✨', '😮', '😢', '🤔', '😅',
+    '👌', '💥', '⚡', '🌟', '☀️', '🏆', '🥇', '🍎',
+] as const;
 
 export const Messages = () => {
     const { user } = useAuth();
@@ -23,6 +34,24 @@ export const Messages = () => {
     const [sendError, setSendError] = useState<string | null>(null);
     const chatEndRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const textInputRef = useRef<HTMLInputElement>(null);
+
+    // ── Reply state ───────────────────────────────────────────────
+    // selectedMessageId: which bubble the user has tapped to reveal
+    //   the action toolbar (Reply / dismiss). Null = no selection.
+    // replyTo: the captured snapshot of the message the next send
+    //   should quote. Cleared on send, on cancel, and on switching
+    //   conversations.
+    // messageRefs: per-message DOM refs so the "tap a reply quote
+    //   to jump to the original" feature can scroll the original
+    //   into view.
+    // highlightedMessageId: brief outline pulse on the jumped-to
+    //   message so the eye lands on it after the scroll.
+    const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
+    const [replyTo, setReplyTo] = useState<Message['replyTo'] | null>(null);
+    const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+    const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
+    const messageRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
     // Hardcoded coach UID also forces isCoach=true as a defensive anchor
     // so Coach Zaki sees the coach inbox even if the role lookup is stale.
@@ -174,6 +203,16 @@ export const Messages = () => {
         chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages, selectedUserId]);
 
+    // Reset per-conversation UI state when switching threads —
+    // dragging a staged reply / open emoji popup / selected bubble
+    // into a different conversation would be confusing.
+    useEffect(() => {
+        setReplyTo(null);
+        setSelectedMessageId(null);
+        setShowEmojiPicker(false);
+        setHighlightedMessageId(null);
+    }, [selectedUserId]);
+
     // Mark messages read when conversation is opened
     useEffect(() => {
         if (user && selectedUserId) {
@@ -320,27 +359,33 @@ export const Messages = () => {
         if ((!text.trim() && !selectedImage) || !selectedUserId || sending) return;
         const body = text.trim();
         const imageToSend = selectedImage;
-        // OPTIMISTIC CLEAR. Drop the typed text + the staged image
-        // BEFORE awaiting the network round-trip. Firestore's local
-        // cache reflects the pending write inside our onSnapshot
-        // listener within ~10ms (well before the server confirms),
-        // so the new bubble appears in the thread almost instantly.
-        // If we left the input full of the user's text until the
-        // server confirmed, even a 300ms network blip looks like
-        // "nothing happened — did it send?" — exactly the feedback
-        // the founder reported. Restore on error below.
+        const replyToSend = replyTo;
+        // OPTIMISTIC CLEAR. Drop the typed text, staged image, reply
+        // quote, and emoji picker BEFORE awaiting the network round-
+        // trip. Firestore's local cache reflects the pending write
+        // inside our onSnapshot listener within ~10ms (well before
+        // the server confirms), so the new bubble appears in the
+        // thread almost instantly. If we left the input full of the
+        // user's text until the server confirmed, even a 300ms
+        // network blip looks like "nothing happened — did it send?"
+        // — exactly the feedback the founder reported. Restore on
+        // error below.
         setText('');
         setSelectedImage(null);
+        setReplyTo(null);
+        setShowEmojiPicker(false);
         if (fileInputRef.current) fileInputRef.current.value = '';
         setSending(true);
         setSendError(null);
         try {
-            await sendMessage(user.id, selectedUserId, user.name, body, imageToSend);
+            await sendMessage(user.id, selectedUserId, user.name, body, imageToSend, replyToSend ?? undefined);
         } catch (err) {
-            // Restore the text so the user can retry without retyping.
-            // Image isn't restored — the file input was already cleared,
-            // so we just surface the error and let them re-attach.
+            // Restore the text + reply quote so the user can retry
+            // without re-staging the reply target. Image isn't restored
+            // — the file input was already cleared, so we surface the
+            // error and let them re-attach.
             setText(body);
+            setReplyTo(replyToSend);
             const code = (err as { code?: string })?.code ?? '(no code)';
             const msg = err instanceof Error ? err.message : 'Failed to send.';
             setSendError(`[${code}] ${msg}`);
@@ -349,6 +394,52 @@ export const Messages = () => {
         } finally {
             setSending(false);
         }
+    };
+
+    // ── Reply / jump-to-message helpers ──────────────────────────
+
+    /** Stage a reply to the given message. Captures a snippet of the
+     *  original at THIS moment so even if the original is deleted
+     *  later, the quoted text on the new message stays intact. */
+    const handleStartReply = (msg: Message) => {
+        const snippet = msg.text
+            ? (msg.text.length > 120 ? msg.text.slice(0, 117) + '...' : msg.text)
+            : '';
+        setReplyTo({
+            messageId: msg.id,
+            senderId: msg.senderId,
+            senderName: msg.senderName,
+            snippet,
+            wasImage: !!msg.imageUrl && !msg.text,
+        });
+        setSelectedMessageId(null);
+        // Focus the input so the user can immediately type the reply
+        // without an extra tap. requestAnimationFrame because the
+        // toolbar dismissing + state batching can move the input
+        // around for a frame.
+        requestAnimationFrame(() => textInputRef.current?.focus());
+    };
+
+    /** Tap-on-quote handler — scrolls the original message into the
+     *  viewport's center and pulses a ring around it for ~1.6s. */
+    const handleJumpToMessage = (messageId: string) => {
+        const el = messageRefs.current[messageId];
+        if (!el) return;
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setHighlightedMessageId(messageId);
+        window.setTimeout(() => setHighlightedMessageId(curr => (curr === messageId ? null : curr)), 1600);
+    };
+
+    /** Append an emoji to the current input. We don't try to insert
+     *  at the caret position because the standard <input type="text">
+     *  doesn't give us a stable selection across the popup interaction,
+     *  and the founder asked for "simple" — append is unambiguous. */
+    const handleInsertEmoji = (emoji: string) => {
+        setText(prev => prev + emoji);
+        // Keep the picker open so the user can stack reactions
+        // ("🔥🔥🔥") with a single tap each. Tap the smile button
+        // again to close.
+        requestAnimationFrame(() => textInputRef.current?.focus());
     };
 
     const formatTime = (ts: unknown) => {
@@ -464,29 +555,92 @@ export const Messages = () => {
                             )}
                             {conversation.map(msg => {
                                 const isMine = msg.senderId === user.id;
+                                const isSelected = selectedMessageId === msg.id;
+                                const isHighlighted = highlightedMessageId === msg.id;
                                 return (
-                                    <div key={msg.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
-                                        <div className={`max-w-[75%] rounded-2xl p-4 ${isMine
-                                            ? 'bg-gradient-to-br from-primary to-primary-container text-on-primary rounded-br-sm shadow-[0_10px_30px_rgba(230,195,100,0.15)]'
-                                            : 'bg-surface-container-high text-on-surface rounded-bl-sm ghost-border'
-                                            }`}>
-                                            {msg.imageUrl && (
-                                                <a href={msg.imageUrl} target="_blank" rel="noreferrer" className="block mb-3">
-                                                    <img
-                                                        src={msg.imageUrl}
-                                                        alt={msg.imageName || t('msgChatAttachmentAlt')}
-                                                        loading="lazy"
-                                                        decoding="async"
-                                                        className="max-h-72 w-full rounded-xl object-cover"
-                                                    />
-                                                </a>
+                                    <div
+                                        key={msg.id}
+                                        ref={(el) => { messageRefs.current[msg.id] = el; }}
+                                        className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}
+                                    >
+                                        <div className={`max-w-[75%] flex flex-col gap-1.5 ${isMine ? 'items-end' : 'items-start'}`}>
+                                            {/* Floating action toolbar — appears above the
+                                                bubble when selected. Just "Reply" for now;
+                                                Copy / Delete can slot in later. */}
+                                            {isSelected && (
+                                                <div className="flex items-center gap-1 bzt-rise-in">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleStartReply(msg)}
+                                                        className="px-3 py-1.5 rounded-full bg-surface-container-highest text-on-surface text-[11px] font-label font-bold uppercase tracking-widest flex items-center gap-1.5 hover:bg-primary/20 hover:text-primary transition-colors shadow-[0_4px_14px_rgba(0,0,0,0.25)]"
+                                                    >
+                                                        <Reply size={12} /> {t('msgReply')}
+                                                    </button>
+                                                </div>
                                             )}
-                                            {msg.text && (
-                                                <p className={`text-sm leading-relaxed font-body ${isMine ? 'font-medium' : ''}`}>{msg.text}</p>
-                                            )}
-                                            <p className={`text-[10px] font-label uppercase tracking-widest mt-2 font-bold ${isMine ? 'text-on-primary/60' : 'text-on-surface/40'}`}>
-                                                {formatTime(msg.timestamp)}
-                                            </p>
+
+                                            {/* The bubble itself — now a button so click
+                                                toggles selection. Stops propagation on
+                                                inner taps (image link, reply quote) so
+                                                they don't also toggle. */}
+                                            <button
+                                                type="button"
+                                                onClick={() => setSelectedMessageId(prev => prev === msg.id ? null : msg.id)}
+                                                className={`text-start rounded-2xl p-4 transition-all duration-300 ${isMine
+                                                    ? 'bg-gradient-to-br from-primary to-primary-container text-on-primary rounded-br-sm shadow-[0_10px_30px_rgba(230,195,100,0.15)]'
+                                                    : 'bg-surface-container-high text-on-surface rounded-bl-sm ghost-border'
+                                                } ${isSelected ? 'ring-2 ring-primary/55' : ''} ${isHighlighted ? 'ring-2 ring-primary scale-[1.02]' : ''}`}
+                                            >
+                                                {/* Reply quote box — present when this
+                                                    message was sent as a reply to another.
+                                                    Tap to jump to the original; we
+                                                    stopPropagation so the parent bubble's
+                                                    select-toggle doesn't fire. */}
+                                                {msg.replyTo && (
+                                                    <div
+                                                        role="button"
+                                                        tabIndex={0}
+                                                        onClick={(e) => { e.stopPropagation(); handleJumpToMessage(msg.replyTo!.messageId); }}
+                                                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); handleJumpToMessage(msg.replyTo!.messageId); } }}
+                                                        className={`mb-3 px-3 py-2 rounded-xl text-[12.5px] cursor-pointer transition-colors ${isMine
+                                                            ? 'bg-on-primary/15 hover:bg-on-primary/22 border-l-[3px] border-on-primary/50'
+                                                            : 'bg-surface-container-lowest hover:bg-surface-container border-l-[3px] border-primary/65'
+                                                        }`}
+                                                    >
+                                                        <div className={`text-[10px] font-label font-bold uppercase tracking-[0.16em] mb-0.5 flex items-center gap-1 ${isMine ? 'text-on-primary/80' : 'text-primary'}`}>
+                                                            <CornerUpLeft size={10} />
+                                                            {msg.replyTo.senderName}
+                                                        </div>
+                                                        <div className={`truncate font-body ${isMine ? 'text-on-primary/85' : 'text-on-surface/80'}`}>
+                                                            {msg.replyTo.wasImage ? `📷 ${t('msgPhotoFallback')}` : msg.replyTo.snippet}
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {msg.imageUrl && (
+                                                    <a
+                                                        href={msg.imageUrl}
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        onClick={(e) => e.stopPropagation()}
+                                                        className="block mb-3"
+                                                    >
+                                                        <img
+                                                            src={msg.imageUrl}
+                                                            alt={msg.imageName || t('msgChatAttachmentAlt')}
+                                                            loading="lazy"
+                                                            decoding="async"
+                                                            className="max-h-72 w-full rounded-xl object-cover"
+                                                        />
+                                                    </a>
+                                                )}
+                                                {msg.text && (
+                                                    <p className={`text-sm leading-relaxed font-body ${isMine ? 'font-medium' : ''}`}>{msg.text}</p>
+                                                )}
+                                                <p className={`text-[10px] font-label uppercase tracking-widest mt-2 font-bold ${isMine ? 'text-on-primary/60' : 'text-on-surface/40'}`}>
+                                                    {formatTime(msg.timestamp)}
+                                                </p>
+                                            </button>
                                         </div>
                                     </div>
                                 );
@@ -495,13 +649,61 @@ export const Messages = () => {
                         </div>
 
                         {/* Input */}
-                        <div className="p-4 bg-surface-container/50 border-t border-outline-variant/30">
+                        <div className="p-4 bg-surface-container/50 border-t border-outline-variant/30 relative">
                             {sendError && (
                                 <div
                                     role="alert"
                                     className="mb-3 px-4 py-2.5 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-[13px] font-body"
                                 >
                                     {sendError}
+                                </div>
+                            )}
+                            {/* Reply preview — shown above the input when
+                                a quoted message is staged. Tappable X
+                                cancels the reply (back to a normal send). */}
+                            {replyTo && (
+                                <div className="mb-3 flex items-stretch gap-3 rounded-2xl bg-surface-container-lowest border border-primary/30 p-3 bzt-rise-in" style={{ borderInlineStartWidth: 4, borderInlineStartColor: 'rgb(var(--primary))' }}>
+                                    <CornerUpLeft size={18} className="text-primary mt-0.5 shrink-0" />
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-[11px] font-label font-bold uppercase tracking-widest text-primary mb-0.5">
+                                            {t('msgReplyingTo')} {replyTo.senderName}
+                                        </p>
+                                        <p className="truncate text-[13px] text-on-surface/75 font-body">
+                                            {replyTo.wasImage ? `📷 ${t('msgPhotoFallback')}` : replyTo.snippet}
+                                        </p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setReplyTo(null)}
+                                        className="h-9 w-9 rounded-full bg-surface-container-high text-on-surface/60 hover:text-on-surface flex items-center justify-center shrink-0"
+                                        aria-label={t('msgCancelReply')}
+                                    >
+                                        <X size={16} />
+                                    </button>
+                                </div>
+                            )}
+                            {/* Emoji picker popup. Anchored above the
+                                input row; click outside (via the smile
+                                button toggle) or pick an emoji to keep
+                                stacking. */}
+                            {showEmojiPicker && (
+                                <div
+                                    className="absolute bottom-full left-4 right-4 mb-2 rounded-2xl bg-surface-container border border-outline-variant/40 shadow-[0_20px_50px_rgba(0,0,0,0.45)] bzt-rise-in z-20"
+                                    style={{ animationDuration: '160ms' }}
+                                >
+                                    <div className="grid grid-cols-8 gap-1.5 p-3">
+                                        {QUICK_EMOJIS.map(emoji => (
+                                            <button
+                                                key={emoji}
+                                                type="button"
+                                                onClick={() => handleInsertEmoji(emoji)}
+                                                className="text-2xl rounded-lg hover:bg-surface-container-highest active:scale-90 transition-all aspect-square flex items-center justify-center"
+                                                aria-label={`Insert ${emoji}`}
+                                            >
+                                                {emoji}
+                                            </button>
+                                        ))}
+                                    </div>
                                 </div>
                             )}
                             {imagePreview && (
@@ -538,12 +740,26 @@ export const Messages = () => {
                                     type="button"
                                     onClick={() => fileInputRef.current?.click()}
                                     disabled={sending}
-                                    className="w-14 h-14 rounded-full bg-surface-container-lowest text-on-surface/60 hover:text-primary hover:bg-surface-container-high flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed transition-all shrink-0"
+                                    className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-surface-container-lowest text-on-surface/60 hover:text-primary hover:bg-surface-container-high flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed transition-all shrink-0"
                                     aria-label={t('msgAttachImage')}
                                 >
                                     <ImagePlus size={20} />
                                 </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowEmojiPicker(v => !v)}
+                                    className={`w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center shrink-0 transition-all ${
+                                        showEmojiPicker
+                                            ? 'bg-primary/15 text-primary'
+                                            : 'bg-surface-container-lowest text-on-surface/60 hover:text-primary hover:bg-surface-container-high'
+                                    }`}
+                                    aria-label={t('msgEmojiPicker')}
+                                    aria-expanded={showEmojiPicker}
+                                >
+                                    <Smile size={20} />
+                                </button>
                                 <input
+                                    ref={textInputRef}
                                     type="text"
                                     value={text}
                                     onChange={e => setText(e.target.value)}

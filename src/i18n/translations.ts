@@ -1124,6 +1124,10 @@ export const translations = {
     msgPhotoFallback:          { en: 'Photo',                                ar: 'صورة' },
     msgRemoveImage:            { en: 'Remove image',                         ar: 'إزالة الصورة' },
     msgAttachImage:            { en: 'Attach image',                         ar: 'إرفاق صورة' },
+    msgReply:                  { en: 'Reply',                                ar: 'رد' },
+    msgReplyingTo:             { en: 'Replying to',                          ar: 'الرد على' },
+    msgCancelReply:            { en: 'Cancel reply',                         ar: 'إلغاء الرد' },
+    msgEmojiPicker:            { en: 'Emojis',                               ar: 'الرموز التعبيرية' },
     msgChatAttachmentAlt:      { en: 'Chat attachment',                      ar: 'مرفق المحادثة' },
     msgUnreadAria:             { en: 'unread messages',                      ar: 'رسائل غير مقروءة' },
 

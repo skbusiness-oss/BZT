@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useData }     from '../context/DataContext';
 import { useAuth }     from '../context/AuthContext';
@@ -289,34 +289,40 @@ export const Workouts = () => {
                             </button>
                         )}
                     </div>
-                    {/* Tidy paired grid — 2 bubbles per row on phone,
-                        3 on small tablets, 4 on desktop. Uniform size
-                        keeps the visual rhythm balanced (the previous
-                        size-by-popularity variation looked organic but
-                        made the page feel asymmetric on small screens).
-                        Soft gold halo underneath the grid gives the
-                        active bubble somewhere to glow into. */}
-                    <div className="relative">
-                        <div
-                            aria-hidden
-                            className="absolute inset-0 pointer-events-none"
-                            style={{
-                                background: 'radial-gradient(circle at center, rgb(var(--primary) / 0.06) 0%, transparent 65%)',
-                                filter: 'blur(20px)',
-                            }}
-                        />
-                        <div className="relative grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 place-items-center gap-x-3 gap-y-4 sm:gap-x-4 sm:gap-y-5 py-3">
-                            {allCategories.map(cat => (
-                                <CategoryBrowserCard
-                                    key={cat}
-                                    label={cat}
-                                    count={categoryCounts[cat] ?? 0}
-                                    active={categoryFilter === cat}
-                                    onClick={() => handleCategoryFilter(cat)}
-                                />
-                            ))}
-                        </div>
-                    </div>
+                    {/* Swipeable horizontal carousel. CSS scroll-snap
+                        gives the native iOS-style snap-to-bubble feel
+                        without any gesture library — the browser
+                        handles inertia, momentum, snap points, and
+                        rubber-banding for free.
+
+                        Layout:
+                        - Container is `overflow-x-auto snap-x mandatory`
+                        - Each bubble is `snap-center shrink-0`
+                        - Edge padding (px-1/2 of container minus 1/2
+                          of bubble) lets the first and last bubble
+                          center themselves when scrolled to either end
+                        - Fade-out gradients on each edge hint that
+                          there's more content beyond the viewport
+                        - Scrollbar hidden visually (-ms-overflow-style
+                          + ::-webkit-scrollbar:none via global CSS)
+                          so the swipe feels like one continuous gesture.
+
+                        Why a carousel beats the previous grid:
+                        - On a 360px phone, 4 fixed columns are too
+                          cramped; 2 cols wastes a lot of vertical
+                          space when there are 8+ categories
+                        - Native swipe is the muscle memory people
+                          have from iOS App Library, Apple Watch home,
+                          and every modern picker
+                        - One bubble is always "in focus" (centered),
+                          which matches the Apple Watch metaphor the
+                          founder originally asked for. */}
+                    <CategoryCarousel
+                        categories={allCategories}
+                        counts={categoryCounts}
+                        activeFilter={categoryFilter}
+                        onPick={handleCategoryFilter}
+                    />
                 </div>
 
                 {/* Goal filter — only when a category is picked.
@@ -389,7 +395,7 @@ export const Workouts = () => {
                 page quiet if the user picked a category that's
                 only represented in the library.
             ════════════════════════════════════════════════ */}
-            {categoryFilter !== 'All' && filteredPrograms.length > 0 && (
+            {!!categoryFilter && filteredPrograms.length > 0 && (
                 <div className="space-y-8">
                     {groupedPrograms.map(([split, programs]) => (
                         <section key={split} className="space-y-4">
@@ -583,7 +589,7 @@ export const Workouts = () => {
                 gate: only when a category is selected AND there's
                 content for it.
             ════════════════════════════════════════════════ */}
-            {categoryFilter !== 'All' && libraryWorkouts.length > 0 && (
+            {!!categoryFilter && libraryWorkouts.length > 0 && (
                 <div className="space-y-8">
                     {groupedLibraryWorkouts.map(([category, items]) => (
                         <section key={category} className="space-y-4">
@@ -669,7 +675,7 @@ export const Workouts = () => {
             )}
 
             {/* Coach-only custom workouts for the selected category. */}
-            {isCoach && categoryFilter !== 'All' && customWorkouts.length > 0 && (
+            {isCoach && !!categoryFilter && customWorkouts.length > 0 && (
                 <div className="grid grid-cols-1 gap-6">
                     {customWorkouts.map(workout => {
                         const isExpanded = expandedWorkout === workout.id;
@@ -873,6 +879,151 @@ export const Workouts = () => {
         </div>
     );
 };
+
+// ─────────────────────────────────────────────────────────────────────
+// CategoryCarousel — horizontally scrollable strip of category bubbles
+// with CSS scroll-snap. Replaces the previous static 2-col grid.
+//
+// Why a carousel: the founder wanted a swipe-with-finger feel like the
+// Apple Watch home or App Library — one bubble centered, neighbours
+// peeking from the sides. Native scroll-snap delivers that with zero
+// JS gesture code and the browser handles inertia + momentum + rubber-
+// banding for free, which a hand-rolled solution never quite nails.
+//
+// Implementation details:
+// - The scroll container is `overflow-x-auto snap-x snap-mandatory`
+// - Each bubble cell is `snap-center shrink-0` so the browser snaps
+//   that cell to the container's horizontal center after a swipe
+// - Container's left/right padding is half the container width minus
+//   half the bubble width — that lets the FIRST and LAST bubbles
+//   centre themselves when scrolled to either extreme (otherwise the
+//   first bubble could never reach the centre snap point)
+// - Edge fade gradients hint at off-screen content
+// - The bubble matching `activeFilter` auto-scrolls into the centre
+//   on mount + whenever the filter changes (so URL deep links and
+//   programmatic changes land visibly)
+// - Scrollbar is hidden via inline style + global CSS (see index.css
+//   for the .bzt-scrollbar-hide utility if you want to reuse it)
+// ─────────────────────────────────────────────────────────────────────
+function CategoryCarousel({
+    categories,
+    counts,
+    activeFilter,
+    onPick,
+}: {
+    categories: string[];
+    counts: Record<string, number>;
+    activeFilter: string;
+    onPick: (cat: string) => void;
+}) {
+    const scrollerRef = useRef<HTMLDivElement | null>(null);
+    const bubbleRefs  = useRef<Record<string, HTMLDivElement | null>>({});
+
+    // Auto-centre the active bubble. Fires on mount + whenever the
+    // filter changes from outside the carousel (e.g. via URL param).
+    // We use scrollIntoView with `inline: 'center'` instead of writing
+    // scrollLeft directly so the browser handles smooth-scrolling and
+    // respects user prefers-reduced-motion.
+    useEffect(() => {
+        if (!activeFilter) return;
+        const el = bubbleRefs.current[activeFilter];
+        if (!el) return;
+        // Schedule on the next frame so layout has settled (avoids a
+        // jump when the carousel renders for the first time).
+        requestAnimationFrame(() => {
+            el.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+        });
+    }, [activeFilter]);
+
+    return (
+        <div className="relative">
+            {/* Edge fade hints — gradient over-paint on each side of
+                the scroll viewport. The from-* color matches the panel
+                background so the gradient melts cleanly into the card.
+                pointer-events-none so taps still hit the bubbles
+                underneath. */}
+            <div
+                aria-hidden
+                className="absolute inset-y-0 left-0 w-10 sm:w-12 z-10 pointer-events-none"
+                style={{ background: 'linear-gradient(to right, rgb(var(--surface-container-low)) 0%, transparent 100%)' }}
+            />
+            <div
+                aria-hidden
+                className="absolute inset-y-0 right-0 w-10 sm:w-12 z-10 pointer-events-none"
+                style={{ background: 'linear-gradient(to left, rgb(var(--surface-container-low)) 0%, transparent 100%)' }}
+            />
+            {/* Ambient gold halo behind the centred bubble — same
+                trick as the cloud version, just narrower. */}
+            <div
+                aria-hidden
+                className="absolute inset-0 pointer-events-none"
+                style={{
+                    background: 'radial-gradient(ellipse 200px 120px at center, rgb(var(--primary) / 0.10) 0%, transparent 70%)',
+                    filter: 'blur(18px)',
+                }}
+            />
+
+            <div
+                ref={scrollerRef}
+                className="relative flex items-center gap-4 sm:gap-5 overflow-x-auto py-5 snap-x snap-mandatory scroll-smooth"
+                style={{
+                    // Hide the scrollbar in WebKit + Firefox + IE. The
+                    // global `*::-webkit-scrollbar` rule in index.css
+                    // doesn't apply because we'd want bars elsewhere;
+                    // inline these so the carousel is self-contained.
+                    scrollbarWidth: 'none',
+                    msOverflowStyle: 'none',
+                    // Allow the first & last bubble to reach centre.
+                    // 50% of the container minus half the bubble (56px = 112/2).
+                    paddingLeft: 'calc(50% - 56px)',
+                    paddingRight: 'calc(50% - 56px)',
+                    WebkitOverflowScrolling: 'touch',
+                }}
+            >
+                {/* WebKit scrollbar hide — inline <style> so we don't
+                    need to touch the global stylesheet for a one-off. */}
+                <style>{`.bzt-cat-scroller::-webkit-scrollbar { display: none; }`}</style>
+
+                {categories.map(cat => (
+                    <div
+                        key={cat}
+                        ref={(el) => { bubbleRefs.current[cat] = el; }}
+                        className="snap-center shrink-0"
+                    >
+                        <CategoryBrowserCard
+                            label={cat}
+                            count={counts[cat] ?? 0}
+                            active={activeFilter === cat}
+                            onClick={() => onPick(cat)}
+                        />
+                    </div>
+                ))}
+            </div>
+
+            {/* Pagination dots — tiny visual indicator of how many
+                bubbles total + which one is centred. Tap a dot to
+                scroll to that bubble. Hidden on hover-capable devices
+                (desktop with mouse) since the scrollbar / mousewheel
+                give the same info there. */}
+            <div className="flex items-center justify-center gap-1.5 mt-1 md:hidden" aria-hidden>
+                {categories.map(cat => (
+                    <button
+                        key={cat}
+                        type="button"
+                        onClick={() => onPick(cat)}
+                        className={clsx(
+                            'h-1.5 rounded-full transition-all',
+                            activeFilter === cat
+                                ? 'w-5 bg-primary'
+                                : 'w-1.5 bg-on-surface/25'
+                        )}
+                        aria-label={`Jump to ${cat}`}
+                    />
+                ))}
+            </div>
+        </div>
+    );
+}
 
 // ─────────────────────────────────────────────────────────────────────
 // CategoryBrowserCard — circular bubble category picker. Uniform size

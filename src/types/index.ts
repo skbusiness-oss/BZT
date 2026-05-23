@@ -481,6 +481,19 @@ export interface Message {
     imageSize?: number;
     timestamp: string;
     read: boolean;
+    /** WhatsApp-style "reply to" reference. Set when the user taps
+     *  "Reply" on another message before composing this one. The
+     *  snippet is captured at send time so even if the original
+     *  message is later deleted, the quote box still renders.
+     *  messageId is used to scroll the original into view when the
+     *  reader taps the quote. */
+    replyTo?: {
+        messageId: string;
+        senderId: string;
+        senderName: string;
+        snippet: string;   // first ~120 chars of original text, or "Photo" if image-only
+        wasImage?: boolean;
+    };
 }
 
 // --- Community ---
