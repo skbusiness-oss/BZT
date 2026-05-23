@@ -135,8 +135,16 @@ export const Login = () => {
                 </button>
             </div>
 
-            {/* Main grid — single-screen experience on desktop */}
-            <div className="max-w-7xl mx-auto px-5 md:px-10 lg:px-14 min-h-screen flex items-center pt-24 pb-12 relative z-10">
+            {/* Main grid — single-screen experience on desktop.
+                NOTE: uses flex-col, NOT flex items-center. The container
+                wraps two siblings now (the hero/sign-in grid AND the
+                legal footer below). With a row-flex parent both would
+                sit side by side and split the viewport in half — which
+                in RTL pushes everything to one side and leaves the
+                other half blank. flex-col + justify-center keeps the
+                grid vertically centered while letting the footer fall
+                naturally below it. */}
+            <div className="max-w-7xl mx-auto px-5 md:px-10 lg:px-14 min-h-screen flex flex-col justify-center pt-24 pb-12 relative z-10">
                 <div className="w-full grid grid-cols-1 lg:grid-cols-[1.3fr_1fr] gap-10 lg:gap-14">
 
                     {/* HERO + PILLS + STATS — left column */}
