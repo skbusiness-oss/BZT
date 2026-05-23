@@ -117,68 +117,60 @@ const FullScreenLoader = () => {
                 }}
             />
 
-            {/* Brand mark — replaces the gold-text wordmark. We use a
-                bare <img> instead of <BrandLogo> because this loader
-                can render before any React context boots, and BrandLogo
-                imports useLanguage. The breathe + shimmer animations
-                are defined in src/index.css (bzt-breathe + bzt-shimmer).
-                Keeping the inline gold ring spinner around the logo so
-                there's STILL a kinetic "in progress" cue when the logo
-                itself is mid-breath — the founder asked for an animated
-                logo on load, but a pure breathe with no motion ring can
-                read as "frozen" on slow networks. */}
-            <div className="relative flex items-center justify-center">
-                {/* Concentric gold rings, sized just outside the logo
-                    so they orbit it. Slow outer ring + faster reverse
-                    inner ring — same physics as the previous spinner,
-                    now framing the brand mark. */}
-                <div
-                    aria-hidden
-                    className="absolute w-44 h-44 rounded-full border-2 border-transparent animate-spin"
+            {/* Wordmark — gold gradient text, anchors the brand even
+                before any real UI renders. Text colors are explicit
+                rgba literals (NOT theme tokens) because this component
+                can render before ThemeProvider boots — using
+                text-on-surface here resolves to nothing, leaving the
+                label invisible / dark-on-dark.
+
+                Note: the brand-image variant of this loader (img +
+                breathe animation) was tried and pulled per founder
+                direction — kept the original text wordmark + spinner
+                because the typographic version reads cleaner during
+                the brief load window. */}
+            <div className="flex flex-col items-center gap-3">
+                <span
+                    className="font-label text-[10px] font-bold uppercase tracking-[0.4em]"
+                    style={{ color: 'rgb(255 255 255 / 0.6)' }}
+                >
+                    BioZackTeam
+                </span>
+                <h1
+                    className="font-display font-extrabold text-3xl md:text-4xl tracking-tighter"
                     style={{
-                        borderTopColor: 'rgb(230 195 100 / 0.75)',
-                        borderRightColor: 'rgb(230 195 100 / 0.20)',
-                        animationDuration: '2.4s',
+                        background: 'linear-gradient(135deg, rgb(255 224 143), rgb(230 195 100) 60%, rgb(201 168 76))',
+                        WebkitBackgroundClip: 'text',
+                        WebkitTextFillColor: 'transparent',
+                        backgroundClip: 'text',
+                    }}
+                >
+                    {loadingHeadline}
+                </h1>
+            </div>
+
+            {/* Ring spinner — two concentric arcs in primary gold, sized
+                so it reads as "in progress" not "frozen". The outer ring
+                is a slow spin, the inner one a faster counter-spin for
+                a more deliberate, kinetic feel. */}
+            <div className="relative w-16 h-16">
+                <div
+                    className="absolute inset-0 rounded-full border-2 border-transparent animate-spin"
+                    style={{
+                        borderTopColor: 'rgb(230 195 100)',
+                        borderRightColor: 'rgb(230 195 100 / 0.4)',
+                        animationDuration: '1.4s',
                     }}
                 />
                 <div
-                    aria-hidden
-                    className="absolute w-36 h-36 rounded-full border-2 border-transparent animate-spin"
+                    className="absolute inset-2 rounded-full border-2 border-transparent animate-spin"
                     style={{
-                        borderBottomColor: 'rgb(255 224 143 / 0.55)',
-                        animationDuration: '1.6s',
+                        borderBottomColor: 'rgb(255 224 143)',
+                        animationDuration: '0.9s',
                         animationDirection: 'reverse',
                     }}
                 />
-                {/* Brand logo — breathes (gentle scale 0.95 → 1.0 → 0.95
-                    on a 2.2s loop) so the mark feels alive instead of
-                    static while the rings spin around it. Drop shadow
-                    gold gives it depth against the black background. */}
-                <img
-                    src="/brand-logo.png?v=4"
-                    alt={translate('brandLogoAlt') || 'BioZackTeam'}
-                    width={120}
-                    height={120}
-                    draggable={false}
-                    className="relative w-[120px] h-[120px] object-contain select-none"
-                    style={{
-                        animation: 'bzt-breathe 2.2s ease-in-out infinite',
-                        filter: 'drop-shadow(0 8px 28px rgba(230, 195, 100, 0.35))',
-                    }}
-                />
             </div>
-
-            {/* Loading headline — keeps the founder-direction phrasing
-                ("Loading"/"جاري التحميل") just below the brand mark, in
-                a smaller weight than before since the visual hierarchy
-                is now LOGO → HEADLINE → status message instead of
-                WORDMARK + HEADLINE + spinner. */}
-            <h1
-                className="font-headline font-extrabold text-xl md:text-2xl tracking-tight"
-                style={{ color: 'rgb(255 224 143 / 0.92)' }}
-            >
-                {loadingHeadline}
-            </h1>
 
             {/* Rotating message. Fixed height so the layout doesn't jump
                 between messages of different widths. key forces a small

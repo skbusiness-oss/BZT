@@ -234,21 +234,6 @@ body {
   100% { background-position: 200% 0; }
 }
 
-/* Logo breathe — gentle scale + glow pulse used by FullScreenLoader.
-   Subtle (95%-100% scale) so the brand mark feels alive without
-   becoming distracting. Paired with concentric spinning rings around
-   the logo so there's a clear "in progress" cue while the logo
-   breathes. */
-@keyframes bzt-breathe {
-  0%, 100% {
-    transform: scale(0.95);
-    opacity: 0.92;
-  }
-  50% {
-    transform: scale(1);
-    opacity: 1;
-  }
-}
 
 /* Honor reduced-motion preferences. Animations don't flat-out vanish —
    they collapse to a fade so the change is still readable. */
