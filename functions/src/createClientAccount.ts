@@ -54,15 +54,10 @@ import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue, Firestore } from 'firebase-admin/firestore';
 import { throttle } from './rateLimit';
 
-// Macros default used to seed coaching client docs. Mirrors the
-// constant in src/lib/constants.ts (DEFAULT_TARGETS). Kept inline
-// here so functions/ doesn't need to import from src/.
-const DEFAULT_CLIENT_MACROS = {
-    calories: 2200,
-    protein: 180,
-    carbs: 220,
-    fats: 70,
-} as const;
+// (No `macros` seed on users/{uid}. Real macro targets live in
+// dietProfile / userDiets, not on the user doc — an earlier draft
+// of this function seeded a placeholder here, which was harmless
+// but never read by anything. Removed for clarity.)
 
 type CreatableRole = 'client' | 'community';
 
@@ -202,7 +197,6 @@ export const createClientAccount = onCall(
                 createdAt: FieldValue.serverTimestamp(),
                 createdBy: callerUid,
                 createdVia: 'coach-add-client',
-                macros: targetRole === 'client' ? DEFAULT_CLIENT_MACROS : null,
                 stripeCustomerId: null,
                 disabled: false,
             });

@@ -319,14 +319,28 @@ export const Messages = () => {
     const handleSend = async () => {
         if ((!text.trim() && !selectedImage) || !selectedUserId || sending) return;
         const body = text.trim();
+        const imageToSend = selectedImage;
+        // OPTIMISTIC CLEAR. Drop the typed text + the staged image
+        // BEFORE awaiting the network round-trip. Firestore's local
+        // cache reflects the pending write inside our onSnapshot
+        // listener within ~10ms (well before the server confirms),
+        // so the new bubble appears in the thread almost instantly.
+        // If we left the input full of the user's text until the
+        // server confirmed, even a 300ms network blip looks like
+        // "nothing happened — did it send?" — exactly the feedback
+        // the founder reported. Restore on error below.
+        setText('');
+        setSelectedImage(null);
+        if (fileInputRef.current) fileInputRef.current.value = '';
         setSending(true);
         setSendError(null);
         try {
-            await sendMessage(user.id, selectedUserId, user.name, body, selectedImage);
-            setText('');
-            setSelectedImage(null);
-            if (fileInputRef.current) fileInputRef.current.value = '';
+            await sendMessage(user.id, selectedUserId, user.name, body, imageToSend);
         } catch (err) {
+            // Restore the text so the user can retry without retyping.
+            // Image isn't restored — the file input was already cleared,
+            // so we just surface the error and let them re-attach.
+            setText(body);
             const code = (err as { code?: string })?.code ?? '(no code)';
             const msg = err instanceof Error ? err.message : 'Failed to send.';
             setSendError(`[${code}] ${msg}`);
@@ -535,8 +549,13 @@ export const Messages = () => {
                                     onChange={e => setText(e.target.value)}
                                     onKeyDown={e => { if (e.key === 'Enter') void handleSend(); }}
                                     placeholder={t('typeMessage')}
-                                    disabled={sending}
-                                    className="flex-1 bg-surface-container-lowest rounded-full px-6 py-4 text-sm font-body text-on-surface placeholder-on-surface/30 border-none outline-none focus:ring-1 focus:ring-primary/30 disabled:opacity-60"
+                                    // Intentionally NOT disabled while sending. handleSend
+                                    // clears the input optimistically and the previous send
+                                    // is already in-flight, so blocking the user from typing
+                                    // the next message buys nothing and makes the chat feel
+                                    // sticky. The send BUTTON below stays disabled to
+                                    // prevent double-fire on the same payload.
+                                    className="flex-1 bg-surface-container-lowest rounded-full px-6 py-4 text-sm font-body text-on-surface placeholder-on-surface/30 border-none outline-none focus:ring-1 focus:ring-primary/30"
                                 />
                                 <button
                                     onClick={() => void handleSend()}

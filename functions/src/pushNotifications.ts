@@ -221,6 +221,15 @@ async function pushToUser(
 export const onMessageCreated = onDocumentCreated(
     {
         document: 'messages/{messageId}',
+        // Pin region explicitly. Without this the function deploys
+        // to us-central1 by default but Eventarc's region-discovery
+        // for the trigger can fall back to a neighbouring region,
+        // and the cross-region hop nullifies the `minInstances: 1`
+        // warm-instance benefit (the warm container is the WRONG
+        // region's). Founder-reported "push arrives minutes late"
+        // tracked back to exactly this — cold start because the
+        // warm instance wasn't receiving the events.
+        region: 'us-central1',
         minInstances: 1,
         concurrency: 80,
     },
@@ -284,6 +293,7 @@ export const onMessageCreated = onDocumentCreated(
 export const onCheckInReviewed = onDocumentUpdated(
     {
         document: 'checkIns/{checkInId}',
+        region: 'us-central1', // same reason as onMessageCreated above
         minInstances: 1,
         concurrency: 80,
     },
