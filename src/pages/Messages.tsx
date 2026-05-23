@@ -53,6 +53,27 @@ export const Messages = () => {
     const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
     const messageRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
+    // ── Swipe-to-reply state ─────────────────────────────────────
+    // WhatsApp-style swipe gesture: drag a message bubble horizontally
+    // past a threshold to stage a reply, like the muscle memory every
+    // mobile messaging app uses.
+    //
+    // - swipingMsgId: which bubble is currently being dragged (only
+    //   ONE bubble responds to pointer moves at a time so multiple
+    //   simultaneous swipes can't fight)
+    // - swipeDelta: live X offset in px; clamped to [-100, 100]
+    // - swipeStartRef: capture pointer start coords + direction guard
+    //
+    // The swipe DIRECTION that triggers reply depends on RTL/LTR + who
+    // sent the message — we want the gesture to feel like "I'm
+    // dragging the bubble towards the input" regardless of layout.
+    // See the swipe handlers below for the per-message direction.
+    const [swipingMsgId, setSwipingMsgId] = useState<string | null>(null);
+    const [swipeDelta, setSwipeDelta] = useState(0);
+    const swipeStartRef = useRef<{ x: number; y: number; abandoned: boolean }>({ x: 0, y: 0, abandoned: false });
+    const SWIPE_THRESHOLD = 60;
+    const SWIPE_MAX = 100;
+
     // Hardcoded coach UID also forces isCoach=true as a defensive anchor
     // so Coach Zaki sees the coach inbox even if the role lookup is stale.
     const HARDCODED_COACH_UID = 'Y9DlGI9kF6dPFPBh4cDvMnxbayB3';
@@ -442,6 +463,78 @@ export const Messages = () => {
         requestAnimationFrame(() => textInputRef.current?.focus());
     };
 
+    // ── Swipe-to-reply pointer handlers ──────────────────────────
+    // We use pointer events (not touch + mouse separately) so the
+    // same code path runs on phone, tablet, and desktop with a
+    // mouse. A small vertical-vs-horizontal guard at the start of
+    // the gesture aborts the swipe if the user is actually
+    // scrolling — otherwise scrolling a long thread on phone would
+    // jitter every message as the pointer passes over it.
+    const beginSwipe = (e: React.PointerEvent, msg: Message) => {
+        // Don't start swipes from interactive children (image link,
+        // reply quote box) — those have their own onClick handlers
+        // and shouldn't double as a drag handle.
+        const target = e.target as HTMLElement;
+        if (target.closest('a, [role="button"]') && target !== e.currentTarget) {
+            // The bubble itself is also a button (role=button is implicit)
+            // but the closest('a, [role="button"]') above will return the
+            // bubble for a tap on the bubble itself. We only abort if a
+            // DIFFERENT child interactive element was hit.
+            const directInteractive = target.closest('a, [role="button"]');
+            if (directInteractive && directInteractive !== e.currentTarget) return;
+        }
+        swipeStartRef.current = { x: e.clientX, y: e.clientY, abandoned: false };
+        setSwipingMsgId(msg.id);
+        setSwipeDelta(0);
+    };
+
+    const continueSwipe = (e: React.PointerEvent, msg: Message) => {
+        if (swipingMsgId !== msg.id || swipeStartRef.current.abandoned) return;
+        const dx = e.clientX - swipeStartRef.current.x;
+        const dy = e.clientY - swipeStartRef.current.y;
+        // First sufficient movement determines if this is a horizontal
+        // gesture (swipe) or vertical (scroll). 10px of movement is
+        // enough signal; below that we wait.
+        if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
+        if (Math.abs(dy) > Math.abs(dx)) {
+            // Vertical-dominant — let the scroll happen, kill the swipe.
+            swipeStartRef.current.abandoned = true;
+            setSwipingMsgId(null);
+            setSwipeDelta(0);
+            return;
+        }
+        // Direction filter: in LTR you reply to "their" messages with
+        // a right swipe and to "your own" with a left swipe — feels
+        // like dragging the bubble towards the input row at the bottom.
+        // In RTL the writing direction flips, so the trigger flips
+        // too. To keep this simple AND match WhatsApp behaviour,
+        // accept ONLY the direction that points away from the
+        // bubble's edge — i.e. you can ALWAYS swipe in the direction
+        // that "pulls" the bubble towards the centre.
+        // Practically: for mine (right-aligned in LTR), swipe LEFT
+        //              for theirs (left-aligned in LTR), swipe RIGHT
+        //              In RTL, both flip.
+        const isMine = msg.senderId === user?.id;
+        const expectsPositive = isRTL ? isMine : !isMine; // right-swipe positive dx
+        const clamped = Math.max(-SWIPE_MAX, Math.min(SWIPE_MAX, dx));
+        // Only show drag in the expected direction; opposite direction
+        // does nothing visually so the gesture feels intentional.
+        const allowed = expectsPositive ? Math.max(0, clamped) : Math.min(0, clamped);
+        setSwipeDelta(allowed);
+    };
+
+    const endSwipe = (msg: Message) => {
+        if (swipingMsgId !== msg.id) return;
+        if (Math.abs(swipeDelta) >= SWIPE_THRESHOLD) {
+            handleStartReply(msg);
+        }
+        // Spring back regardless — staging the reply doesn't keep the
+        // bubble offset, the reply preview moves to the input area.
+        setSwipeDelta(0);
+        setSwipingMsgId(null);
+        swipeStartRef.current.abandoned = false;
+    };
+
     const formatTime = (ts: unknown) => {
         // Firestore returns Timestamp objects from serverTimestamp() writes.
         // Pending writes appear as null on the writer's local snapshot
@@ -557,13 +650,26 @@ export const Messages = () => {
                                 const isMine = msg.senderId === user.id;
                                 const isSelected = selectedMessageId === msg.id;
                                 const isHighlighted = highlightedMessageId === msg.id;
+                                // RTL-aware side picking. In LTR: mine→right,
+                                // theirs→left. In Arabic the writing direction
+                                // flips, so the conventional "self" side flips
+                                // too: mine→left, theirs→right. XOR-style.
+                                const showOnEndSide = isRTL ? !isMine : isMine;
+                                // Bubble corner: the "tail" corner sits on the
+                                // side closest to the screen edge. Flip with RTL.
+                                const tailClass = isMine
+                                    ? (isRTL ? 'rounded-bl-sm' : 'rounded-br-sm')
+                                    : (isRTL ? 'rounded-br-sm' : 'rounded-bl-sm');
+                                // Live swipe offset for this message only. Other
+                                // messages render with `undefined` transform.
+                                const isSwiping = swipingMsgId === msg.id;
                                 return (
                                     <div
                                         key={msg.id}
                                         ref={(el) => { messageRefs.current[msg.id] = el; }}
-                                        className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}
+                                        className={`flex ${showOnEndSide ? 'justify-end' : 'justify-start'}`}
                                     >
-                                        <div className={`max-w-[75%] flex flex-col gap-1.5 ${isMine ? 'items-end' : 'items-start'}`}>
+                                        <div className={`max-w-[75%] flex flex-col gap-1.5 ${showOnEndSide ? 'items-end' : 'items-start'}`}>
                                             {/* Floating action toolbar — appears above the
                                                 bubble when selected. Just "Reply" for now;
                                                 Copy / Delete can slot in later. */}
@@ -580,17 +686,47 @@ export const Messages = () => {
                                             )}
 
                                             {/* The bubble itself — now a button so click
-                                                toggles selection. Stops propagation on
-                                                inner taps (image link, reply quote) so
+                                                toggles selection, AND pointer events for
+                                                horizontal swipe-to-reply. Stops propagation
+                                                on inner taps (image link, reply quote) so
                                                 they don't also toggle. */}
                                             <button
                                                 type="button"
                                                 onClick={() => setSelectedMessageId(prev => prev === msg.id ? null : msg.id)}
-                                                className={`text-start rounded-2xl p-4 transition-all duration-300 ${isMine
-                                                    ? 'bg-gradient-to-br from-primary to-primary-container text-on-primary rounded-br-sm shadow-[0_10px_30px_rgba(230,195,100,0.15)]'
-                                                    : 'bg-surface-container-high text-on-surface rounded-bl-sm ghost-border'
+                                                onPointerDown={(e) => beginSwipe(e, msg)}
+                                                onPointerMove={(e) => continueSwipe(e, msg)}
+                                                onPointerUp={() => endSwipe(msg)}
+                                                onPointerCancel={() => endSwipe(msg)}
+                                                style={{
+                                                    transform: isSwiping && swipeDelta !== 0 ? `translateX(${swipeDelta}px)` : undefined,
+                                                    transition: isSwiping ? 'none' : 'transform 240ms cubic-bezier(0.34, 1.56, 0.64, 1)',
+                                                    touchAction: 'pan-y',
+                                                }}
+                                                className={`relative text-start rounded-2xl p-4 ${isMine
+                                                    ? `bg-gradient-to-br from-primary to-primary-container text-on-primary ${tailClass} shadow-[0_10px_30px_rgba(230,195,100,0.15)]`
+                                                    : `bg-surface-container-high text-on-surface ${tailClass} ghost-border`
                                                 } ${isSelected ? 'ring-2 ring-primary/55' : ''} ${isHighlighted ? 'ring-2 ring-primary scale-[1.02]' : ''}`}
                                             >
+                                                {/* Reply hint icon — fades in as the user
+                                                    swipes past ~25% of threshold. Sits on
+                                                    the side the bubble is being dragged
+                                                    FROM (since the bubble moves AWAY from
+                                                    it). At full threshold the icon is
+                                                    100% opacity = "release to reply". */}
+                                                {isSwiping && Math.abs(swipeDelta) > 15 && (
+                                                    <span
+                                                        aria-hidden
+                                                        className="absolute top-1/2 -translate-y-1/2 flex items-center justify-center w-9 h-9 rounded-full bg-primary/15 text-primary pointer-events-none"
+                                                        style={{
+                                                            [swipeDelta > 0 ? 'left' : 'right']: -52,
+                                                            opacity: Math.min(1, Math.abs(swipeDelta) / SWIPE_THRESHOLD),
+                                                            transform: `scale(${Math.min(1, 0.6 + 0.4 * (Math.abs(swipeDelta) / SWIPE_THRESHOLD))}) translateY(-50%)`,
+                                                            transformOrigin: 'center',
+                                                        } as React.CSSProperties}
+                                                    >
+                                                        <Reply size={16} />
+                                                    </span>
+                                                )}
                                                 {/* Reply quote box — present when this
                                                     message was sent as a reply to another.
                                                     Tap to jump to the original; we
