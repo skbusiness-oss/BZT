@@ -52,38 +52,24 @@ export function buildEmbedUrl(raw: string): { embedUrl: string; platform: 'youtu
 }
 
 /**
- * Build a YouTube embed URL that auto-loads the FIRST search result for
- * the given query — no API key required.
+ * youtubeSearchPageUrl — build a YouTube search-results URL for the
+ * given exercise name. Used by the "Watch tutorial on YouTube" card
+ * in ExerciseModal when no curated video and no GIF exist.
  *
- * Used as a graceful fallback when an exercise has no curated videoId
- * and no GIF: we synthesise a search query from the exercise name and
- * embed YouTube's player with `listType=search&list=<query>`. The
- * player then loads the top relevant video and the user can play it
- * directly inside the modal — no detour to youtube.com.
+ * We append " exercise tutorial" to bias the search toward
+ * instructional uploads. Opening this URL on a phone with the
+ * YouTube app installed routes through the app via URL handlers,
+ * which feels native; on web it opens the YouTube search page.
  *
- * We append " exercise tutorial" to the raw exercise name so the
- * search is biased toward instructional uploads instead of random
- * compilations / shorts. URL-encoded for safe transport.
- *
- * Caveats:
- * - `listType=search` is a long-standing YouTube embed feature that
- *   has wobbled over the years; in some edge cases the player shows
- *   "Watch on YouTube" instead of playing inline. Always pair this
- *   with the corresponding searchPageUrl() below as a tap-out link.
- * - Quality of the top result varies. If the coach later sets a
- *   specific videoId for the exercise, that takes precedence and
- *   this fallback never renders for that exercise.
+ * NOTE: an earlier iteration of this helper exported a companion
+ * `youtubeSearchEmbedUrl()` that returned an `<iframe src=…
+ * listType=search&list=…>` URL meant to play the top result inline.
+ * YouTube has tightened embed restrictions across 2024-25 — most
+ * search results now render "Video unavailable" inside that embed,
+ * so the inline preview was net-negative UX. We pulled it; the
+ * link-to-YouTube approach is reliable 100% of the time and is what
+ * ships now.
  */
-export function youtubeSearchEmbedUrl(exerciseName: string): string {
-    const q = encodeURIComponent(`${exerciseName.trim()} exercise tutorial`);
-    // playsinline=1 keeps the player inline on iOS Safari instead of
-    // jumping to full-screen on tap. modestbranding=1 + rel=0 reduce
-    // YouTube's distraction surface around the player.
-    return `https://www.youtube.com/embed?listType=search&list=${q}&playsinline=1&modestbranding=1&rel=0`;
-}
-
-/** Plain youtube.com search page URL — for "Open in YouTube" fallback
- *  links when the embedded player can't play inline. */
 export function youtubeSearchPageUrl(exerciseName: string): string {
     const q = encodeURIComponent(`${exerciseName.trim()} exercise tutorial`);
     return `https://www.youtube.com/results?search_query=${q}`;

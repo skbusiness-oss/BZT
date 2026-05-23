@@ -10,8 +10,8 @@ import { useEffect, useState } from 'react';
 import { useLanguage } from '../../context/LanguageContext';
 import { ExerciseDetail } from '../../types';
 import { getExerciseByName } from '../../lib/exerciseService';
-import { youtubeSearchEmbedUrl, youtubeSearchPageUrl } from '../../lib/videoUtils';
-import { X, AlertTriangle, Wrench, Play, Lightbulb, ListOrdered, ExternalLink } from 'lucide-react';
+import { youtubeSearchPageUrl } from '../../lib/videoUtils';
+import { X, AlertTriangle, Wrench, Play, Lightbulb, ListOrdered, Youtube } from 'lucide-react';
 
 interface ExerciseModalProps {
     exerciseName: string;
@@ -72,12 +72,16 @@ export const ExerciseModal = ({ exerciseName, exerciseDetail, onClose }: Exercis
                                 <div className="absolute inset-0 border-2 border-primary/30 rounded-xl pointer-events-none" />
                             </div>
                         ) : (
-                            /* No GIF, no curated video — fall back to a YouTube
-                               search embed for the exercise name. The player
-                               auto-loads the top result so the user gets a
-                               real tutorial immediately instead of an
-                               "exercise details coming soon" dead end. */
-                            <YouTubeSearchEmbed name={exerciseName} isAr={isAr} />
+                            /* No GIF, no curated video — show the
+                               tappable "Find tutorial on YouTube"
+                               card so the user has a path to a real
+                               video instead of a dead end. */
+                            <div className="mb-6">
+                                <div className="w-full aspect-video rounded-xl ghost-border bg-surface-container-lowest relative overflow-hidden">
+                                    <YouTubeFindCard name={exerciseName} isAr={isAr} />
+                                    <div className="absolute inset-0 border-2 border-primary/30 rounded-xl pointer-events-none" />
+                                </div>
+                            </div>
                         )}
                         {remoteInstructions.length > 0 && (
                             <div className="space-y-4">
@@ -165,39 +169,16 @@ export const ExerciseModal = ({ exerciseName, exerciseDetail, onClose }: Exercis
                                 </>
                             ) : (
                                 /* No curated videoId, no local gif, no
-                                   remote gif — last-resort fallback:
-                                   embed a YouTube search for the exercise
-                                   name so the user STILL gets a video
-                                   without us shipping per-exercise art. */
-                                <iframe
-                                    src={youtubeSearchEmbedUrl(name)}
-                                    className="w-full h-full"
-                                    style={{ border: 'none' }}
-                                    allow="autoplay; encrypted-media; picture-in-picture"
-                                    allowFullScreen
-                                    title={`${name} — YouTube search`}
-                                />
+                                   remote gif — render a tappable
+                                   "Find tutorial on YouTube" card.
+                                   Opens youtube.com search in a new
+                                   tab on web, or the YouTube app on
+                                   phone (via app URL handlers). */
+                                <YouTubeFindCard name={name} isAr={isAr} />
                             )}
                             {/* Gold Frame Overlay */}
                             <div className="absolute inset-0 border-2 border-primary/30 rounded-xl pointer-events-none" />
                         </div>
-                        {/* When we're showing the search-embed fallback
-                            (no curated video, no gif), surface a small
-                            tap-out link beneath the player so users on
-                            edge-case mobile browsers that can't play
-                            the embed inline can still open the search
-                            in the YouTube app/site. */}
-                        {!exerciseDetail.videoId && !((!imgError && exerciseDetail.gifUrl) || remoteGif) && (
-                            <a
-                                href={youtubeSearchPageUrl(name)}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="mt-2 inline-flex items-center gap-1.5 text-on-surface/55 hover:text-primary text-[11px] font-label font-bold uppercase tracking-widest transition-colors"
-                            >
-                                <ExternalLink size={11} />
-                                {isAr ? 'افتح في يوتيوب' : 'Open in YouTube'}
-                            </a>
-                        )}
                     </div>
 
                     {/* Title & Metadata */}
@@ -290,39 +271,45 @@ export const ExerciseModal = ({ exerciseName, exerciseDetail, onClose }: Exercis
 };
 
 /**
- * YouTubeSearchEmbed — fallback player used when an exercise has no
- * curated videoId AND no GIF (local or remote). Embeds YouTube's
- * search-result player keyed by the exercise name + "exercise tutorial",
- * so the top relevant video auto-loads inside the modal.
+ * YouTubeFindCard — fallback used when an exercise has no curated
+ * videoId AND no GIF (local or remote). Renders a tappable card with
+ * the YouTube logo + the exercise name + a "Watch tutorial on YouTube"
+ * button. Tapping it opens youtube.com search results for the exercise
+ * name in a new tab — or hands off to the YouTube app via URL handler
+ * if installed (standard iOS / Android behaviour).
  *
- * Always pairs the player with an "Open in YouTube" tap-out link
- * underneath because YouTube's `listType=search` embed occasionally
- * shows a "Watch on YouTube" gate instead of playing inline on
- * mobile — the explicit link is the graceful fallback.
+ * Replaced the earlier inline-embed approach (listType=search iframe),
+ * which started returning "Video unavailable" on most exercises after
+ * YouTube tightened embed restrictions across 2024-25. The link card
+ * is reliable 100% of the time at the cost of leaving the app — an
+ * acceptable trade until a proper YouTube Data API integration lands.
  */
-function YouTubeSearchEmbed({ name, isAr }: { name: string; isAr: boolean }) {
+function YouTubeFindCard({ name, isAr }: { name: string; isAr: boolean }) {
     return (
-        <div className="mb-6">
-            <div className="w-full aspect-video rounded-xl ghost-border bg-surface-container-lowest relative overflow-hidden">
-                <iframe
-                    src={youtubeSearchEmbedUrl(name)}
-                    className="w-full h-full"
-                    style={{ border: 'none' }}
-                    allow="autoplay; encrypted-media; picture-in-picture"
-                    allowFullScreen
-                    title={`${name} — YouTube search`}
-                />
-                <div className="absolute inset-0 border-2 border-primary/30 rounded-xl pointer-events-none" />
+        <a
+            href={youtubeSearchPageUrl(name)}
+            target="_blank"
+            rel="noreferrer"
+            className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center bg-gradient-to-br from-surface-container-low to-surface-container-lowest hover:from-surface-container hover:to-surface-container-low transition-colors group"
+        >
+            {/* YouTube glyph in red so it reads as "this opens YouTube"
+                at a glance — same colour cue every user already knows. */}
+            <span className="w-14 h-14 rounded-2xl flex items-center justify-center bg-[rgb(255_0_0_/_0.16)] text-[rgb(255_60_60)] border border-[rgb(255_0_0_/_0.30)] group-hover:scale-105 transition-transform">
+                <Youtube size={26} strokeWidth={2.2} />
+            </span>
+            <div>
+                <div className="font-headline font-bold text-on-surface text-[15px] leading-tight mb-1">
+                    {isAr ? 'شاهد شرح التمرين على يوتيوب' : 'Watch tutorial on YouTube'}
+                </div>
+                <div className="text-[12px] text-on-surface/55 font-body">
+                    {isAr ? `بحث عن "${name}"` : `Search for "${name}"`}
+                </div>
             </div>
-            <a
-                href={youtubeSearchPageUrl(name)}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-2 inline-flex items-center gap-1.5 text-on-surface/55 hover:text-primary text-[11px] font-label font-bold uppercase tracking-widest transition-colors"
-            >
-                <ExternalLink size={11} />
-                {isAr ? 'افتح في يوتيوب' : 'Open in YouTube'}
-            </a>
-        </div>
+            <span className="mt-1 inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary text-on-primary font-label text-[11px] font-bold uppercase tracking-widest shadow-[0_4px_14px_rgba(230,195,100,0.30)] group-hover:scale-[1.03] transition-transform">
+                <Play size={11} className="fill-current" />
+                {isAr ? 'افتح يوتيوب' : 'Open YouTube'}
+            </span>
+        </a>
     );
 }
+
