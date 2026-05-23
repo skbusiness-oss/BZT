@@ -1,5 +1,5 @@
 // Bump VERSION whenever the cache strategy changes so old installs purge.
-const VERSION = 'v88';
+const VERSION = 'v89';
 const STATIC_CACHE = `bzt-static-${VERSION}`;
 
 /**
@@ -34,6 +34,7 @@ const PREWARM_URLS = [
     '/brand-logo.png',
     '/icon-192.png',
     '/icon-512.png',
+    '/apple-touch-icon.png',
     '/dashboard-covers/coaching-journey.jpg',
     '/dashboard-covers/continue-learning.jpg',
     '/dashboard-covers/empty-diet.jpg',

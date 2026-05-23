@@ -10,29 +10,34 @@
          visits to re-fetch the bytes even if the file path itself is
          unchanged. Bump this number whenever the icon PNGs are
          replaced — it's the single lever that propagates the change. -->
-    <link rel="icon" type="image/png" href="/icon-192.png?v=3" />
-    <link rel="icon" type="image/png" sizes="32x32" href="/icon-192.png?v=3" />
-    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png?v=3" />
+    <link rel="icon" type="image/png" href="/icon-192.png?v=4" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/icon-192.png?v=4" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png?v=4" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <meta name="description" content="BioZackTeam - Elite Fitness Coaching Platform" />
     <meta name="theme-color" content="#000000" />
 
     <!-- PWA Manifest -->
-    <link rel="manifest" href="/manifest.json?v=3" />
+    <link rel="manifest" href="/manifest.json?v=4" />
 
     <!-- PWA Support (iOS + standards). Multiple apple-touch-icon
          sizes so iOS picks the closest match for the user's device
          (iPhone uses 180, iPad uses 167/152). Without explicit sizes
          iOS falls back to a single 180 render and may upscale/blur
          on retina screens.
-         Same ?v=3 cache-bust as the favicon block above. -->
+         Same ?v=4 cache-bust as the favicon block above. -->
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="BioZack" />
-    <link rel="apple-touch-icon" href="/icon-192.png?v=3" />
-    <link rel="apple-touch-icon" sizes="192x192" href="/icon-192.png?v=3" />
-    <link rel="apple-touch-icon" sizes="512x512" href="/icon-512.png?v=3" />
+    <!-- /apple-touch-icon.png is the iOS-spec 180×180 size — iPhone's
+         preferred apple-touch-icon. Listing it first (and as the
+         unsized default) so iOS picks it over the 192 / 512 variants
+         that exist for other surfaces. -->
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=4" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=4" />
+    <link rel="apple-touch-icon" sizes="192x192" href="/icon-192.png?v=4" />
+    <link rel="apple-touch-icon" sizes="512x512" href="/icon-512.png?v=4" />
 
     <title>BioZackTeam Fitness</title>
 
