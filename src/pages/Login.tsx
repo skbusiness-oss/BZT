@@ -24,6 +24,7 @@ import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import { rateLimits } from '../lib/validation';
+import { Link } from 'react-router-dom';
 import {
     Lock, Mail, Globe, Loader2, LogIn, ArrowLeft, Sun, Moon,
     GraduationCap, Dumbbell, Utensils, MessageSquare,
@@ -343,6 +344,21 @@ export const Login = () => {
                         </div>
                     </aside>
                 </div>
+
+                {/* ── Legal footer ─────────────────────────────────────
+                    Required link from the Stripe Checkout / payment-link
+                    footers, and just good practice — first-time visitors
+                    who paste the URL into a browser need to be one click
+                    away from the policies they agreed to at checkout.
+                    Sits at the very bottom of the page; muted styling so
+                    it never competes with the sign-in CTA above. */}
+                <footer className="mt-16 pb-2 flex flex-wrap items-center justify-center gap-x-6 gap-y-3 text-on-surface/40 text-[11px] font-label font-bold uppercase tracking-[0.18em]">
+                    <Link to="/terms" className="hover:text-primary transition-colors">{t('legalTermsLink')}</Link>
+                    <span aria-hidden className="w-1 h-1 rounded-full bg-on-surface/20" />
+                    <Link to="/privacy" className="hover:text-primary transition-colors">{t('legalPrivacyLink')}</Link>
+                    <span aria-hidden className="w-1 h-1 rounded-full bg-on-surface/20" />
+                    <Link to="/health-disclaimer" className="hover:text-primary transition-colors">{t('legalHealthLink')}</Link>
+                </footer>
             </div>
         </div>
     );

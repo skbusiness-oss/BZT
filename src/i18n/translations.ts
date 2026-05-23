@@ -1317,6 +1317,14 @@ export const translations = {
     welcomeStep4Hint:          { en: 'When asked, allow notifications so you don\'t miss messages from Coach Med.',
                                  ar: 'عند السؤال، اسمح بالإشعارات حتى لا تفوّتك رسائل الكوتش ميد.' },
 
+    // ─── Legal — Terms / Privacy / Health (footer + Settings) ─────
+    // Short link labels only — the full document content is hardcoded
+    // inside src/pages/Legal.tsx (too long to live alongside UI strings).
+    legalSectionEyebrow:       { en: 'Legal',                              ar: 'القانوني' },
+    legalTermsLink:            { en: 'Terms of service',                   ar: 'شروط الخدمة' },
+    legalPrivacyLink:          { en: 'Privacy policy',                     ar: 'سياسة الخصوصية' },
+    legalHealthLink:           { en: 'Health disclaimer',                  ar: 'إخلاء المسؤولية الصحية' },
+
     // CTAs + support footer
     welcomePostPayCta:         { en: 'Go to sign in',                       ar: 'الانتقال إلى تسجيل الدخول' },
     welcomePostPaySupportTitle:{ en: 'Need help?',                          ar: 'تحتاج إلى مساعدة؟' },

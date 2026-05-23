@@ -25,8 +25,9 @@ import { useTheme } from '../context/ThemeContext';
 import {
     Globe, Bell, LogOut, Shield, Sun, Moon, Edit2, Calendar, UserRound, Activity, Target, Award,
     CheckCircle2, AlertCircle, Loader2, Send, Check, X as XIcon, CreditCard,
+    FileText, AlertTriangle,
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { onSnapshot, doc, updateDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../lib/firebase';
@@ -353,6 +354,23 @@ export const Settings = () => {
                 </button>
             </section>
 
+            {/* ── Legal card ────────────────────────────────────────
+                Three quick links to the public legal pages. Keeping
+                these in Settings means a paying user can re-read
+                what they agreed to without leaving the app, and we
+                satisfy the App Store / Play Store requirement for
+                in-app links to Terms + Privacy. */}
+            <section className="bg-surface-container-low rounded-2xl ghost-border overflow-hidden">
+                <div className="px-6 pt-6 pb-3">
+                    <span className="font-label text-[10px] font-bold uppercase tracking-widest text-on-surface/55">
+                        {t('legalSectionEyebrow')}
+                    </span>
+                </div>
+                <LegalLinkRow icon={<FileText size={18} className="text-on-surface-variant" />} label={t('legalTermsLink')}   to="/terms" />
+                <LegalLinkRow icon={<Shield size={18} className="text-on-surface-variant" />}   label={t('legalPrivacyLink')} to="/privacy" />
+                <LegalLinkRow icon={<AlertTriangle size={18} className="text-on-surface-variant" />} label={t('legalHealthLink')} to="/health-disclaimer" last />
+            </section>
+
             <div className="text-center text-on-surface/30 text-[10px] font-label font-bold uppercase tracking-widest pt-4">
                 BioZackTeam · v1.0.0
             </div>
@@ -394,6 +412,29 @@ function Row({ icon, label, control, last }: {
 
 function InfoValue({ children }: { children: React.ReactNode }) {
     return <span className="text-sm font-headline font-bold text-on-surface">{children}</span>;
+}
+
+// Single tappable row that navigates to a legal page. Visual treatment
+// matches Row() above but the whole row is a link, not a label+control
+// pair — feels more like "open this document".
+function LegalLinkRow({ icon, label, to, last }: {
+    icon: React.ReactNode;
+    label: string;
+    to: string;
+    last?: boolean;
+}) {
+    return (
+        <Link
+            to={to}
+            className={`flex items-center justify-between gap-4 px-6 py-4 text-on-surface hover:bg-surface-container transition-colors ${last ? '' : 'border-b border-outline-variant/30'}`}
+        >
+            <div className="flex items-center gap-3 min-w-0">
+                <span className="shrink-0">{icon}</span>
+                <span className="font-body truncate">{label}</span>
+            </div>
+            <span className="text-on-surface/40 text-[18px] leading-none shrink-0" aria-hidden>›</span>
+        </Link>
+    );
 }
 
 // ── Push notifications diagnostic ────────────────────────────────────

@@ -24,6 +24,7 @@ import { Notifications } from './pages/Notifications';
 import { Welcome } from './pages/Welcome';
 import { UpgradeSuccess } from './pages/UpgradeSuccess';
 import { Subscriptions } from './pages/Subscriptions';
+import { Legal } from './pages/Legal';
 import { Messages } from './pages/Messages';
 import { Community } from './pages/Community';
 import { Leaderboard } from './pages/Leaderboard';
@@ -333,6 +334,13 @@ export const AppRoutes = () => {
                 Stripe redirect still works). */}
             <Route path="/welcome" element={<ErrorBoundary><Welcome /></ErrorBoundary>} />
             <Route path="/upgrade/success" element={<ErrorBoundary><UpgradeSuccess /></ErrorBoundary>} />
+            {/* Legal pages — PUBLIC, no auth. The same component
+                renders all three documents; the route determines which
+                tab is active on initial load. Linked from Stripe
+                Checkout footers + the app's own login footer. */}
+            <Route path="/terms" element={<ErrorBoundary><Legal /></ErrorBoundary>} />
+            <Route path="/privacy" element={<ErrorBoundary><Legal /></ErrorBoundary>} />
+            <Route path="/health-disclaimer" element={<ErrorBoundary><Legal /></ErrorBoundary>} />
             <Route path="/admin/setup" element={<ProtectedRoute allowedRoles={['admin']}><AdminSetup /></ProtectedRoute>} />
             <Route element={<ProtectedRoute><AuthenticatedShell /></ProtectedRoute>}>
                 <Route path="/" element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
