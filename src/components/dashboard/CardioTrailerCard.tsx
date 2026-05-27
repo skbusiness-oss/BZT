@@ -16,9 +16,8 @@
  * planner (zones, machine variations, calculator, Academy link).
  */
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
-import { t, goldGradient, pillPad, pillPadSm } from './biozackteam/shared';
+import { t, goldGradient, pillPad } from './biozackteam/shared';
 
 // Cardio-themed hero — the endurance cover (a running / cardio shot)
 // is the closest match across the existing /workout-covers/* set.
@@ -26,12 +25,8 @@ import { t, goldGradient, pillPad, pillPadSm } from './biozackteam/shared';
 const HERO_PATH = '/workout-covers/goal-endurance.jpg';
 
 export function CardioTrailerCard() {
-    const { user } = useAuth();
     const { t: tx } = useLanguage();
     const navigate = useNavigate();
-
-    const age = user?.age ?? 30;
-    const mhr = Math.max(220 - age, 100);
 
     return (
         <div
@@ -81,22 +76,12 @@ export function CardioTrailerCard() {
                 display: 'flex', flexDirection: 'column',
                 justifyContent: 'space-between', minHeight: 220,
             }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
-                    <div style={{
-                        fontFamily: t.body, fontSize: 11, fontWeight: 600,
-                        letterSpacing: '0.16em', textTransform: 'uppercase',
-                        color: 'rgba(255,255,255,0.82)',
-                    }}>
-                        {tx('cardioTrailerEyebrow')}
-                    </div>
-                    <div style={{
-                        padding: pillPadSm, borderRadius: 999,
-                        background: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)',
-                        color: '#fff', fontFamily: t.body, fontSize: 11, fontWeight: 600,
-                        textTransform: 'uppercase', letterSpacing: '0.1em', whiteSpace: 'nowrap',
-                    }} dir="ltr">
-                        {tx('cardioTrailerMhrPill')?.replace('{mhr}', String(mhr))}
-                    </div>
+                <div style={{
+                    fontFamily: t.body, fontSize: 11, fontWeight: 600,
+                    letterSpacing: '0.16em', textTransform: 'uppercase',
+                    color: 'rgba(255,255,255,0.82)',
+                }}>
+                    {tx('cardioTrailerEyebrow')}
                 </div>
 
                 <div>

@@ -191,6 +191,36 @@ export const translations = {
     cardioPlanTitle:               { en: 'Plan your cardio',                    ar: 'خطّط للكارديو' },
     cardioPlanSubtitle:            { en: 'Learn how to use cardio for fat loss or cardiovascular fitness — and pick the right machine, intensity, and duration for your goal.',
                                      ar: 'تعلّم كيف تستخدم الكارديو لخسارة الدهون أو لبناء اللياقة القلبية — واختر الآلة والكثافة والمدة المناسبة لهدفك.' },
+    cardioPlanSubtitleV2:          { en: 'Pick an activity. We\'ll show how many calories you\'ll burn.',
+                                     ar: 'اختر نشاطاً. سنوضّح لك كم ستحرق من السعرات.' },
+
+    // ── Activity picker (simplified, no MHR/zones jargon) ──
+    cardioPickActivityTitle:       { en: 'Pick your activity',                  ar: 'اختر نشاطك' },
+    cardioPickActivityHint:        { en: 'Each tile shows what you\'d burn in 30 minutes at an easy pace.',
+                                     ar: 'كل بطاقة تُظهر ما ستحرقه في 30 دقيقة بإيقاع سهل.' },
+    cardioTileKcal30Min:           { en: 'kcal · 30 min',                       ar: 'سعرة · 30 دق' },
+
+    cardioActTreadmill:            { en: 'Treadmill',                           ar: 'المشّاية' },
+    cardioActBike:                 { en: 'Bike',                                ar: 'الدراجة' },
+    cardioActElliptical:           { en: 'Elliptical',                          ar: 'الإليبتيكال' },
+    cardioActRower:                { en: 'Rower',                               ar: 'التجديف' },
+    cardioActStairs:               { en: 'Stair climber',                       ar: 'مصعد الدرج' },
+    cardioActWalk:                 { en: 'Walking',                             ar: 'المشي' },
+    cardioActJumprope:             { en: 'Jump rope',                           ar: 'حبل القفز' },
+    cardioActSwim:                 { en: 'Swimming',                            ar: 'السباحة' },
+
+    cardioPickedSubtitle:          { en: 'Adjust duration and intensity.',      ar: 'عدّل المدّة والكثافة.' },
+    cardioHowLong:                 { en: 'How long?',                           ar: 'كم من الوقت؟' },
+    cardioHowHard:                 { en: 'How hard?',                           ar: 'كم بشدّة؟' },
+
+    cardioIntensityEasy:           { en: 'Easy',                                ar: 'سهل' },
+    cardioIntensityEasyHint:       { en: 'You can hold a conversation.',        ar: 'تستطيع التحدّث.' },
+    cardioIntensityHard:           { en: 'Hard',                                ar: 'صعب' },
+    cardioIntensityHardHint:       { en: 'Short sentences only — pushing.',     ar: 'جمل قصيرة فقط — دفع شديد.' },
+
+    cardioResultLabel:             { en: 'You\'ll burn approximately',          ar: 'ستحرق تقريباً' },
+    cardioResultFootnote:          { en: 'A rough estimate. Real burn varies with effort, fitness level, and equipment resistance.',
+                                     ar: 'تقدير تقريبي. الحرق الفعلي يختلف حسب الجهد، مستوى اللياقة، ومقاومة الجهاز.' },
 
     cardioPlanLogNoteTitle:        { en: 'Logging happens on the Update page',  ar: 'التسجيل يتمّ في صفحة التحديث' },
     cardioPlanLogNoteBody:         { en: 'This page is for planning and learning. To record what you actually did, open Update and add it to your weekly check-in.',
