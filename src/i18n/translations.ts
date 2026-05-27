@@ -273,11 +273,14 @@ export const translations = {
     cardioAcademyCtaSub:           { en: 'Watch the Cardio course in the Academy →',
                                      ar: 'شاهد دورة الكارديو في الأكاديمية ←' },
 
-    // Dashboard trailer
-    cardioTrailerEyebrow:          { en: 'Cardio plan',                         ar: 'خطّة الكارديو' },
+    // Dashboard trailer (full hero-card matching workout + diet cards)
+    cardioTrailerEyebrow:          { en: 'Your cardio plan',                    ar: 'خطّة الكارديو' },
     cardioTrailerTitle:            { en: 'Plan your cardio',                    ar: 'خطّط للكارديو' },
-    cardioTrailerMhrInline:        { en: 'Max HR {mhr} bpm · zones, machines, calculator',
-                                     ar: 'أقصى نبضات {mhr} · مناطق، آلات، حاسبة' },
+    cardioTrailerPurpose:          { en: 'Zones, machines, calculator',         ar: 'مناطق، آلات، حاسبة' },
+    cardioTrailerSub:              { en: 'Pick your goal, pick your machine, see how much you\'ll burn.',
+                                     ar: 'اختر هدفك، اختر آلتك، شاهد كم ستحرق.' },
+    cardioTrailerMhrPill:          { en: 'Max HR {mhr}',                        ar: 'أقصى {mhr}' },
+    cardioTrailerCta:              { en: 'Open my plan',                        ar: 'افتح خطّتي' },
 
     // ── Celebration messages after logging ──
     selfLogCongratsTitle:          { en: 'You\'re logged in for today.',        ar: 'تم تسجيلك لهذا اليوم.' },
