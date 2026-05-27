@@ -13,6 +13,7 @@ import { useWeeklyCheckIns } from '../../hooks/useWeeklyCheckIns';
 import { levelFromScore, levelProgress } from '../../lib/activityScore';
 import { CheckInCompare } from '../checkin/CheckInCompare';
 import type { Week } from '../../types';
+import { PartyPopper, CheckCircle as CheckCircleIcon } from 'lucide-react';
 
 const t = {
     surface: 'rgb(var(--surface))',
@@ -1244,6 +1245,13 @@ export const ProgressPanel = () => {
         || todaysWeighIn?.locked === true
         || todaysLegacy?.locked === true;
 
+    // Big celebratory banner that fires after a successful weekly
+    // check-in submit. Auto-dismisses after 8s. Founder direction:
+    // "show a message like when finishing the day of training, like
+    // congratulations you have logged your metrics successfully see
+    // you next week" — this is the main /update success moment.
+    const [congrats, setCongrats] = useState(false);
+
     const handleWeeklyCheckIn = async (p: {
         weight: number; notes: string;
         metrics: { strength: number; hunger: number; energy: number; cardioCalories: number };
@@ -1260,6 +1268,11 @@ export const ProgressPanel = () => {
             cardioCalories: p.metrics.cardioCalories,
             notes: p.notes || undefined,
         });
+        // Only fire the celebration AFTER the write resolves. If the
+        // submit throws, the WeeklyCheckIn child's own error banner
+        // surfaces it — we don't fire congrats on a failed submit.
+        setCongrats(true);
+        window.setTimeout(() => setCongrats(false), 8000);
     };
 
     return (
@@ -1291,6 +1304,62 @@ export const ProgressPanel = () => {
                 }
             `}</style>
             <div style={{ fontFamily: t.body, color: t.onSurface, display: 'flex', flexDirection: 'column', gap: 24 }}>
+                {/* Celebration banner — fires for ~8s after a
+                    successful weekly check-in submit. Sits at the
+                    very top so it lands in the eyeline before the
+                    user starts scrolling. Auto-dismisses; manual ✕
+                    available too. Uses inline-style since this
+                    component lives in the BZT token system. */}
+                {congrats && (
+                    <div style={{
+                        display: 'flex', alignItems: 'flex-start', gap: 16,
+                        padding: '20px 22px',
+                        borderRadius: 18,
+                        background: 'linear-gradient(135deg, rgba(16,185,129,0.16), rgba(16,185,129,0.08))',
+                        border: '1px solid rgba(16,185,129,0.30)',
+                        animation: 'bzt-fade-in 320ms cubic-bezier(0.16, 1, 0.3, 1) both',
+                    }}>
+                        <span style={{
+                            width: 48, height: 48, borderRadius: 999,
+                            background: 'rgba(16,185,129,0.25)', color: '#34d399',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                        }}>
+                            <PartyPopper size={22} strokeWidth={2.2} />
+                        </span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                            <h3 style={{
+                                margin: 0,
+                                fontFamily: t.display, fontSize: 18, fontWeight: 700,
+                                color: '#86efac', letterSpacing: '-0.01em',
+                                display: 'flex', alignItems: 'center', gap: 8,
+                            }}>
+                                <CheckCircleIcon size={14} />
+                                {t_('progressLogCongratsTitle')}
+                            </h3>
+                            <p style={{
+                                margin: '4px 0 0',
+                                fontFamily: t.body, fontSize: 13.5, lineHeight: 1.55,
+                                color: 'rgba(255,255,255,0.75)',
+                            }}>
+                                {t_('progressLogCongratsBody')}
+                            </p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setCongrats(false)}
+                            style={{
+                                background: 'transparent', border: 'none', cursor: 'pointer',
+                                color: 'rgba(255,255,255,0.4)',
+                                fontFamily: t.body, fontSize: 12, fontWeight: 700,
+                                letterSpacing: '0.16em', textTransform: 'uppercase',
+                                alignSelf: 'flex-start', padding: 0, flexShrink: 0,
+                            }}
+                        >
+                            ✕
+                        </button>
+                    </div>
+                )}
+
                 {/* Single switchable card — replaces the prior 3 stacked metric tiles.
                     Slides through Streak / Level / Logs. Tap arrows, dots, or swipe. */}
                 <StatusCarousel
