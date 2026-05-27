@@ -21,14 +21,14 @@
  * Logging stays elsewhere: a prominent "log on Update" callout
  * sits near the top. This page is purely planning.
  */
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import {
     ArrowLeft, GraduationCap, ChevronRight, Info, Footprints,
     Bike, Activity, Waves, ChevronsUp, Repeat, Zap, Flame,
-    User, Ruler, Scale, Edit2, Target,
+    User, Ruler, Scale, Edit2, Target, Minus, TrendingUp, Mountain,
     type LucideIcon,
 } from 'lucide-react';
 import clsx from 'clsx';
@@ -47,10 +47,15 @@ interface Activity {
     icon: LucideIcon;
     easyMet: number;
     hardMet: number;
+    /** If true, the result panel shows an incline toggle (Flat /
+     *  Some / Steep) that adds a MET bonus to the estimate. Only
+     *  used by the treadmill — walking outdoors gets its own
+     *  hiking/incline path via the Walking tile if needed later. */
+    supportsIncline?: boolean;
 }
 
 const ACTIVITIES: Activity[] = [
-    { id: 'treadmill',  labelKey: 'cardioActTreadmill',  icon: Footprints, easyMet: 6,   hardMet: 11 },
+    { id: 'treadmill',  labelKey: 'cardioActTreadmill',  icon: Footprints, easyMet: 6,   hardMet: 11, supportsIncline: true },
     { id: 'bike',       labelKey: 'cardioActBike',       icon: Bike,       easyMet: 5,   hardMet: 9 },
     { id: 'elliptical', labelKey: 'cardioActElliptical', icon: Activity,   easyMet: 5,   hardMet: 8 },
     { id: 'rower',      labelKey: 'cardioActRower',      icon: Repeat,     easyMet: 5,   hardMet: 8 },
@@ -61,6 +66,17 @@ const ACTIVITIES: Activity[] = [
 ];
 
 type Intensity = 'easy' | 'hard';
+type Incline = 'flat' | 'some' | 'steep';
+
+// MET bonus per incline level. Numbers approximated from the
+// Compendium of Physical Activities walking/running-on-grade
+// entries — incline at 5% adds ~1.5 MET, 10%+ adds ~3.5 MET.
+// Conservative defaults; real burn varies with stride + speed.
+const INCLINE_MET_BONUS: Record<Incline, number> = {
+    flat:  0,
+    some:  1.5,
+    steep: 3.5,
+};
 
 // Standard MET-based calorie estimate. Weight in kg, duration in min.
 // Used everywhere a "kcal burned" number is shown on this page.
@@ -104,6 +120,10 @@ export const CardioPlan = () => {
     const [pickedId, setPickedId] = useState<string | null>(null);
     const [durationMin, setDurationMin] = useState<number>(30);
     const [intensity, setIntensity] = useState<Intensity>('easy');
+    // Treadmill-only: incline level. Resets to 'flat' whenever a
+    // new activity is picked so the user always starts from a
+    // neutral baseline.
+    const [incline, setIncline] = useState<Incline>('flat');
 
     const picked = pickedId ? ACTIVITIES.find(a => a.id === pickedId) : null;
 
@@ -132,13 +152,19 @@ export const CardioPlan = () => {
     const bmr = useMemo(() => estimateBmr(age, heightCm, weightKg), [age, heightCm, weightKg]);
 
     const pickedKcal = picked
-        ? kcalEstimate(intensity === 'easy' ? picked.easyMet : picked.hardMet, weightKg, durationMin)
+        ? kcalEstimate(
+            (intensity === 'easy' ? picked.easyMet : picked.hardMet)
+              + (picked.supportsIncline ? INCLINE_MET_BONUS[incline] : 0),
+            weightKg,
+            durationMin,
+          )
         : 0;
 
     const handlePick = (id: string) => {
         setPickedId(id);
         setDurationMin(30);
         setIntensity('easy');
+        setIncline('flat');
     };
 
     return (
@@ -223,11 +249,14 @@ export const CardioPlan = () => {
                 {statsOpen && (
                     <div className="px-5 pb-5 pt-2 space-y-3 border-t border-outline-variant/15 bzt-rise-in" style={{ animationDuration: '180ms' }}>
                         <div className="grid grid-cols-3 gap-3 pt-3">
+                            {/* StatField now clamps internally on
+                                blur/Enter, so the parent setters can
+                                just take the value as-is. */}
                             <StatField
                                 icon={User}
                                 label={t('cardioStatAge')}
                                 value={age}
-                                onChange={(v) => setAge(Math.max(15, Math.min(100, v)))}
+                                onChange={setAge}
                                 suffix={t('cardioStatYears')}
                                 min={15} max={100}
                             />
@@ -235,7 +264,7 @@ export const CardioPlan = () => {
                                 icon={Ruler}
                                 label={t('cardioStatHeight')}
                                 value={heightCm}
-                                onChange={(v) => setHeightCm(Math.max(120, Math.min(220, v)))}
+                                onChange={setHeightCm}
                                 suffix="cm"
                                 min={120} max={220}
                             />
@@ -243,7 +272,7 @@ export const CardioPlan = () => {
                                 icon={Scale}
                                 label={t('cardioStatWeight')}
                                 value={weightKg}
-                                onChange={(v) => setWeightKg(Math.max(35, Math.min(200, v)))}
+                                onChange={setWeightKg}
                                 suffix="kg"
                                 min={35} max={200}
                             />
@@ -368,6 +397,27 @@ export const CardioPlan = () => {
                         </div>
                     </div>
 
+                    {/* Treadmill-only incline toggle. Three levels —
+                        plain English ("Flat / Some incline / Steep")
+                        with the MET bonus driving the kcal result
+                        below silently. Walking on a 10% grade burns
+                        materially more than walking flat, and most
+                        treadmill users either know this intuitively
+                        ("I want incline today") or want to see what
+                        difference it makes. */}
+                    {picked.supportsIncline && (
+                        <div className="mb-6">
+                            <div className="text-[10px] font-label font-bold uppercase tracking-widest text-on-surface/55 mb-2">
+                                {t('cardioInclineLabel')}
+                            </div>
+                            <div className="grid grid-cols-3 gap-2">
+                                <InclineToggle value="flat"  active={incline === 'flat'}  onPick={setIncline} />
+                                <InclineToggle value="some"  active={incline === 'some'}  onPick={setIncline} />
+                                <InclineToggle value="steep" active={incline === 'steep'} onPick={setIncline} />
+                            </div>
+                        </div>
+                    )}
+
                     {/* Big result card */}
                     <div className="rounded-2xl p-6 bg-gradient-to-br from-orange-500/12 to-amber-500/8 border border-orange-500/25 text-center">
                         <div className="text-[10px] font-label font-bold uppercase tracking-widest text-orange-400 mb-2">
@@ -460,8 +510,17 @@ function ActivityTile({ icon: Icon, label, kcal, active, onPick }: {
 
 // ─────────────────────────────────────────────────────────────────
 //  StatField — one of the three editable stats (age / height /
-//  weight) in the expanded stats panel. Compact numeric input with
-//  icon + label + unit suffix so all three sit cleanly in a row.
+//  weight) in the expanded stats panel.
+//
+//  Bug fix: the first version clamped on every keystroke (e.g.
+//  typing "175" for height meant "1" → clamped to 120 instantly,
+//  then "17" → still 120, then "175" → finally 175). Felt
+//  uncontrollable, which is the founder report.
+//
+//  Fix: keep a local string while the user is typing. Only parse
+//  + clamp + propagate to the parent on BLUR or Enter. The input
+//  syncs back from `value` whenever the parent changes it for
+//  other reasons (initial render, another component setting it).
 // ─────────────────────────────────────────────────────────────────
 function StatField({ icon: Icon, label, value, onChange, suffix, min, max }: {
     icon: LucideIcon;
@@ -472,6 +531,31 @@ function StatField({ icon: Icon, label, value, onChange, suffix, min, max }: {
     min: number;
     max: number;
 }) {
+    const [text, setText] = useState<string>(String(value));
+
+    // Sync local text from parent value when it changes from outside
+    // (e.g. profile load, initial render). Skip when the user is
+    // mid-edit — handled by the input only updating `text`, not
+    // calling onChange until blur.
+    useEffect(() => { setText(String(value)); }, [value]);
+
+    const commit = () => {
+        const n = parseInt(text, 10);
+        if (Number.isNaN(n)) {
+            // User cleared the field or entered junk — restore the
+            // last good value rather than leaving the input empty
+            // (which would break the BMR / weekly target math
+            // downstream).
+            setText(String(value));
+            return;
+        }
+        const clamped = Math.max(min, Math.min(max, n));
+        if (clamped !== value) onChange(clamped);
+        // Reflect the clamped value in the input too — so if you
+        // tried to type 999 and max is 200, the field shows 200.
+        setText(String(clamped));
+    };
+
     return (
         <div className="bg-surface-container-lowest rounded-xl p-3 border border-outline-variant/20">
             <div className="flex items-center gap-1.5 mb-1.5">
@@ -484,13 +568,17 @@ function StatField({ icon: Icon, label, value, onChange, suffix, min, max }: {
                 <input
                     type="number"
                     inputMode="numeric"
-                    value={value}
-                    min={min}
-                    max={max}
-                    onChange={(e) => {
-                        const n = parseInt(e.target.value, 10);
-                        if (!Number.isNaN(n)) onChange(n);
+                    value={text}
+                    onChange={(e) => setText(e.target.value)}
+                    onBlur={commit}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                            (e.target as HTMLInputElement).blur();
+                        }
                     }}
+                    // Drop the native min/max attribute so the browser
+                    // doesn't interfere with typing. Clamping is our
+                    // job on commit, not the browser's mid-keystroke.
                     className="w-full min-w-0 bg-transparent border-none outline-none text-2xl font-headline font-extrabold text-on-surface tabular-nums focus:text-primary transition-colors"
                 />
                 <span className="text-[10px] font-label uppercase tracking-widest text-on-surface/45 font-bold shrink-0">
@@ -498,6 +586,43 @@ function StatField({ icon: Icon, label, value, onChange, suffix, min, max }: {
                 </span>
             </div>
         </div>
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────
+//  InclineToggle — Flat / Some / Steep buttons (treadmill only)
+// ─────────────────────────────────────────────────────────────────
+function InclineToggle({ value, active, onPick }: {
+    value: Incline;
+    active: boolean;
+    onPick: (v: Incline) => void;
+}) {
+    const { t } = useLanguage();
+    const config = value === 'flat'
+        ? { icon: Minus, labelKey: 'cardioInclineFlat',  activeBg: 'bg-emerald-500/15 border-emerald-500', activeText: 'text-emerald-400' }
+        : value === 'some'
+            ? { icon: TrendingUp, labelKey: 'cardioInclineSome', activeBg: 'bg-amber-500/15 border-amber-500', activeText: 'text-amber-400' }
+            : { icon: Mountain, labelKey: 'cardioInclineSteep', activeBg: 'bg-orange-500/15 border-orange-500', activeText: 'text-orange-400' };
+    const Icon = config.icon;
+    return (
+        <button
+            type="button"
+            onClick={() => onPick(value)}
+            className={clsx(
+                'py-2.5 px-3 rounded-xl text-center transition-all flex flex-col items-center gap-1',
+                active
+                    ? `${config.activeBg} border-2`
+                    : 'bg-surface-container-lowest border-2 border-outline-variant/25 hover:border-primary/40',
+            )}
+        >
+            <Icon size={14} className={active ? config.activeText : 'text-on-surface/55'} strokeWidth={2.4} />
+            <span className={clsx(
+                'font-headline font-bold text-[12px]',
+                active ? 'text-on-surface' : 'text-on-surface/70',
+            )}>
+                {t(config.labelKey)}
+            </span>
+        </button>
     );
 }
 

@@ -218,6 +218,12 @@ export const translations = {
     cardioIntensityHard:           { en: 'Hard',                                ar: 'صعب' },
     cardioIntensityHardHint:       { en: 'Short sentences only — pushing.',     ar: 'جمل قصيرة فقط — دفع شديد.' },
 
+    // Treadmill incline (only renders when treadmill is picked)
+    cardioInclineLabel:            { en: 'Incline',                             ar: 'الانحدار' },
+    cardioInclineFlat:             { en: 'Flat',                                ar: 'مستوي' },
+    cardioInclineSome:             { en: 'Some',                                ar: 'بعض الانحدار' },
+    cardioInclineSteep:            { en: 'Steep',                               ar: 'شديد' },
+
     cardioResultLabel:             { en: 'You\'ll burn approximately',          ar: 'ستحرق تقريباً' },
     cardioResultFootnote:          { en: 'A rough estimate. Real burn varies with effort, fitness level, and equipment resistance.',
                                      ar: 'تقدير تقريبي. الحرق الفعلي يختلف حسب الجهد، مستوى اللياقة، ومقاومة الجهاز.' },
