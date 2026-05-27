@@ -156,6 +156,43 @@ export const translations = {
     checkInWizNoReflectionFiled:        { en: 'You didn\'t leave a reflection this week.', ar: 'لم تكتب تأمّلاً هذا الأسبوع.' },
     checkInWizPhotoNotUploaded:         { en: 'not uploaded',                   ar: 'غير مرفوعة' },
 
+    // ── Cardio calculator card (community update section) ──
+    cardioCalcTitle:               { en: 'Plan your cardio',                    ar: 'خطّط للكارديو' },
+    cardioCalcSubtitle:            { en: 'Pick a zone and we\'ll estimate how much you\'ll burn.',
+                                     ar: 'اختر منطقة وسنقدّر كم ستحرق.' },
+    cardioCalcMhrLabel:            { en: 'Your max heart rate',                 ar: 'أقصى معدّل لضربات قلبك' },
+    cardioCalcMhrFormula:          { en: '220 − {age} years',                   ar: '220 − {age} سنة' },
+
+    cardioCalcZoneFatTitle:        { en: 'Fat burn',                            ar: 'حرق الدهون' },
+    cardioCalcZoneFatBody:         { en: 'Lower intensity, longer sessions. You can hold a conversation. Body uses more fat as fuel — best for weight loss and recovery.',
+                                     ar: 'كثافة أقل، جلسات أطول. تستطيع التحدّث. الجسم يستخدم الدهون كوقود رئيسي — الأفضل لخسارة الوزن والتعافي.' },
+    cardioCalcZoneHeartTitle:      { en: 'Train heart',                         ar: 'قوّ قلبك' },
+    cardioCalcZoneHeartBody:       { en: 'Higher intensity, shorter sessions (HIIT). Hard breathing. Burns more total calories AND keeps burning hours after you stop.',
+                                     ar: 'كثافة أعلى، جلسات أقصر (HIIT). تنفّس شاق. يحرق سعرات أكثر إجمالاً ويستمرّ في الحرق لساعات بعد التوقّف.' },
+    cardioCalcSelect:              { en: 'Select',                              ar: 'اختر' },
+
+    cardioCalcChangeZone:          { en: 'Change zone',                         ar: 'غيّر المنطقة' },
+    cardioCalcDurationLabel:       { en: 'Session duration',                    ar: 'مدّة الجلسة' },
+    cardioCalcEstimateLabel:       { en: 'You\'ll burn approximately',          ar: 'ستحرق تقريباً' },
+    cardioCalcEstimateFootnote:    { en: 'Estimate based on a {weight} kg body weight. Real burn varies with effort, terrain, and individual metabolism.',
+                                     ar: 'تقدير بناءً على وزن {weight} كغ. الحرق الفعلي يختلف حسب الجهد، الأرضية، والأيض الفردي.' },
+    cardioCalcNotesLabel:          { en: 'Notes (optional)',                    ar: 'ملاحظات (اختياري)' },
+    cardioCalcNotesPlaceholder:    { en: 'e.g. brisk walk on the treadmill, incline 5',
+                                     ar: 'مثلاً: مشي سريع على المشاية، إنحدار 5' },
+    cardioCalcSaveCta:             { en: 'Save to today\'s log',                ar: 'احفظ في سجل اليوم' },
+    cardioCalcSavedConfirm:        { en: 'Saved to your log',                   ar: 'تم الحفظ في سجلّك' },
+    cardioCalcAcademyCtaTitle:     { en: 'Want to learn more?',                 ar: 'تريد أن تتعلّم أكثر؟' },
+    cardioCalcAcademyCtaSub:       { en: 'Watch the Cardio course in the Academy',
+                                     ar: 'شاهد دورة الكارديو في الأكاديمية' },
+
+    // ── Celebration messages after logging ──
+    selfLogCongratsTitle:          { en: 'You\'re logged in for today.',        ar: 'تم تسجيلك لهذا اليوم.' },
+    selfLogCongratsBody:           { en: 'Nice work. Keep the momentum — log again on your next training day.',
+                                     ar: 'عمل جيد. حافظ على الزخم — سجّل مرة أخرى في يوم تدريبك القادم.' },
+    checkInCongratsTitle:          { en: 'Week submitted. Excellent work.',     ar: 'تم إرسال الأسبوع. عمل ممتاز.' },
+    checkInCongratsBody:           { en: 'Your coach will review and reply within a few days. See you next week.',
+                                     ar: 'سيراجع مدرّبك ويردّ خلال بضعة أيام. نراك الأسبوع القادم.' },
+
     // Step titles for the progress-indicator chip (short variants)
     checkInWizSteplogTitle:     { en: 'Daily log',                           ar: 'سجلّ يومي' },
     checkInWizStepfeltTitle:    { en: 'How you felt',                        ar: 'كيف شعرت' },

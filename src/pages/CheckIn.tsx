@@ -11,6 +11,7 @@ import {
     X,
     CheckCircle,
     AlertCircle,
+    PartyPopper,
 } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -32,6 +33,14 @@ export const CheckIn = () => {
     const [photoModal, setPhotoModal] = useState<string | null>(null);
     const [uploadingAngle, setUploadingAngle] = useState<string | null>(null);
     const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
+    // Big celebratory banner that fires ONCE after submit — distinct
+    // from the persistent "Submitted — pending coach review" status
+    // banner that always shows for submitted weeks. Founder direction:
+    // "show a message like when finishing the day of training, like
+    // congratulations you have logged your metrics successfully see
+    // you next week." Auto-dismisses after 8s; clears immediately on
+    // week-switch so it doesn't leak across weeks.
+    const [justSubmitted, setJustSubmitted] = useState(false);
     const [strength, setStrength] = useState(5);
     const [energy, setEnergy] = useState(5);
     const [cardioCalories, setCardioCalories] = useState(0);
@@ -114,6 +123,12 @@ export const CheckIn = () => {
             // Idempotent — one WEEKLY_CHECKIN award per week submission.
             await awardXp(user?.id, XP_SOURCE.WEEKLY_CHECKIN, weekData.id);
             showToast('success', t('checkInSubmitted'));
+            // Trigger the celebratory banner. 8s is long enough for
+            // the eye to land on it AND for the reader to digest
+            // "see you next week", short enough to not block the
+            // read-only wizard rendering underneath.
+            setJustSubmitted(true);
+            window.setTimeout(() => setJustSubmitted(false), 8000);
         } catch (e: unknown) {
             const err = e as { code?: string; message?: string };
             // eslint-disable-next-line no-console
@@ -243,6 +258,33 @@ export const CheckIn = () => {
                     feedback (the coach pill auto-opens on reviewed
                     weeks). One layout, one mental model, regardless
                     of where the week sits in the cycle. */}
+                {/* Celebration banner — fires once for ~8s right
+                    after the client taps Submit. Sits ABOVE the
+                    wizard so it doesn't displace the now-read-only
+                    content underneath. */}
+                {justSubmitted && (
+                    <div className="bg-gradient-to-br from-emerald-500/15 via-emerald-500/10 to-emerald-500/8 border border-emerald-500/30 rounded-2xl p-5 flex items-start gap-4 bzt-rise-in mb-6">
+                        <span className="w-12 h-12 rounded-full bg-emerald-500/25 text-emerald-400 flex items-center justify-center shrink-0">
+                            <PartyPopper size={22} strokeWidth={2.2} />
+                        </span>
+                        <div className="flex-1 min-w-0">
+                            <h3 className="font-headline font-bold text-emerald-300 text-lg leading-tight mb-1">
+                                {t('checkInCongratsTitle')}
+                            </h3>
+                            <p className="text-on-surface/80 font-body text-[13.5px] leading-relaxed">
+                                {t('checkInCongratsBody')}
+                            </p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setJustSubmitted(false)}
+                            className="text-on-surface/40 hover:text-on-surface/80 text-[12px] font-label font-bold uppercase tracking-widest shrink-0 self-start"
+                        >
+                            ✕
+                        </button>
+                    </div>
+                )}
+
                 <CheckInWizard
                     readOnly={isReadOnly}
                     weekStatus={weekData.status as 'pending' | 'submitted' | 'reviewed' | 'locked'}

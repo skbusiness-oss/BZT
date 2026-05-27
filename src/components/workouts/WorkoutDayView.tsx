@@ -197,6 +197,38 @@ export const WorkoutDayView = () => {
                 </div>
             )}
 
+            {/* Don't-forget-your-cardio reminder — appears on every
+                training day above the exercise list. Founder
+                direction: "on workouts sections on training days add
+                a note as well of don't forget your cardio." Most
+                clients programme cardio as a separate, often-skipped
+                bolt-on; surfacing it next to the resistance work
+                keeps it on the radar. Tap routes to the Academy
+                cardio section so they can also revisit how to
+                programme it. */}
+            {workout && (
+                <button
+                    type="button"
+                    onClick={() => navigate('/library?topic=cardio')}
+                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-orange-500/8 border border-orange-500/25 hover:bg-orange-500/12 hover:border-orange-500/45 transition-all text-start group"
+                >
+                    <span className="w-9 h-9 rounded-lg bg-orange-500/20 text-orange-400 flex items-center justify-center shrink-0">
+                        <Flame size={16} strokeWidth={2.4} />
+                    </span>
+                    <div className="flex-1 min-w-0">
+                        <div className="text-[10px] font-label font-bold uppercase tracking-widest text-orange-400 mb-0.5">
+                            {isAr ? 'تذكير' : 'Reminder'}
+                        </div>
+                        <div className="text-on-surface text-[13.5px] font-body leading-snug">
+                            {isAr ? 'لا تنسَ الكارديو اليوم — ادمجها قبل أو بعد التمرين.' : "Don't forget your cardio today — fit it in before or after this workout."}
+                        </div>
+                    </div>
+                    <span className="text-[10px] font-label font-bold uppercase tracking-widest text-orange-400/70 group-hover:text-orange-400 shrink-0">
+                        {isAr ? 'تعلّم ←' : 'Learn →'}
+                    </span>
+                </button>
+            )}
+
             {/* Exercise list */}
             {workout && (
                 <div className="space-y-3">

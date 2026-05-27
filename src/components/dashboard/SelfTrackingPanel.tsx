@@ -6,7 +6,8 @@ import {
     Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
     ComposedChart, Line, Bar, Legend,
 } from 'recharts';
-import { Scale, Ruler, Plus, Trash2, Loader2 } from 'lucide-react';
+import { Scale, Ruler, Plus, Trash2, Loader2, CheckCircle, PartyPopper } from 'lucide-react';
+import { CardioCalculatorCard } from './CardioCalculatorCard';
 
 interface Props {
     /** When provided (and not equal to current user), panel renders read-only for coach view-as. */
@@ -32,6 +33,12 @@ export const SelfTrackingPanel = ({ targetUserId }: Props) => {
     const [notes, setNotes] = useState('');
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    // Celebratory toast that fires after a successful log. Founder
+    // direction: "show a message like congratulations you have logged
+    // your metrics successfully see you next week" — meant to make
+    // the moment feel rewarding, not transactional. Auto-dismisses
+    // 6s after firing.
+    const [congrats, setCongrats] = useState(false);
 
     /**
      * Merged chart series. We have THREE data sources keyed by date:
@@ -111,11 +118,35 @@ export const SelfTrackingPanel = ({ targetUserId }: Props) => {
             await addLog({ date, weight: w, measurements: hasMeasurement ? measurements : undefined, notes: notes || undefined });
             setShowForm(false);
             setWeight(''); setMeasurements({}); setNotes(''); setDate(todayISO());
+            // Show the celebratory message after every successful
+            // log. Auto-dismisses after 6s so it doesn't sit there
+            // forever — long enough for the user to read + feel the
+            // moment, short enough to not block the chart underneath.
+            setCongrats(true);
+            window.setTimeout(() => setCongrats(false), 6000);
         } catch (e) {
             setError(e instanceof Error ? e.message : 'Failed to save');
         } finally {
             setSubmitting(false);
         }
+    };
+
+    /** Saves the cardio calculator's output as a self-log entry on
+     *  today's date. The card decides what to compute; we just write
+     *  it through as cardioCalories + notes that include the planned
+     *  duration + intensity so the user has context when they look
+     *  back later. */
+    const handleSaveCardio = async (entry: { zone: 'fat' | 'heart'; durationMin: number; targetKcal: number; targetHrLow: number; targetHrHigh: number; notes: string }) => {
+        const zoneLabel = entry.zone === 'fat' ? (t('cardioCalcZoneFatTitle') || 'Fat burn') : (t('cardioCalcZoneHeartTitle') || 'Train heart');
+        const composedNotes = [
+            `${zoneLabel} · ${entry.durationMin} min · ${entry.targetHrLow}-${entry.targetHrHigh} bpm`,
+            entry.notes.trim(),
+        ].filter(Boolean).join(' — ');
+        await addLog({
+            date: todayISO(),
+            metrics: { cardioCalories: entry.targetKcal },
+            notes: composedNotes,
+        });
     };
 
     if (loading) {
@@ -128,6 +159,45 @@ export const SelfTrackingPanel = ({ targetUserId }: Props) => {
 
     return (
         <div className="space-y-4">
+            {/* Congratulations banner — auto-dismisses 6s after a
+                successful log. Founder direction: "show a message
+                like congratulations you have logged your metrics
+                successfully see you next week" — meant to make the
+                logging moment feel rewarding instead of transactional. */}
+            {congrats && (
+                <div className="bg-gradient-to-br from-emerald-500/15 via-emerald-500/10 to-emerald-500/8 border border-emerald-500/30 rounded-2xl p-5 flex items-start gap-4 bzt-rise-in">
+                    <span className="w-11 h-11 rounded-full bg-emerald-500/25 text-emerald-400 flex items-center justify-center shrink-0">
+                        <PartyPopper size={20} strokeWidth={2.2} />
+                    </span>
+                    <div className="flex-1 min-w-0">
+                        <h3 className="font-headline font-bold text-emerald-300 text-base leading-tight mb-1 flex items-center gap-2">
+                            <CheckCircle size={14} className="shrink-0" />
+                            {t('selfLogCongratsTitle')}
+                        </h3>
+                        <p className="text-on-surface/75 font-body text-[13px] leading-relaxed">
+                            {t('selfLogCongratsBody')}
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => setCongrats(false)}
+                        className="text-on-surface/40 hover:text-on-surface/80 text-[10px] font-label font-bold uppercase tracking-widest shrink-0 self-start"
+                    >
+                        ✕
+                    </button>
+                </div>
+            )}
+
+            {/* Cardio calculator — community users only. Coaching
+                clients already get a cardio target prescribed by
+                their coach (visible in the CheckIn wizard's coach
+                pill), so the calculator would be redundant for them.
+                isOwner = looking at your own panel (not coach
+                viewing-as a client). */}
+            {isOwner && (
+                <CardioCalculatorCard onSaveCardio={handleSaveCardio} />
+            )}
+
             {/* Hero summary — one unified frame */}
             <div
                 className="bg-surface-container-low rounded-2xl p-8 relative overflow-hidden border border-outline-variant/30 ghost-border shadow-xl"
