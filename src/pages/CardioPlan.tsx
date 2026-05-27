@@ -28,7 +28,7 @@ import { useLanguage } from '../context/LanguageContext';
 import {
     ArrowLeft, GraduationCap, ChevronRight, Info, Footprints,
     Bike, Activity, Waves, ChevronsUp, Repeat, Zap, Flame,
-    User, Ruler, Scale, Edit2, Target, Minus, TrendingUp, Mountain,
+    User, Ruler, Scale, Edit2, Target, TrendingUp,
     type LucideIcon,
 } from 'lucide-react';
 import clsx from 'clsx';
@@ -66,17 +66,15 @@ const ACTIVITIES: Activity[] = [
 ];
 
 type Intensity = 'easy' | 'hard';
-type Incline = 'flat' | 'some' | 'steep';
 
-// MET bonus per incline level. Numbers approximated from the
-// Compendium of Physical Activities walking/running-on-grade
-// entries — incline at 5% adds ~1.5 MET, 10%+ adds ~3.5 MET.
-// Conservative defaults; real burn varies with stride + speed.
-const INCLINE_MET_BONUS: Record<Incline, number> = {
-    flat:  0,
-    some:  1.5,
-    steep: 3.5,
-};
+// MET bonus per % of treadmill incline. Linear approximation from
+// the Compendium of Physical Activities walking/running-on-grade
+// entries — roughly +0.3 MET per 1% grade. So a 5% incline adds
+// 1.5 MET, 10% adds 3, 15% adds 4.5. Good enough for a planning
+// estimate; real burn varies with stride length, speed, and how
+// much the user holds the handles (cheating with the rails
+// reduces work).
+const inclineMetBonus = (pct: number) => pct * 0.3;
 
 // Standard MET-based calorie estimate. Weight in kg, duration in min.
 // Used everywhere a "kcal burned" number is shown on this page.
@@ -120,10 +118,10 @@ export const CardioPlan = () => {
     const [pickedId, setPickedId] = useState<string | null>(null);
     const [durationMin, setDurationMin] = useState<number>(30);
     const [intensity, setIntensity] = useState<Intensity>('easy');
-    // Treadmill-only: incline level. Resets to 'flat' whenever a
-    // new activity is picked so the user always starts from a
-    // neutral baseline.
-    const [incline, setIncline] = useState<Incline>('flat');
+    // Treadmill-only: incline percentage (0-15%). Resets to 0
+    // whenever a new activity is picked so the user always starts
+    // from "normal calories" before they add incline.
+    const [inclinePct, setInclinePct] = useState<number>(0);
 
     const picked = pickedId ? ACTIVITIES.find(a => a.id === pickedId) : null;
 
@@ -154,7 +152,7 @@ export const CardioPlan = () => {
     const pickedKcal = picked
         ? kcalEstimate(
             (intensity === 'easy' ? picked.easyMet : picked.hardMet)
-              + (picked.supportsIncline ? INCLINE_MET_BONUS[incline] : 0),
+              + (picked.supportsIncline ? inclineMetBonus(inclinePct) : 0),
             weightKg,
             durationMin,
           )
@@ -164,7 +162,7 @@ export const CardioPlan = () => {
         setPickedId(id);
         setDurationMin(30);
         setIntensity('easy');
-        setIncline('flat');
+        setInclinePct(0);
     };
 
     return (
@@ -397,23 +395,36 @@ export const CardioPlan = () => {
                         </div>
                     </div>
 
-                    {/* Treadmill-only incline toggle. Three levels —
-                        plain English ("Flat / Some incline / Steep")
-                        with the MET bonus driving the kcal result
-                        below silently. Walking on a 10% grade burns
-                        materially more than walking flat, and most
-                        treadmill users either know this intuitively
-                        ("I want incline today") or want to see what
-                        difference it makes. */}
+                    {/* Treadmill-only incline slider. Starts at 0%
+                        ("normal calories") and adds bonus MET as the
+                        user dials it up. Each 1% adds ~0.3 MET, so
+                        the kcal number below updates in real time as
+                        the user drags. Founder direction: "show
+                        normal calories, then let them add how much
+                        incline and watch it change." */}
                     {picked.supportsIncline && (
                         <div className="mb-6">
-                            <div className="text-[10px] font-label font-bold uppercase tracking-widest text-on-surface/55 mb-2">
-                                {t('cardioInclineLabel')}
+                            <div className="flex items-baseline justify-between mb-3">
+                                <span className="text-[10px] font-label font-bold uppercase tracking-widest text-on-surface/55 inline-flex items-center gap-1.5">
+                                    <TrendingUp size={11} className="text-orange-400" strokeWidth={2.4} />
+                                    {t('cardioInclineLabel')}
+                                </span>
+                                <span className="text-2xl font-headline font-extrabold text-primary tabular-nums" dir="ltr">
+                                    {inclinePct}<span className="text-xs text-on-surface/40 font-normal">%</span>
+                                </span>
                             </div>
-                            <div className="grid grid-cols-3 gap-2">
-                                <InclineToggle value="flat"  active={incline === 'flat'}  onPick={setIncline} />
-                                <InclineToggle value="some"  active={incline === 'some'}  onPick={setIncline} />
-                                <InclineToggle value="steep" active={incline === 'steep'} onPick={setIncline} />
+                            <input
+                                type="range"
+                                min={0}
+                                max={15}
+                                step={1}
+                                value={inclinePct}
+                                onChange={(e) => setInclinePct(parseInt(e.target.value))}
+                                className="w-full h-1.5 rounded-full appearance-none cursor-pointer bg-surface-container-highest accent-primary"
+                            />
+                            <div className="flex justify-between text-[10px] font-label uppercase tracking-widest text-on-surface/40 mt-2">
+                                <span>{t('cardioInclineFlat')}</span>
+                                <span>15%</span>
                             </div>
                         </div>
                     )}
@@ -586,43 +597,6 @@ function StatField({ icon: Icon, label, value, onChange, suffix, min, max }: {
                 </span>
             </div>
         </div>
-    );
-}
-
-// ─────────────────────────────────────────────────────────────────
-//  InclineToggle — Flat / Some / Steep buttons (treadmill only)
-// ─────────────────────────────────────────────────────────────────
-function InclineToggle({ value, active, onPick }: {
-    value: Incline;
-    active: boolean;
-    onPick: (v: Incline) => void;
-}) {
-    const { t } = useLanguage();
-    const config = value === 'flat'
-        ? { icon: Minus, labelKey: 'cardioInclineFlat',  activeBg: 'bg-emerald-500/15 border-emerald-500', activeText: 'text-emerald-400' }
-        : value === 'some'
-            ? { icon: TrendingUp, labelKey: 'cardioInclineSome', activeBg: 'bg-amber-500/15 border-amber-500', activeText: 'text-amber-400' }
-            : { icon: Mountain, labelKey: 'cardioInclineSteep', activeBg: 'bg-orange-500/15 border-orange-500', activeText: 'text-orange-400' };
-    const Icon = config.icon;
-    return (
-        <button
-            type="button"
-            onClick={() => onPick(value)}
-            className={clsx(
-                'py-2.5 px-3 rounded-xl text-center transition-all flex flex-col items-center gap-1',
-                active
-                    ? `${config.activeBg} border-2`
-                    : 'bg-surface-container-lowest border-2 border-outline-variant/25 hover:border-primary/40',
-            )}
-        >
-            <Icon size={14} className={active ? config.activeText : 'text-on-surface/55'} strokeWidth={2.4} />
-            <span className={clsx(
-                'font-headline font-bold text-[12px]',
-                active ? 'text-on-surface' : 'text-on-surface/70',
-            )}>
-                {t(config.labelKey)}
-            </span>
-        </button>
     );
 }
 
