@@ -46,7 +46,13 @@ export function CompletionCelebration({ title, subtitle, ctaLabel, onCta, onDism
     return (
         <div
             dir={isRTL ? 'rtl' : 'ltr'}
-            className="min-h-[60vh] flex flex-col items-center justify-center text-center space-y-6 animate-in fade-in zoom-in-95 duration-500 pb-20 px-6"
+            // Snappy 200ms entry — the previous 500ms duration plus
+            // the Firestore-write wait made the celebration feel
+            // sluggish to appear after tap. Pair this with the
+            // optimistic-fire pattern in the parent handlers
+            // (handleSubmit / handleComplete) so total perceived
+            // latency from tap to celebration is under one frame.
+            className="min-h-[60vh] flex flex-col items-center justify-center text-center space-y-6 animate-in fade-in zoom-in-95 duration-200 pb-20 px-6"
         >
             <div className="relative">
                 <Trophy className="text-primary animate-bounce" size={64} />

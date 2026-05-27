@@ -55,10 +55,21 @@ export const WorkoutDayView = () => {
     const isCompleted = activeProgram?.completedDays.includes(dayNum) ?? false;
 
     const handleComplete = async () => {
-        setIsCompleting(true);
-        await completeDay(dayNum);
+        // OPTIMISTIC: fire the celebration the instant the user taps
+        // Mark Day Complete. The previous flow awaited completeDay()
+        // (Firestore write, 400-1500ms on a phone network) BEFORE
+        // showing the celebration — felt sluggish. If the write
+        // actually fails, we hide the celebration + the error
+        // surfaces from completeDay's own toast.
         setShowCelebration(true);
-        setIsCompleting(false);
+        setIsCompleting(true);
+        try {
+            await completeDay(dayNum);
+        } catch {
+            setShowCelebration(false);
+        } finally {
+            setIsCompleting(false);
+        }
     };
 
     // Get next day info for celebration screen

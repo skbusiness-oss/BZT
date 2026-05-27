@@ -110,6 +110,13 @@ export const CheckIn = () => {
             );
             if (!ok) return;
         }
+        // OPTIMISTIC celebration: fire the full-screen takeover the
+        // instant the user taps Submit. Without this, the user sat
+        // staring at the wizard for 500-2000ms while Firestore
+        // wrote, then the celebration finally popped — felt sluggish.
+        // On a real failure we roll it back below and surface the
+        // error via showToast.
+        setJustSubmitted(true);
         try {
             await updateWeek(weekData.id, {
                 dailyEntries: entries,
@@ -125,13 +132,9 @@ export const CheckIn = () => {
             // Idempotent — one WEEKLY_CHECKIN award per week submission.
             await awardXp(user?.id, XP_SOURCE.WEEKLY_CHECKIN, weekData.id);
             showToast('success', t('checkInSubmitted'));
-            // Trigger the celebratory banner. 8s is long enough for
-            // the eye to land on it AND for the reader to digest
-            // "see you next week", short enough to not block the
-            // read-only wizard rendering underneath.
-            setJustSubmitted(true);
-            window.setTimeout(() => setJustSubmitted(false), 8000);
         } catch (e: unknown) {
+            // Roll back the optimistic celebration on real failure.
+            setJustSubmitted(false);
             const err = e as { code?: string; message?: string };
             // eslint-disable-next-line no-console
             console.error('CheckIn submit failed:', err);

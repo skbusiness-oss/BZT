@@ -1258,23 +1258,26 @@ export const ProgressPanel = () => {
         weight: number; notes: string;
         metrics: { strength: number; hunger: number; energy: number; cardioCalories: number };
     }) => {
-        // Atomic batch write — weighIn + metrics + selfLogs sidecar +
-        // user.currentWeightKg mirror, all in one transaction. See
-        // `useWeeklyCheckIns.submit()` for the full sequence and the
-        // rationale behind each doc.
-        await submitWeeklyCheckIn({
-            weight: p.weight,
-            strength: p.metrics.strength,
-            hunger: p.metrics.hunger,
-            energy: p.metrics.energy,
-            cardioCalories: p.metrics.cardioCalories,
-            notes: p.notes || undefined,
-        });
-        // Only fire the celebration AFTER the write resolves. If the
-        // submit throws, the WeeklyCheckIn child's own error banner
-        // surfaces it — we don't fire congrats on a failed submit.
+        // OPTIMISTIC: fire the celebration the instant the user taps
+        // Submit. The atomic batch write below typically takes 600-
+        // 1800ms on mobile, which felt sluggish when we waited for
+        // it before showing the celebration. If the write throws we
+        // hide the celebration AND re-raise so the WeeklyCheckIn
+        // child's own error banner surfaces the failure.
         setCongrats(true);
-        window.setTimeout(() => setCongrats(false), 8000);
+        try {
+            await submitWeeklyCheckIn({
+                weight: p.weight,
+                strength: p.metrics.strength,
+                hunger: p.metrics.hunger,
+                energy: p.metrics.energy,
+                cardioCalories: p.metrics.cardioCalories,
+                notes: p.notes || undefined,
+            });
+        } catch (err) {
+            setCongrats(false);
+            throw err;
+        }
     };
 
     return (
