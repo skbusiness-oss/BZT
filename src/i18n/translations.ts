@@ -222,6 +222,23 @@ export const translations = {
     cardioResultFootnote:          { en: 'A rough estimate. Real burn varies with effort, fitness level, and equipment resistance.',
                                      ar: 'تقدير تقريبي. الحرق الفعلي يختلف حسب الجهد، مستوى اللياقة، ومقاومة الجهاز.' },
 
+    // Stats panel (age / height / weight) + weekly target
+    cardioStatsLabel:              { en: 'Your stats',                          ar: 'بياناتك' },
+    cardioStatsEdit:               { en: 'Edit',                                ar: 'تعديل' },
+    cardioStatsHide:               { en: 'Hide',                                ar: 'إخفاء' },
+    cardioStatAge:                 { en: 'Age',                                 ar: 'العمر' },
+    cardioStatYears:               { en: 'yrs',                                 ar: 'سنة' },
+    cardioStatHeight:              { en: 'Height',                              ar: 'الطول' },
+    cardioStatWeight:              { en: 'Weight',                              ar: 'الوزن' },
+    cardioStatsFootnote:           { en: 'At rest your body burns about {bmr} kcal per day just to keep you alive — cardio is on top of that.',
+                                     ar: 'في الراحة، جسمك يحرق حوالي {bmr} سعرة يومياً فقط للحفاظ على حياتك — الكارديو يُضاف لهذا.' },
+
+    cardioTargetEyebrow:           { en: 'Your weekly target',                  ar: 'هدفك الأسبوعي' },
+    cardioTargetTitle:             { en: 'Aim for {min} minutes of cardio per week',
+                                     ar: 'استهدف {min} دقيقة من الكارديو أسبوعياً' },
+    cardioTargetBody:              { en: 'At your weight, that\'s about {kcal} kcal burned per week. Split it across 3-5 sessions.',
+                                     ar: 'بوزنك، يعني ذلك حوالي {kcal} سعرة محروقة أسبوعياً. وزّعها على 3-5 جلسات.' },
+
     cardioPlanLogNoteTitle:        { en: 'Logging happens on the Update page',  ar: 'التسجيل يتمّ في صفحة التحديث' },
     cardioPlanLogNoteBody:         { en: 'This page is for planning and learning. To record what you actually did, open Update and add it to your weekly check-in.',
                                      ar: 'هذه الصفحة للتخطيط والتعلّم. لتسجيل ما قمت به فعلياً، افتح صفحة التحديث وأضفه إلى تسجيلك الأسبوعي.' },

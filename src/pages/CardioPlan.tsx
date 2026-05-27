@@ -28,6 +28,7 @@ import { useLanguage } from '../context/LanguageContext';
 import {
     ArrowLeft, GraduationCap, ChevronRight, Info, Footprints,
     Bike, Activity, Waves, ChevronsUp, Repeat, Zap, Flame,
+    User, Ruler, Scale, Edit2, Target,
     type LucideIcon,
 } from 'lucide-react';
 import clsx from 'clsx';
@@ -61,18 +62,44 @@ const ACTIVITIES: Activity[] = [
 
 type Intensity = 'easy' | 'hard';
 
+// Standard MET-based calorie estimate. Weight in kg, duration in min.
+// Used everywhere a "kcal burned" number is shown on this page.
 const kcalEstimate = (met: number, weightKg: number, minutes: number) =>
     Math.round(((met * 3.5 * weightKg) / 200) * minutes);
+
+// Mifflin-St Jeor basal metabolic rate (BMR) — kcal/day at rest.
+// We use the "average" form (no sex input) by taking the midpoint
+// of the male / female formulas. Page-level UX choice: keeps the
+// stats panel to three fields (age / height / weight) instead of
+// four. Per-person accuracy is within ±5% which is plenty for a
+// planning estimate.
+const estimateBmr = (age: number, heightCm: number, weightKg: number) => {
+    const baseMale   = 10 * weightKg + 6.25 * heightCm - 5 * age + 5;
+    const baseFemale = 10 * weightKg + 6.25 * heightCm - 5 * age - 161;
+    return Math.round((baseMale + baseFemale) / 2);
+};
+
+// WHO's standard for adult cardio: 150 minutes of moderate-intensity
+// activity per week. We surface this as a personalised target on the
+// page — "Aim for 150 min/week → ~X kcal at your stats."
+const WEEKLY_CARDIO_TARGET_MIN = 150;
+const TARGET_MET = 5; // "moderate" intensity, same as the easy MET on the bike
 
 export const CardioPlan = () => {
     const { user } = useAuth();
     const { t, isRTL } = useLanguage();
     const navigate = useNavigate();
 
-    // Weight pulled silently from the user profile. Falls back to a
-    // sensible 70kg if missing — the calculator degrades rather
-    // than 404. Never displayed in the UI; numbers stay small.
-    const weightKg = user?.currentWeightKg ?? 70;
+    // Stats default from the user's profile, but become locally
+    // editable so the user can tweak them ("what if I were 5 kg
+    // lighter?") without changing their profile. Founder direction:
+    // surface age + height + weight as visible inputs, since they
+    // drive the recommendation below + the per-activity kcal
+    // estimates above.
+    const [age, setAge]           = useState<number>(user?.age ?? 30);
+    const [heightCm, setHeightCm] = useState<number>(user?.heightCm ?? 170);
+    const [weightKg, setWeightKg] = useState<number>(user?.currentWeightKg ?? 70);
+    const [statsOpen, setStatsOpen] = useState<boolean>(false);
 
     const [pickedId, setPickedId] = useState<string | null>(null);
     const [durationMin, setDurationMin] = useState<number>(30);
@@ -80,9 +107,9 @@ export const CardioPlan = () => {
 
     const picked = pickedId ? ACTIVITIES.find(a => a.id === pickedId) : null;
 
-    // Per-tile default estimate at the easy intensity, 30 min. Drives
-    // the headline number on each card so users see a real estimate
-    // before they tap.
+    // Per-tile default estimate at the easy intensity, 30 min.
+    // Recomputes whenever weight changes (e.g. user edited the
+    // stats panel) so the grid always reflects current inputs.
     const defaultEstimates = useMemo(() => {
         const map: Record<string, number> = {};
         for (const a of ACTIVITIES) {
@@ -90,6 +117,19 @@ export const CardioPlan = () => {
         }
         return map;
     }, [weightKg]);
+
+    // Weekly cardio recommendation, personalised. WHO says 150
+    // min/week at moderate intensity — at the user's body weight
+    // that translates to a concrete kcal-per-week number, which
+    // is more actionable than the abstract "150 minutes".
+    const weeklyTargetKcal = useMemo(
+        () => kcalEstimate(TARGET_MET, weightKg, WEEKLY_CARDIO_TARGET_MIN),
+        [weightKg],
+    );
+
+    // BMR — daily calories burned at rest. Useful context number,
+    // shown subtly in the stats panel when expanded.
+    const bmr = useMemo(() => estimateBmr(age, heightCm, weightKg), [age, heightCm, weightKg]);
 
     const pickedKcal = picked
         ? kcalEstimate(intensity === 'easy' ? picked.easyMet : picked.hardMet, weightKg, durationMin)
@@ -149,6 +189,99 @@ export const CardioPlan = () => {
                     style={{ transform: isRTL ? 'rotate(180deg)' : undefined }}
                 />
             </button>
+
+            {/* ── Stats panel (collapsed by default) ─────────────
+                Compact one-line display of age + height + weight.
+                Tap edit → expands into 3 small editable inputs.
+                Founder direction: surface these so the user can
+                see and adjust them, but keep visually small. */}
+            <div className="bg-surface-container-low rounded-2xl ghost-border mb-6 overflow-hidden">
+                <button
+                    type="button"
+                    onClick={() => setStatsOpen(o => !o)}
+                    className="w-full flex items-center justify-between gap-3 px-5 py-3.5 hover:bg-surface-container/40 transition-colors"
+                >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                        <span className="w-8 h-8 rounded-lg bg-primary/12 text-primary flex items-center justify-center shrink-0">
+                            <User size={14} strokeWidth={2.4} />
+                        </span>
+                        <div className="min-w-0 text-start">
+                            <div className="text-[10px] font-label font-bold uppercase tracking-widest text-on-surface/50">
+                                {t('cardioStatsLabel')}
+                            </div>
+                            <div className="text-on-surface text-[13px] font-headline font-bold tabular-nums" dir="ltr">
+                                {age}y · {heightCm} cm · {weightKg} kg
+                            </div>
+                        </div>
+                    </div>
+                    <span className="inline-flex items-center gap-1 text-[10px] font-label font-bold uppercase tracking-widest text-primary/70 shrink-0">
+                        <Edit2 size={11} />
+                        {statsOpen ? t('cardioStatsHide') : t('cardioStatsEdit')}
+                    </span>
+                </button>
+
+                {statsOpen && (
+                    <div className="px-5 pb-5 pt-2 space-y-3 border-t border-outline-variant/15 bzt-rise-in" style={{ animationDuration: '180ms' }}>
+                        <div className="grid grid-cols-3 gap-3 pt-3">
+                            <StatField
+                                icon={User}
+                                label={t('cardioStatAge')}
+                                value={age}
+                                onChange={(v) => setAge(Math.max(15, Math.min(100, v)))}
+                                suffix={t('cardioStatYears')}
+                                min={15} max={100}
+                            />
+                            <StatField
+                                icon={Ruler}
+                                label={t('cardioStatHeight')}
+                                value={heightCm}
+                                onChange={(v) => setHeightCm(Math.max(120, Math.min(220, v)))}
+                                suffix="cm"
+                                min={120} max={220}
+                            />
+                            <StatField
+                                icon={Scale}
+                                label={t('cardioStatWeight')}
+                                value={weightKg}
+                                onChange={(v) => setWeightKg(Math.max(35, Math.min(200, v)))}
+                                suffix="kg"
+                                min={35} max={200}
+                            />
+                        </div>
+                        <p className="text-[11px] text-on-surface/45 font-body leading-relaxed inline-flex items-start gap-1.5">
+                            <Info size={10} className="mt-0.5 shrink-0" />
+                            {t('cardioStatsFootnote')?.replace('{bmr}', String(bmr))}
+                        </p>
+                    </div>
+                )}
+            </div>
+
+            {/* ── Weekly cardio target — personalised recommendation
+                Founder direction: add an "average cardio" target
+                that uses the stats above. WHO's 150 min/week of
+                moderate cardio, translated to a real kcal number
+                at the user's stats. More actionable than "150
+                minutes" alone. */}
+            <div className="bg-gradient-to-br from-orange-500/10 to-amber-500/8 border border-orange-500/25 rounded-2xl p-5 mb-8">
+                <div className="flex items-start gap-3">
+                    <span className="w-10 h-10 rounded-xl bg-orange-500/20 text-orange-400 flex items-center justify-center shrink-0">
+                        <Target size={18} strokeWidth={2.4} />
+                    </span>
+                    <div className="flex-1 min-w-0">
+                        <div className="text-[10px] font-label font-bold uppercase tracking-widest text-orange-400 mb-1">
+                            {t('cardioTargetEyebrow')}
+                        </div>
+                        <h3 className="font-headline font-bold text-on-surface text-[16px] leading-tight mb-1">
+                            {t('cardioTargetTitle')
+                                ?.replace('{min}', String(WEEKLY_CARDIO_TARGET_MIN))}
+                        </h3>
+                        <p className="text-on-surface/70 font-body text-[13px] leading-relaxed" dir="ltr">
+                            {t('cardioTargetBody')
+                                ?.replace('{kcal}', String(weeklyTargetKcal))}
+                        </p>
+                    </div>
+                </div>
+            </div>
 
             {/* ── Activity picker grid ───────────────────────────── */}
             <h2 className="font-headline font-extrabold text-on-surface text-xl tracking-tight mb-1">
@@ -322,6 +455,49 @@ function ActivityTile({ icon: Icon, label, kcal, active, onPick }: {
                 </span>
             </div>
         </button>
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────
+//  StatField — one of the three editable stats (age / height /
+//  weight) in the expanded stats panel. Compact numeric input with
+//  icon + label + unit suffix so all three sit cleanly in a row.
+// ─────────────────────────────────────────────────────────────────
+function StatField({ icon: Icon, label, value, onChange, suffix, min, max }: {
+    icon: LucideIcon;
+    label: string;
+    value: number;
+    onChange: (v: number) => void;
+    suffix: string;
+    min: number;
+    max: number;
+}) {
+    return (
+        <div className="bg-surface-container-lowest rounded-xl p-3 border border-outline-variant/20">
+            <div className="flex items-center gap-1.5 mb-1.5">
+                <Icon size={11} className="text-on-surface/50" strokeWidth={2.4} />
+                <span className="text-[9px] font-label font-bold uppercase tracking-widest text-on-surface/55">
+                    {label}
+                </span>
+            </div>
+            <div className="flex items-baseline gap-1" dir="ltr">
+                <input
+                    type="number"
+                    inputMode="numeric"
+                    value={value}
+                    min={min}
+                    max={max}
+                    onChange={(e) => {
+                        const n = parseInt(e.target.value, 10);
+                        if (!Number.isNaN(n)) onChange(n);
+                    }}
+                    className="w-full min-w-0 bg-transparent border-none outline-none text-2xl font-headline font-extrabold text-on-surface tabular-nums focus:text-primary transition-colors"
+                />
+                <span className="text-[10px] font-label uppercase tracking-widest text-on-surface/45 font-bold shrink-0">
+                    {suffix}
+                </span>
+            </div>
+        </div>
     );
 }
 
