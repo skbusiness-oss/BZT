@@ -31,6 +31,7 @@ import { Leaderboard } from './pages/Leaderboard';
 import { Settings } from './pages/Settings';
 import { AdminSetup } from './pages/AdminSetup';
 import { Pricing } from './pages/Pricing';
+import { CardioPlan } from './pages/CardioPlan';
 import { ErrorBoundary } from './components/shared/ErrorBoundary';
 import { TosModal } from './components/shared/TosModal';
 import { CommunityBaselineForm } from './components/profile/CommunityBaselineForm';
@@ -384,6 +385,7 @@ export const AppRoutes = () => {
                 } />
                 <Route path="/profile" element={<ErrorBoundary><Profile /></ErrorBoundary>} />
                 <Route path="/update" element={<ErrorBoundary><Profile /></ErrorBoundary>} />
+                <Route path="/cardio" element={<ErrorBoundary><CardioPlan /></ErrorBoundary>} />
                 <Route path="/upgrade" element={<ErrorBoundary><Upgrade /></ErrorBoundary>} />
                 <Route path="/broadcast" element={<ErrorBoundary><Broadcast /></ErrorBoundary>} />
                 <Route path="/notifications" element={<ErrorBoundary><Notifications /></ErrorBoundary>} />

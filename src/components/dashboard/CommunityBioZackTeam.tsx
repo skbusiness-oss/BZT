@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { useSelfLogs } from '../../hooks/useSelfLogs';
-import { CardioCalculatorCard } from './CardioCalculatorCard';
+import { CardioTrailerCard } from './CardioTrailerCard';
 import { useWeeklyCheckIns } from '../../hooks/useWeeklyCheckIns';
 import { useActiveProgram } from '../../hooks/useActiveProgram';
 import { useLatestBroadcast } from '../../hooks/useLatestBroadcast';
@@ -261,32 +261,12 @@ export const CommunityBioZackTeam = () => {
     const { user } = useAuth();
     const { t: tx } = useLanguage();
     const navigate = useNavigate();
-    const { logs, addLog } = useSelfLogs();
-
-    /** Cardio-calculator hand-off — lands a self-log entry on today
-     *  with the planned kcal burn + a notes string composing the
-     *  zone / duration / target HR band for later reference. */
-    const handleSaveCardio = async (entry: {
-        zone: 'fat' | 'heart';
-        durationMin: number;
-        targetKcal: number;
-        targetHrLow: number;
-        targetHrHigh: number;
-        notes: string;
-    }) => {
-        const zoneLabel = entry.zone === 'fat'
-            ? (tx('cardioCalcZoneFatTitle') || 'Fat burn')
-            : (tx('cardioCalcZoneHeartTitle') || 'Train heart');
-        const composedNotes = [
-            `${zoneLabel} · ${entry.durationMin} min · ${entry.targetHrLow}-${entry.targetHrHigh} bpm`,
-            entry.notes.trim(),
-        ].filter(Boolean).join(' — ');
-        await addLog({
-            date: new Date().toISOString().slice(0, 10),
-            metrics: { cardioCalories: entry.targetKcal },
-            notes: composedNotes,
-        });
-    };
+    const { logs } = useSelfLogs();
+    // No cardio-save handler here anymore. The dashboard trailer
+    // routes to /cardio (CardioPlan page) where users plan, but
+    // logging happens on /update via the ProgressPanel weekly
+    // check-in. Founder direction: "here you don't log your cardio
+    // you log it on the update section."
     const { weighIns } = useWeeklyCheckIns();
     const latestBroadcast = useLatestBroadcast(user?.role);
     const { activeProgram, getTodaysDay, todaysDayNumber } = useActiveProgram();
@@ -382,14 +362,13 @@ export const CommunityBioZackTeam = () => {
                 />
             </div>
 
-            {/* Cardio calculator — community users plan today's
-                cardio right here on the dashboard, in the same
-                "what am I doing today" rhythm as the workout +
-                diet cards. The card has its own inline
-                "Saved to your log" confirmation so no extra
-                celebration banner is needed at this surface. */}
+            {/* Cardio trailer — small clickable card that previews
+                the full Cardio Plan page at /cardio. The full page
+                holds the calculator, zone education, machine
+                variations, and Academy link. Trailer keeps the
+                dashboard scannable. */}
             <div style={{ marginBottom: 16 }}>
-                <CardioCalculatorCard onSaveCardio={handleSaveCardio} />
+                <CardioTrailerCard />
             </div>
 
             <div style={{ marginBottom: 32 }}>
