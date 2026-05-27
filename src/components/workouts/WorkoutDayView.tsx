@@ -23,8 +23,9 @@ import { Workout } from '../../types';
 import { getExerciseDetail } from '../../data/exerciseLibrary';
 import {
     ArrowLeft, CheckCircle2, Timer, Dumbbell,
-    Target, Trophy, Flame, Sparkles,
+    Target, Flame,
 } from 'lucide-react';
+import { CompletionCelebration } from '../shared/CompletionCelebration';
 
 export const WorkoutDayView = () => {
     const { dayNumber: dayParam } = useParams<{ dayNumber: string }>();
@@ -65,48 +66,33 @@ export const WorkoutDayView = () => {
     const nextDay = activeProgram?.rotation.find(d => d.dayNumber === nextDayNum);
     const isCycleComplete = dayNum === 10;
 
-    // Celebration screen
+    // Celebration screen — uses the shared CompletionCelebration so
+    // workout-day-complete, weekly-metric-log, and weekly-check-in-
+    // submitted all share the same visual treatment (founder
+    // direction: "make as well when logging the metrics for community
+    // users and for coaching users when they submit their weekly
+    // report"). The local component used to render this inline; now
+    // we just pass title + subtitle + ctaLabel to the shared one.
     if (showCelebration) {
+        const title = isCycleComplete
+            ? (isAr
+                ? `🎉 الدورة ${activeProgram?.currentCycle ?? 1} مكتملة!`
+                : `🎉 Cycle ${activeProgram?.currentCycle ?? 1} Complete!`)
+            : (isAr ? `🎉 اليوم ${dayNum} مكتمل!` : `🎉 Day ${dayNum} Complete!`);
+        const subtitle = isCycleComplete
+            ? (isAr
+                ? 'عمل ممتاز! البرنامج يستمر — دورة جديدة تبدأ.'
+                : 'Amazing work! Your program continues — a new cycle begins.')
+            : (nextDay
+                ? (isAr ? `الغد: ${nextDay.label}` : `Tomorrow: ${nextDay.label}`)
+                : undefined);
         return (
-            <div dir={isRTL ? 'rtl' : 'ltr'} className="min-h-[60vh] flex flex-col items-center justify-center text-center space-y-6 animate-in fade-in zoom-in-95 duration-500 pb-20">
-                <div className="relative">
-                    <Trophy className="text-primary animate-bounce" size={64} />
-                    <Sparkles className="text-primary-fixed absolute -top-2 -right-2 animate-pulse" size={24} />
-                </div>
-
-                {isCycleComplete ? (
-                    <>
-                        <h1 className="text-3xl font-extrabold text-on-surface">
-                            {isAr ? `🎉 الدورة ${activeProgram?.currentCycle ?? 1} مكتملة!` : `🎉 Cycle ${activeProgram?.currentCycle ?? 1} Complete!`}
-                        </h1>
-                        <p className="text-on-surface/70 text-lg max-w-sm">
-                            {isAr
-                                ? 'عمل ممتاز! البرنامج يستمر — دورة جديدة تبدأ.'
-                                : 'Amazing work! Your program continues — a new cycle begins.'
-                            }
-                        </p>
-                    </>
-                ) : (
-                    <>
-                        <h1 className="text-3xl font-extrabold text-on-surface">
-                            {isAr ? `🎉 اليوم ${dayNum} مكتمل!` : `🎉 Day ${dayNum} Complete!`}
-                        </h1>
-                        {nextDay && (
-                            <p className="text-on-surface/70 text-lg">
-                                {isAr ? 'الغد: ' : 'Tomorrow: '}
-                                <span className="text-on-surface font-semibold">{nextDay.label}</span>
-                            </p>
-                        )}
-                    </>
-                )}
-
-                <button
-                    onClick={() => navigate('/')}
-                    className="py-4 px-8 rounded-full font-label text-[12px] font-bold uppercase tracking-widest text-on-primary bg-gradient-to-r from-primary to-primary-container shadow-[0_5px_15px_rgba(230,195,100,0.3)] hover:scale-[1.02] active:scale-[0.98] transition-all"
-                >
-                    {isAr ? '← العودة للوحة' : '← Back to Dashboard'}
-                </button>
-            </div>
+            <CompletionCelebration
+                title={title}
+                subtitle={subtitle}
+                ctaLabel={isAr ? 'العودة للوحة' : 'Back to Dashboard'}
+                onCta={() => navigate('/')}
+            />
         );
     }
 

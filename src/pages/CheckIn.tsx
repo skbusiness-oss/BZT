@@ -11,13 +11,15 @@ import {
     X,
     CheckCircle,
     AlertCircle,
-    PartyPopper,
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { CompletionCelebration } from '../components/shared/CompletionCelebration';
 import clsx from 'clsx';
 
 export const CheckIn = () => {
     const { user } = useAuth();
     const { t } = useLanguage();
+    const navigate = useNavigate();
     const { clients, getClientWeeks, updateWeek, updateClient, uploadPhoto } = useData();
 
     const client = clients.find(c => c.userId === user?.id);
@@ -180,6 +182,24 @@ export const CheckIn = () => {
             )}
             <div className="max-w-6xl mx-auto pb-20 space-y-8 animate-in fade-in duration-500">
 
+                {/* Full-screen celebration takeover — fires right
+                    after the client submits their week. Replaces the
+                    whole CheckIn surface while shown. User taps the
+                    gold CTA to head back to the dashboard, or the
+                    small "Stay here" link to dismiss and review
+                    their submitted week in read-only mode. Auto-
+                    dismisses after 8s as a backstop. */}
+                {justSubmitted ? (
+                    <CompletionCelebration
+                        title={`🎉 ${t('checkInCongratsTitle')}`}
+                        subtitle={t('checkInCongratsBody')}
+                        ctaLabel={t('celebrationBackToDashboard')}
+                        onCta={() => { setJustSubmitted(false); navigate('/'); }}
+                        onDismiss={() => setJustSubmitted(false)}
+                        dismissLabel={t('celebrationReviewWeek')}
+                    />
+                ) : (<>
+
                 {/* ── Editorial Header ── */}
                 <header className="text-center md:text-start">
                     <p className="text-primary font-label uppercase tracking-[0.3em] text-[10px] font-bold mb-2">Weekly Protocol</p>
@@ -258,33 +278,6 @@ export const CheckIn = () => {
                     feedback (the coach pill auto-opens on reviewed
                     weeks). One layout, one mental model, regardless
                     of where the week sits in the cycle. */}
-                {/* Celebration banner — fires once for ~8s right
-                    after the client taps Submit. Sits ABOVE the
-                    wizard so it doesn't displace the now-read-only
-                    content underneath. */}
-                {justSubmitted && (
-                    <div className="bg-gradient-to-br from-emerald-500/15 via-emerald-500/10 to-emerald-500/8 border border-emerald-500/30 rounded-2xl p-5 flex items-start gap-4 bzt-rise-in mb-6">
-                        <span className="w-12 h-12 rounded-full bg-emerald-500/25 text-emerald-400 flex items-center justify-center shrink-0">
-                            <PartyPopper size={22} strokeWidth={2.2} />
-                        </span>
-                        <div className="flex-1 min-w-0">
-                            <h3 className="font-headline font-bold text-emerald-300 text-lg leading-tight mb-1">
-                                {t('checkInCongratsTitle')}
-                            </h3>
-                            <p className="text-on-surface/80 font-body text-[13.5px] leading-relaxed">
-                                {t('checkInCongratsBody')}
-                            </p>
-                        </div>
-                        <button
-                            type="button"
-                            onClick={() => setJustSubmitted(false)}
-                            className="text-on-surface/40 hover:text-on-surface/80 text-[12px] font-label font-bold uppercase tracking-widest shrink-0 self-start"
-                        >
-                            ✕
-                        </button>
-                    </div>
-                )}
-
                 <CheckInWizard
                     readOnly={isReadOnly}
                     weekStatus={weekData.status as 'pending' | 'submitted' | 'reviewed' | 'locked'}
@@ -307,6 +300,7 @@ export const CheckIn = () => {
                     onSubmit={handleSubmit}
                 />
 
+                </>)}
 
             </div>
 

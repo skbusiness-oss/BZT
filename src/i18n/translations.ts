@@ -289,6 +289,12 @@ export const translations = {
     progressLogCongratsTitle:      { en: 'Metrics logged. Strong work.',         ar: 'تم تسجيل القياسات. عمل قوي.' },
     progressLogCongratsBody:       { en: 'Your weekly numbers are in. Keep the streak alive — see you next week.',
                                      ar: 'أرقامك الأسبوعية مسجّلة. حافظ على السلسلة — نراك الأسبوع القادم.' },
+
+    // Shared completion-celebration CTAs (workout day / progress / check-in)
+    celebrationBackToDashboard:    { en: 'Back to Dashboard',                    ar: 'العودة للوحة' },
+    celebrationReviewWeek:         { en: 'Review my submitted week',             ar: 'مراجعة الأسبوع المُرسَل' },
+    celebrationReviewProgress:     { en: 'Stay and review my progress',          ar: 'البقاء ومراجعة تقدّمي' },
+    celebrationStayHere:           { en: 'Stay on this page',                    ar: 'البقاء في هذه الصفحة' },
     checkInCongratsTitle:          { en: 'Week submitted. Excellent work.',     ar: 'تم إرسال الأسبوع. عمل ممتاز.' },
     checkInCongratsBody:           { en: 'Your coach will review and reply within a few days. See you next week.',
                                      ar: 'سيراجع مدرّبك ويردّ خلال بضعة أيام. نراك الأسبوع القادم.' },
