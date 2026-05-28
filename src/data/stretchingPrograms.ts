@@ -25,12 +25,13 @@ export const STRETCHING_PROGRAMS: Workout[] = [
         ex('Arm Circles', 2, '20 seconds each way', 15),
         ex('Hip Circles', 2, '8 each way', 15),
     ]),
-    stretch('stretch-static-001', 'Static Stretching - Post-Workout Cool Down', 'Hold longer positions after training to bring the body down and improve flexibility.', 15, [
-        ex('Static Full Body Stretch', 1, '15 min follow-along', 20, 'Use after training'),
-        ex('Hamstring Stretch', 2, '45 sec each side', 15),
-        ex('Quad Stretch', 2, '45 sec each side', 15),
-        ex('Chest Doorway Stretch', 2, '45 sec', 15),
-        ex('Childs Pose Lat Stretch', 2, '45 sec', 15),
+    stretch('stretch-static-001', 'Static Stretching - Post-Workout Cool Down', 'Hold longer positions after training to bring the body down and improve flexibility. Follow along with Coach Zack.', 12, [
+        ex('Standing Forward Fold', 2, '30 sec hold', 15, 'Soften deeper on each exhale'),
+        ex('Standing Hamstring Stretch', 2, '30 sec each side', 15),
+        ex('Standing Toe Touch', 2, '30 sec hold', 15),
+        ex('Kneeling Hip Flexor Stretch', 2, '30 sec each side', 15),
+        ex('Seated Figure-Four Stretch', 2, '30 sec each side', 15),
+        ex('Lying Glute Stretch', 2, '30 sec each side', 15),
     ]),
     stretch('stretch-back-001', 'Back Stretching - Back, Hips & Hamstrings', 'A simple recovery flow for tight lower back, hips, and posterior chain.', 8, [
         ex('Back Pain Relief Stretch Routine', 1, '5 min follow-along', 20, 'Stop if pain increases'),

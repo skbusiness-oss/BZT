@@ -11,7 +11,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { ExerciseDetail } from '../../types';
 import { getExerciseByName } from '../../lib/exerciseService';
 import { getVideoIdForExercise } from '../../data/exerciseLibrary';
-import { youtubeSearchPageUrl } from '../../lib/videoUtils';
+import { youtubeSearchPageUrl, buildEmbedUrl } from '../../lib/videoUtils';
 import { X, AlertTriangle, Wrench, Play, Lightbulb, ListOrdered, Youtube } from 'lucide-react';
 
 interface ExerciseModalProps {
@@ -134,6 +134,18 @@ export const ExerciseModal = ({ exerciseName, exerciseDetail, onClose }: Exercis
     const mistakes = isAr ? exerciseDetail.commonMistakesAr : exerciseDetail.commonMistakes;
     const equipment = isAr ? exerciseDetail.equipmentAr : exerciseDetail.equipment;
 
+    // When a full video URL is present (e.g. the coach's own Vimeo
+    // stretch clips), resolve it to a player embed. buildEmbedUrl
+    // handles both Vimeo (preserving the privacy hash) and YouTube,
+    // so this branch is platform-agnostic. Curated YouTube videoIds
+    // keep using the dedicated videoId branch below.
+    const embed = exerciseDetail.videoUrl ? buildEmbedUrl(exerciseDetail.videoUrl) : null;
+    const embedSrc = embed
+        ? (embed.platform === 'vimeo'
+            ? `${embed.embedUrl}&autoplay=1&muted=1&loop=1`
+            : `${embed.embedUrl}?autoplay=1&mute=1&loop=1&controls=1&rel=0&modestbranding=1&playsinline=1`)
+        : null;
+
     return (
         <>
             {/* Modal Backdrop */}
@@ -160,7 +172,16 @@ export const ExerciseModal = ({ exerciseName, exerciseDetail, onClose }: Exercis
                     {/* Media Player Section */}
                     <div className="relative group mt-2 mb-8">
                         <div className="aspect-video w-full overflow-hidden rounded-xl ghost-border bg-surface-container-lowest relative">
-                            {exerciseDetail.videoId ? (
+                            {embedSrc ? (
+                                <iframe
+                                    src={embedSrc}
+                                    className="w-full h-full opacity-90"
+                                    style={{ border: 'none' }}
+                                    allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+                                    allowFullScreen
+                                    title={name}
+                                />
+                            ) : exerciseDetail.videoId ? (
                                 <iframe
                                     src={`https://www.youtube.com/embed/${exerciseDetail.videoId}?autoplay=1&mute=1&loop=1&playlist=${exerciseDetail.videoId}&controls=1&rel=0&modestbranding=1&playsinline=1`}
                                     className="w-full h-full opacity-90"

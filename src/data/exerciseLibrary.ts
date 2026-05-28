@@ -1354,6 +1354,70 @@ export function getVideoIdForExercise(name: string): string | null {
     return null;
 }
 
+/**
+ * vimeoStretchDetail — builds an ExerciseDetail backed by one of the
+ * coach's OWN static-stretching clips, hosted on Vimeo. Unlike
+ * stretchDetail (which sets a YouTube `videoId`), this sets a full
+ * `videoUrl` + `videoSource: 'vimeo'` so ExerciseModal embeds the
+ * Vimeo player via buildEmbedUrl().
+ *
+ * The raw clips have no spoken instructions, so we bake in the same
+ * general "hold, breathe, don't bounce" static-stretch coaching cues
+ * (EN + AR) for every entry — only the name + target muscles vary.
+ * This keeps all stretch footage 100% BioZackTeam original (no
+ * third-party channels), which was the coach's explicit requirement.
+ */
+function vimeoStretchDetail(
+    name: string, nameAr: string,
+    videoUrl: string,
+    primary: string[], primaryAr: string[]
+): ExerciseDetail {
+    return {
+        canonicalName: name,
+        canonicalNameAr: nameAr,
+        gifUrl: '',
+        videoUrl,
+        videoSource: 'vimeo',
+        gifSource: 'youtube',
+        muscles: {
+            primary,
+            primaryAr,
+            secondary: [],
+            secondaryAr: [],
+        },
+        instructions: [
+            'Ease into the position until you feel a gentle stretch.',
+            'Hold still and breathe slowly through the nose.',
+            'Relax a little deeper with each exhale.',
+        ],
+        instructionsAr: [
+            'ادخل في الوضعية بلطف حتى تشعر بإطالة خفيفة.',
+            'اثبت دون حركة وتنفّس ببطء من الأنف.',
+            'استرخِ أعمق قليلًا مع كل زفير.',
+        ],
+        tips: [
+            'Hold each stretch for 20-30 seconds.',
+            'Stretch to mild tension, never to pain.',
+            'Keep breathing — do not hold your breath.',
+        ],
+        tipsAr: [
+            'اثبت في كل إطالة من 20 إلى 30 ثانية.',
+            'أطِل حتى شدّ خفيف، وليس حتى الألم.',
+            'استمر في التنفّس — لا تحبس نفسك.',
+        ],
+        commonMistakes: [
+            'Bouncing instead of holding still.',
+            'Forcing into pain.',
+        ],
+        commonMistakesAr: [
+            'الارتداد بدل الثبات.',
+            'الدفع حتى الألم.',
+        ],
+        equipment: 'Bodyweight',
+        equipmentAr: 'وزن الجسم',
+    };
+}
+
 function stretchDetail(name: string, videoId: string, primary: string[], instructions: string[], tips: string[], mistakes: string[]): ExerciseDetail {
     return {
         canonicalName: name,
@@ -1428,6 +1492,46 @@ Object.assign(LIBRARY, {
     'Pancake Stretch': stretchDetail('Pancake Stretch', 'eQHmKJh20_c', ['Adductors', 'Hamstrings'], ['Sit with legs wide.', 'Hinge forward from the hips.', 'Hold a comfortable range.'], ['Use hands for support.', 'Keep knees pointed up.'], ['Rounding hard to chase depth.', 'Bouncing.']),
     'Lat Stretch': stretchDetail('Lat Stretch', 'E2SOrScNbww', ['Lats'], ['Reach both arms forward on a bench or floor.', 'Sink the chest gently.', 'Breathe into the sides of the ribs.'], ['Keep elbows soft.', 'Shift slightly side to side.'], ['Forcing the shoulders overhead.', 'Shrugging.']),
     'Seated Spinal Twist': stretchDetail('Seated Spinal Twist', 'BPlCatqZRPI', ['Spine', 'Hips'], ['Sit tall.', 'Cross one leg if comfortable.', 'Rotate gently from the upper back.'], ['Grow tall before rotating.', 'Use an easy breath rhythm.'], ['Yanking with the arms.', 'Twisting into pain.']),
+});
+
+// Coach's OWN static-stretching demos (filmed in-house, hosted on
+// Vimeo). These power the "Static Stretching — Post-Workout Cool Down"
+// program, replacing the third-party YouTube clips so every rep the
+// client watches is BioZackTeam original footage. Names are best-guess
+// pending the coach's confirmation against the live videos. (One 7th
+// clip — Vimeo 1196321387 — is held back until its privacy setting is
+// fixed so the player stops demanding a Vimeo sign-in.)
+Object.assign(LIBRARY, {
+    'Standing Forward Fold': vimeoStretchDetail(
+        'Standing Forward Fold', 'الانحناء الأمامي وقوفًا',
+        'https://vimeo.com/1196321388',
+        ['Hamstrings', 'Lower back'], ['أوتار الركبة', 'أسفل الظهر'],
+    ),
+    'Standing Hamstring Stretch': vimeoStretchDetail(
+        'Standing Hamstring Stretch', 'إطالة أوتار الركبة وقوفًا',
+        'https://vimeo.com/1196321429',
+        ['Hamstrings'], ['أوتار الركبة'],
+    ),
+    'Standing Toe Touch': vimeoStretchDetail(
+        'Standing Toe Touch', 'لمس أصابع القدم وقوفًا',
+        'https://vimeo.com/1196321472',
+        ['Hamstrings', 'Lower back'], ['أوتار الركبة', 'أسفل الظهر'],
+    ),
+    'Kneeling Hip Flexor Stretch': vimeoStretchDetail(
+        'Kneeling Hip Flexor Stretch', 'إطالة ثنية الورك بالركوع',
+        'https://vimeo.com/1196321430',
+        ['Hip flexors', 'Quads'], ['ثنيات الورك', 'العضلة الرباعية'],
+    ),
+    'Seated Figure-Four Stretch': vimeoStretchDetail(
+        'Seated Figure-Four Stretch', 'إطالة الرقم أربعة جلوسًا',
+        'https://vimeo.com/1196321390',
+        ['Glutes', 'Hips'], ['عضلات الألوية', 'الوركان'],
+    ),
+    'Lying Glute Stretch': vimeoStretchDetail(
+        'Lying Glute Stretch', 'إطالة عضلة الألوية مستلقيًا',
+        'https://vimeo.com/1196321389',
+        ['Glutes', 'Hips'], ['عضلات الألوية', 'الوركان'],
+    ),
 });
 
 export { LIBRARY as EXERCISE_LIBRARY };
