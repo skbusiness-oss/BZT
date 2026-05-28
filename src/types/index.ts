@@ -422,6 +422,11 @@ export interface Exercise {
     reps: string;
     restSeconds: number;
     notes?: string;
+    // Stretching videos carry a stable id + Vimeo URL so the exercise
+    // modal resolves the clip by id (never by the coach-editable title)
+    // and the coach's rename/delete overrides can be keyed reliably.
+    exId?: string;
+    videoUrl?: string;
 }
 
 export type WorkoutGoal = 'fat_loss' | 'muscle_gain' | 'strength' | 'recomp' | 'maintenance' | 'endurance';

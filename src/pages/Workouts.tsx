@@ -3,9 +3,12 @@ import { useSearchParams } from 'react-router-dom';
 import { useData }     from '../context/DataContext';
 import { useAuth }     from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
-import { Workout, WorkoutGoal } from '../types';
+import { Workout, WorkoutGoal, Exercise } from '../types';
 import { ALL_PROGRAMS, ALL_TRAINING_PROGRAMS } from '../data';
 import { getExerciseDetail } from '../data/exerciseLibrary';
+import { SEED_BY_ID, buildStretchDetail } from '../data/stretchingVideos';
+import { useStretchingOverrides } from '../hooks/useStretchingOverrides';
+import { StretchingVideoEditor } from '../components/workouts/StretchingVideoEditor';
 import { ExerciseModal } from '../components/workouts/ExerciseModal';
 import { ExerciseSections } from '../components/workouts/ExerciseSections';
 import { WorkoutEditor }   from '../components/workouts/WorkoutEditor';
@@ -59,8 +62,10 @@ export const Workouts = () => {
         addWorkout, updateWorkout, removeWorkout, addWorkoutCategory,
     } = useData();
     const { user } = useAuth();
-    const { t }   = useLanguage();
+    const { t, lang, isRTL } = useLanguage();
+    const isAr = lang === 'ar';
     const { activeProgram, loading: programLoading } = useActiveProgram();
+    const stretchApi = useStretchingOverrides();
 
     const isCoach   = user?.role === 'coach' || user?.role === 'admin';
 
@@ -84,7 +89,8 @@ export const Workouts = () => {
     const [goalFilter, setGoalFilter]     = useState<'all' | WorkoutGoal>('all');
     const [expandedProgram, setExpandedProgram] = useState<string | null>(null);
     const [expandedWorkout, setExpandedWorkout] = useState<string | null>(null);
-    const [selectedExerciseName, setSelectedExerciseName] = useState<string | null>(null);
+    const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
+    const [editStretch, setEditStretch] = useState(false);
 
     // ── Editor state ───────────────────────────────────────────
     const [showEditor, setShowEditor]     = useState(false);
@@ -163,6 +169,46 @@ export const Workouts = () => {
 
     const groupedPrograms = useMemo(() => groupItems(filteredPrograms, p => p.split), [filteredPrograms]);
     const groupedLibraryWorkouts = useMemo(() => groupItems(libraryWorkouts, w => w.category), [libraryWorkouts]);
+
+    // Stretching videos are coach-editable (rename + soft-delete) via
+    // settings/stretchingOverrides. Apply those overrides on top of the
+    // in-code seed at render time: localise the title, swap the AR
+    // duration label, and drop any video the coach has hidden. Only the
+    // Stretching category is touched — everything else passes through.
+    const applyStretchOverrides = (w: Workout): Workout => {
+        if (w.category !== 'Stretching') return w;
+        const exercises = w.exercises
+            .filter(ex => !(ex.exId && stretchApi.overrides[ex.exId]?.deleted))
+            .map(ex => {
+                if (!ex.exId) return ex;
+                const o = stretchApi.overrides[ex.exId];
+                const seed = SEED_BY_ID[ex.exId];
+                const name = isAr
+                    ? (o?.titleAr?.trim() || seed?.titleAr || ex.name)
+                    : (o?.title?.trim() || seed?.title || ex.name);
+                return { ...ex, name, reps: isAr ? (seed?.repsAr || ex.reps) : ex.reps };
+            });
+        return { ...w, exercises };
+    };
+
+    const groupedLibraryWorkoutsEffective = useMemo(
+        () => groupedLibraryWorkouts
+            .map(([category, items]): [string, Workout[]] =>
+                [category, items.map(applyStretchOverrides).filter(w => w.exercises.length > 0)])
+            .filter(([, items]) => items.length > 0),
+        // applyStretchOverrides closes over overrides + isAr
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [groupedLibraryWorkouts, stretchApi.overrides, isAr],
+    );
+
+    // Resolve the modal's ExerciseDetail. Stretching exercises carry a
+    // stable exId → build the (override-aware) detail from the seed so a
+    // rename never breaks playback; everything else falls back to the
+    // static library lookup by name.
+    const detailFor = (ex: Exercise) =>
+        ex.exId && SEED_BY_ID[ex.exId]
+            ? buildStretchDetail(SEED_BY_ID[ex.exId], stretchApi.overrides[ex.exId])
+            : getExerciseDetail(ex.name);
     // No "All" bubble — the user picks a specific category to start
     // browsing, otherwise we render the empty state. Removing "All"
     // also leaves an even bubble count (8 → 4 pairs on phone) which
@@ -543,7 +589,7 @@ export const Workouts = () => {
                                                         {/* Expanded: ExerciseCards */}
                                                         {isWorkoutExpanded && workout && (
                                                             <div className="border-t border-outline-variant/30 p-6 animate-in fade-in duration-300 bg-surface-container/30">
-                                                                <ExerciseSections exercises={workout.exercises} onExerciseClick={exercise => setSelectedExerciseName(exercise.name)} />
+                                                                <ExerciseSections exercises={workout.exercises} onExerciseClick={exercise => setSelectedExercise(exercise)} />
                                                                 <div className="flex gap-8 mt-6 pt-6 border-t border-outline-variant/30">
                                                                     <div className="flex items-center gap-2 text-on-surface/50 font-body text-sm">
                                                                         <Award className="text-primary" size={16} />
@@ -591,17 +637,38 @@ export const Workouts = () => {
             ════════════════════════════════════════════════ */}
             {!!categoryFilter && libraryWorkouts.length > 0 && (
                 <div className="space-y-8">
-                    {groupedLibraryWorkouts.map(([category, items]) => (
+                    {groupedLibraryWorkoutsEffective.map(([category, items]) => {
+                        const isStretch = category === 'Stretching';
+                        return (
                         <section key={category} className="space-y-4">
                             <div className="flex items-center justify-between gap-4 px-1">
                                 <div>
                                     <h2 className="text-lg font-headline font-extrabold text-on-surface">{category}</h2>
                                     <p className="text-xs font-body text-on-surface/45">{items.length} sessions</p>
                                 </div>
-                                <span className="px-3 py-1.5 rounded-lg bg-surface-container-low text-[10px] font-label font-bold uppercase tracking-widest text-on-surface/60 border border-outline-variant/30">
-                                    {category}
-                                </span>
+                                {isStretch && isCoach ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => setEditStretch(v => !v)}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 border border-primary/30 text-primary text-[11px] font-label font-bold uppercase tracking-widest hover:bg-primary/20 transition-colors"
+                                    >
+                                        <Edit3 size={13} />
+                                        {editStretch ? (isAr ? 'تم' : 'Done') : (isAr ? 'تعديل الفيديوهات' : 'Edit videos')}
+                                    </button>
+                                ) : (
+                                    <span className="px-3 py-1.5 rounded-lg bg-surface-container-low text-[10px] font-label font-bold uppercase tracking-widest text-on-surface/60 border border-outline-variant/30">
+                                        {category}
+                                    </span>
+                                )}
                             </div>
+                            {isStretch && editStretch && isCoach ? (
+                                <StretchingVideoEditor
+                                    api={stretchApi}
+                                    onDone={() => setEditStretch(false)}
+                                    isRTL={isRTL}
+                                    isAr={isAr}
+                                />
+                            ) : (
                             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                                 {items.map(workout => {
                                     const isExpanded = expandedWorkout === workout.id;
@@ -640,7 +707,7 @@ export const Workouts = () => {
 
                                             {isExpanded && (
                                                 <div className="border-t border-outline-variant/30 p-5 bg-surface-container-lowest animate-in fade-in slide-in-from-top-2 duration-300">
-                                                    <ExerciseSections exercises={workout.exercises} onExerciseClick={exercise => setSelectedExerciseName(exercise.name)} />
+                                                    <ExerciseSections exercises={workout.exercises} onExerciseClick={exercise => setSelectedExercise(exercise)} />
                                                     <div className="flex flex-wrap gap-5 mt-6 pt-5 border-t border-outline-variant/30">
                                                         <div className="flex items-center gap-2 text-on-surface/50 font-body text-sm">
                                                             <Award className="text-primary" size={16} />
@@ -661,8 +728,10 @@ export const Workouts = () => {
                                     );
                                 })}
                             </div>
+                            )}
                         </section>
-                    ))}
+                        );
+                    })}
 
                     {libraryWorkouts.length === 0 && (
                         <div className="text-center py-24 bg-surface-container-low rounded-2xl ghost-border p-8">
@@ -765,7 +834,7 @@ export const Workouts = () => {
                                                         </div>
                                                         {day.type === 'training' && day.exercises.length > 0 && (
                                                             <div className="pl-5 md:pl-6 border-l-2 border-surface-container">
-                                                                <ExerciseSections exercises={day.exercises} onExerciseClick={exercise => setSelectedExerciseName(exercise.name)} />
+                                                                <ExerciseSections exercises={day.exercises} onExerciseClick={exercise => setSelectedExercise(exercise)} />
                                                             </div>
                                                         )}
                                                         {day.type === 'rest' && (
@@ -778,7 +847,7 @@ export const Workouts = () => {
                                             </div>
                                         ) : (
                                             /* Single session */
-                                            <ExerciseSections exercises={workout.exercises} onExerciseClick={exercise => setSelectedExerciseName(exercise.name)} />
+                                            <ExerciseSections exercises={workout.exercises} onExerciseClick={exercise => setSelectedExercise(exercise)} />
                                         )}
 
                                         {/* Summary stats */}
@@ -825,11 +894,11 @@ export const Workouts = () => {
             )}
 
             {/* ── Add category modal ────────────────────────── */}
-            {selectedExerciseName && (
+            {selectedExercise && (
                 <ExerciseModal
-                    exerciseName={selectedExerciseName}
-                    exerciseDetail={getExerciseDetail(selectedExerciseName)}
-                    onClose={() => setSelectedExerciseName(null)}
+                    exerciseName={selectedExercise.name}
+                    exerciseDetail={detailFor(selectedExercise)}
+                    onClose={() => setSelectedExercise(null)}
                 />
             )}
 
