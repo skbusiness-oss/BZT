@@ -1418,6 +1418,64 @@ function vimeoStretchDetail(
     };
 }
 
+/**
+ * vimeoDynamicDetail — like vimeoStretchDetail, but for the coach's
+ * DYNAMIC warm-up clips. Dynamic mobility needs the OPPOSITE coaching
+ * cue from static stretching: keep moving, build range gradually, and
+ * do NOT hold the end position. Bakes those cues in (EN + AR) so every
+ * pre-workout move carries the right guidance.
+ */
+function vimeoDynamicDetail(
+    name: string, nameAr: string,
+    videoUrl: string,
+    primary: string[], primaryAr: string[]
+): ExerciseDetail {
+    return {
+        canonicalName: name,
+        canonicalNameAr: nameAr,
+        gifUrl: '',
+        videoUrl,
+        videoSource: 'vimeo',
+        gifSource: 'youtube',
+        muscles: {
+            primary,
+            primaryAr,
+            secondary: [],
+            secondaryAr: [],
+        },
+        instructions: [
+            'Move smoothly and with control.',
+            'Start with a small range and build it gradually.',
+            'Keep moving — do not hold the end position.',
+        ],
+        instructionsAr: [
+            'تحرّك بسلاسة وتحكّم.',
+            'ابدأ بمدى حركة صغير وزِده تدريجيًا.',
+            'استمر في الحركة — لا تثبت عند النهاية.',
+        ],
+        tips: [
+            'Use this before lifting or cardio.',
+            'Keep it controlled, not explosive.',
+            'Aim to feel warm, not tired.',
+        ],
+        tipsAr: [
+            'استخدمه قبل رفع الأثقال أو الكارديو.',
+            'حافظ على التحكّم دون اندفاع.',
+            'الهدف أن تشعر بالدفء لا بالتعب.',
+        ],
+        commonMistakes: [
+            'Bouncing hard or forcing the range.',
+            'Going too fast and losing control.',
+        ],
+        commonMistakesAr: [
+            'الارتداد بعنف أو فرض المدى.',
+            'السرعة الزائدة وفقدان التحكّم.',
+        ],
+        equipment: 'Bodyweight',
+        equipmentAr: 'وزن الجسم',
+    };
+}
+
 function stretchDetail(name: string, videoId: string, primary: string[], instructions: string[], tips: string[], mistakes: string[]): ExerciseDetail {
     return {
         canonicalName: name,
@@ -1531,6 +1589,57 @@ Object.assign(LIBRARY, {
         'Lying Glute Stretch', 'إطالة عضلة الألوية مستلقيًا',
         'https://vimeo.com/1196321389',
         ['Glutes', 'Hips'], ['عضلات الألوية', 'الوركان'],
+    ),
+});
+
+// Coach's OWN dynamic warm-up demos (filmed in-house, hosted on
+// Vimeo). These power the "Dynamic Stretching — Pre-Workout Warm-Up"
+// program, replacing the third-party YouTube clips. Order follows the
+// coach's export sequence (clip 1→8 by filename suffix). Names are
+// best-guess from the video thumbnails pending the coach's review —
+// dynamic moves are hard to read from a single frame, so expect to
+// rename a few. (This block runs last, so 'Arm Circles' intentionally
+// overrides the earlier YouTube stretchDetail entry of the same name.)
+Object.assign(LIBRARY, {
+    'Jog in Place': vimeoDynamicDetail(
+        'Jog in Place', 'الجري في المكان',
+        'https://vimeo.com/1196340476',
+        ['Full body'], ['كامل الجسم'],
+    ),
+    'Jumping Jacks': vimeoDynamicDetail(
+        'Jumping Jacks', 'تمرين القفز المتباعد',
+        'https://vimeo.com/1196340475',
+        ['Full body'], ['كامل الجسم'],
+    ),
+    'Bodyweight Squats': vimeoDynamicDetail(
+        'Bodyweight Squats', 'القرفصاء بوزن الجسم',
+        'https://vimeo.com/1196340477',
+        ['Quads', 'Glutes'], ['العضلة الرباعية', 'عضلات الألوية'],
+    ),
+    'Arm Circles': vimeoDynamicDetail(
+        'Arm Circles', 'تدوير الذراعين',
+        'https://vimeo.com/1196340473',
+        ['Shoulders'], ['الكتفان'],
+    ),
+    'Arm Swings': vimeoDynamicDetail(
+        'Arm Swings', 'تأرجح الذراعين',
+        'https://vimeo.com/1196340782',
+        ['Shoulders', 'Chest'], ['الكتفان', 'الصدر'],
+    ),
+    'Overhead Side Bend': vimeoDynamicDetail(
+        'Overhead Side Bend', 'الميل الجانبي مع رفع الذراعين',
+        'https://vimeo.com/1196340798',
+        ['Obliques', 'Lats'], ['العضلات المائلة', 'العضلات الجناحية'],
+    ),
+    'Arm Crossovers': vimeoDynamicDetail(
+        'Arm Crossovers', 'تقاطع الذراعين',
+        'https://vimeo.com/1196341028',
+        ['Chest', 'Shoulders'], ['الصدر', 'الكتفان'],
+    ),
+    'Standing Torso Twists': vimeoDynamicDetail(
+        'Standing Torso Twists', 'لف الجذع وقوفًا',
+        'https://vimeo.com/1196341328',
+        ['Obliques', 'Spine'], ['العضلات المائلة', 'العمود الفقري'],
     ),
 });
 

@@ -18,12 +18,15 @@ function stretch(id: string, name: string, desc: string, mins: number, exercises
 }
 
 export const STRETCHING_PROGRAMS: Workout[] = [
-    stretch('stretch-dynamic-001', 'Dynamic Stretching - Pre-Workout Warm-Up', 'Move through joint-friendly dynamic stretches before lifting or cardio.', 10, [
-        ex('Dynamic Full Body Warm-Up', 1, '5 min follow-along', 20, 'Use before training'),
-        ex('Worlds Greatest Stretch', 2, '6 each side', 20, 'Move slowly'),
-        ex('Leg Swings', 2, '12 each side', 15, 'Front/back and side/side'),
-        ex('Arm Circles', 2, '20 seconds each way', 15),
-        ex('Hip Circles', 2, '8 each way', 15),
+    stretch('stretch-dynamic-001', 'Dynamic Stretching - Pre-Workout Warm-Up', 'Move through joint-friendly dynamic stretches before lifting or cardio. Follow along with Coach Zack.', 10, [
+        ex('Jog in Place', 1, '45 sec', 10, 'Light and easy to start'),
+        ex('Jumping Jacks', 1, '40 sec', 10),
+        ex('Bodyweight Squats', 1, '40 sec', 10),
+        ex('Arm Circles', 1, '30 sec each way', 10),
+        ex('Arm Swings', 1, '30 sec', 10),
+        ex('Overhead Side Bend', 1, '30 sec each side', 10),
+        ex('Arm Crossovers', 1, '30 sec', 10),
+        ex('Standing Torso Twists', 1, '30 sec each side', 10),
     ]),
     stretch('stretch-static-001', 'Static Stretching - Post-Workout Cool Down', 'Hold longer positions after training to bring the body down and improve flexibility. Follow along with Coach Zack.', 12, [
         ex('Standing Forward Fold', 2, '30 sec hold', 15, 'Soften deeper on each exhale'),
