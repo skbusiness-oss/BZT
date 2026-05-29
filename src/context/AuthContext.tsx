@@ -10,7 +10,6 @@ import {
   signInWithEmailAndPassword,
   signOut as firebaseSignOut,
   onAuthStateChanged,
-  sendPasswordResetEmail,
 } from 'firebase/auth';
 import {
   doc,
@@ -549,12 +548,34 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   // ── Password reset ────────────────────────────────────────────────────────
+  // Forgot-password flow. Calls the `sendPasswordResetEmail` Cloud
+  // Function instead of Firebase's client SDK so the user receives
+  // our branded HTML email (via Resend) rather than Firebase's
+  // default Identity-Toolkit-hosted template.
+  //
+  // Anti-enumeration: the function returns success regardless of
+  // whether the email is registered, so we always return `{}` on
+  // the success path. The only error we surface is rate-limit
+  // (resource-exhausted) — that's a legitimate friction the user
+  // needs to know about ("wait a few minutes").
   const sendPasswordReset = async (email: string): Promise<{ error?: string }> => {
     try {
-      await sendPasswordResetEmail(auth, email.toLowerCase().trim());
+      const call = httpsCallable<{ email: string }, { ok: boolean }>(functions, 'sendPasswordResetEmail');
+      await call({ email: email.toLowerCase().trim() });
       return {};
     } catch (error: unknown) {
-      return { error: getFirebaseErrorMessage((error as { code?: string })?.code ?? '') };
+      const err = error as FunctionsError;
+      if (err?.code === 'functions/resource-exhausted') {
+        return { error: 'Too many reset attempts for this email. Wait a few minutes and try again.' };
+      }
+      if (err?.code === 'functions/invalid-argument') {
+        return { error: 'Please enter a valid email address.' };
+      }
+      // Anything else (network, generic): surface a clean message
+      // rather than leaking implementation details.
+      // eslint-disable-next-line no-console
+      console.error('[sendPasswordReset] callable failed:', error);
+      return { error: 'Could not send the reset email. Please try again.' };
     }
   };
 

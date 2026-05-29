@@ -42,6 +42,8 @@ import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import Stripe from 'stripe';
 import { PRICE_TO_TIER, Tier } from './stripeConfig';
+import { RESEND_API_KEY, sendEmail } from './emailService';
+import { welcomeEmail } from './emailTemplates';
 
 // Stripe v22's d.ts uses `export = StripeConstructor` with a nested
 // namespace alias that TS can't reliably walk to under `module:
@@ -57,7 +59,7 @@ type StripeEvent = {
 };
 type StripeCheckoutSession = {
     id: string;
-    customer_details?: { email?: string | null } | null;
+    customer_details?: { email?: string | null; name?: string | null } | null;
     customer_email?: string | null;
     customer?: string | { id: string } | null;
     subscription?: string | { id: string } | null;
@@ -81,37 +83,40 @@ type StripeLineItem = {
 const STRIPE_SECRET_KEY = defineSecret('STRIPE_SECRET_KEY');
 const STRIPE_WEBHOOK_SECRET = defineSecret('STRIPE_WEBHOOK_SECRET');
 
-// Firebase web API key — public (lives in the client bundle too). Used
-// to trigger Firebase Auth's hosted password-reset email via the
-// Identity Toolkit REST endpoint. Same call the client-side
-// sendPasswordResetEmail() makes under the hood, so the email uses the
-// templates configured in the Firebase Auth console.
-const FIREBASE_WEB_API_KEY = 'AIzaSyAoClMgn0gpXR-TKyOAIip3k5v6eKqoo1U';
-
 /**
- * Fire Firebase Auth's hosted "Welcome — set your password" email by
- * hitting the same Identity Toolkit endpoint the client SDK uses. This
- * lets us reuse the customizable email template the founder configures
- * in Firebase console (subject + body + Arabic localization) instead
- * of needing a separate SMTP/SendGrid provider.
+ * Send the post-payment "Welcome — set your password" email through
+ * Resend with our branded HTML template, instead of Firebase's
+ * default Identity-Toolkit-hosted ugly one.
+ *
+ * Mechanism:
+ *   1. Generate a real reset link via the Admin SDK (same link
+ *      Firebase would have emailed itself).
+ *   2. Render the branded welcome HTML around that link.
+ *   3. Send through Resend (see emailService.ts).
+ *
+ * Best-effort: failures are logged but don't break the webhook —
+ * losing a welcome email is annoying but should never break the
+ * surrounding Stripe processing. The user can always tap "Forgot
+ * password" on /login to get a fresh reset link.
  */
-async function sendWelcomeEmail(email: string): Promise<void> {
-    const url = `https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${FIREBASE_WEB_API_KEY}`;
-    const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            requestType: 'PASSWORD_RESET',
-            email,
-        }),
-    });
-    if (!res.ok) {
-        const text = await res.text();
+async function sendWelcomeEmail(email: string, displayName?: string): Promise<void> {
+    try {
+        const link = await getAuth().generatePasswordResetLink(email, {
+            url: 'https://app.biozackteam.com/login',
+            handleCodeInApp: false,
+        });
+        const { subject, html, text } = welcomeEmail(link, displayName);
+        const result = await sendEmail({ to: email, subject, html, text });
+        if (!result.ok) {
+            // eslint-disable-next-line no-console
+            console.warn(`[stripeWebhook] welcome email send failed for ${email}:`, result.error);
+        } else {
+            // eslint-disable-next-line no-console
+            console.log(`[stripeWebhook] welcome email queued for ${email} (id=${result.id})`);
+        }
+    } catch (err) {
         // eslint-disable-next-line no-console
-        console.warn(`[stripeWebhook] welcome email failed for ${email}:`, res.status, text);
-    } else {
-        // eslint-disable-next-line no-console
-        console.log(`[stripeWebhook] welcome email queued for ${email}`);
+        console.error(`[stripeWebhook] welcome email pipeline failed for ${email}:`, err);
     }
 }
 
@@ -235,6 +240,7 @@ async function handleCheckoutCompleted(
 ): Promise<void> {
     const session = event.data.object as StripeCheckoutSession;
     const email = (session.customer_details?.email || session.customer_email || '').toLowerCase().trim();
+    const customerName = (session.customer_details?.name || '').trim() || null;
     const firebaseUidFromMetadata =
         (session.client_reference_id as string | null | undefined) ||
         (session.metadata?.firebaseUid as string | undefined);
@@ -339,7 +345,11 @@ async function handleCheckoutCompleted(
     // Welcome / password-set email — only on brand-new accounts. In-app
     // upgrades skip this since the user already has a password.
     if (isNewAccount && email) {
-        await sendWelcomeEmail(email);
+        // Use the customer's display name (from Stripe billing) so the
+        // greeting feels personal: "Welcome, Sami." instead of the
+        // generic "Welcome to BioZackTeam.". Falls back gracefully
+        // if Stripe didn't capture a name.
+        await sendWelcomeEmail(email, customerName ?? undefined);
     }
 
     // eslint-disable-next-line no-console
@@ -494,7 +504,7 @@ async function handleInvoicePaymentFailed(event: StripeEvent): Promise<void> {
 
 export const stripeWebhook = onRequest(
     {
-        secrets: [STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET],
+        secrets: [STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, RESEND_API_KEY],
         region: 'us-central1',
         // No minInstances — webhook traffic is bursty + low-volume; the
         // ~5s cold start on the first event of the day is acceptable
