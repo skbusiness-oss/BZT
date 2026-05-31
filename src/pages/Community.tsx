@@ -1,7 +1,7 @@
 import { ExternalLink, MessageCircle, Users, Zap } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 
-const DISCORD_INVITE = 'https://discord.gg/biozackteam';
+const DISCORD_INVITE = 'https://discord.gg/T5nue8amkm';
 
 export const Community = () => {
     const { t } = useLanguage();
