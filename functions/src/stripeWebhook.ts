@@ -234,6 +234,60 @@ async function markFailed(eventId: string, err: unknown): Promise<void> {
  *      We look them up by uid, flip their role + Stripe IDs. No new
  *      account, no welcome email.
  */
+// Canonical coach UID (single-coach launch). Matches the hardcoded
+// staff anchor in firestore.rules. New self-serve coaching clients are
+// assigned to this coach so they surface in his roster immediately.
+const COACH_UID = 'Y9DlGI9kF6dPFPBh4cDvMnxbayB3';
+
+/**
+ * Ensure a coaching client has their clients/{uid} record.
+ *
+ * The webhook assigns users/{uid}.role='client' on a coaching purchase,
+ * but the ClientDashboard + weekly check-in flow need a SEPARATE
+ * clients/{uid} doc (onboarding, check-ins, program, coach link).
+ * Without it a self-serve $149 buyer lands on "Client record not found"
+ * and never appears in the coach's roster.
+ *
+ * Idempotent + non-destructive: if the doc already exists (coach made
+ * it, OR a prior webhook attempt did) we leave it untouched so we never
+ * clobber coach-managed data. Only ever CREATES the minimal onboarding
+ * shape — mirrors the coach's AddClient modal so the buyer lands on the
+ * normal onboarding form (isOnboarding:true) and shows up in My Clients.
+ */
+async function ensureClientDoc(
+    uid: string,
+    opts: { name?: string | null; email?: string | null },
+): Promise<void> {
+    const db = getFirestore();
+    const clientRef = db.doc(`clients/${uid}`);
+    const snap = await clientRef.get();
+    if (snap.exists) return; // never clobber an existing client record
+
+    const name = (opts.name || opts.email?.split('@')[0] || 'New member').trim();
+    try {
+        await clientRef.create({
+            userId: uid,
+            coachId: COACH_UID,
+            name,
+            email: (opts.email || '').toLowerCase().trim(),
+            category: 'health',   // neutral default; coach can recategorize
+            currentWeek: 0,
+            programLength: 12,
+            needsReview: false,
+            isOnboarding: true,
+            createdAt: FieldValue.serverTimestamp(),
+        });
+        // eslint-disable-next-line no-console
+        console.log(`[stripeWebhook] created clients/${uid} (coaching onboarding)`);
+    } catch (e) {
+        // ALREADY_EXISTS (gRPC code 6) — a concurrent webhook beat us to
+        // it. That's the desired end state, so swallow it; re-throw
+        // anything else so Stripe retries.
+        const code = (e as { code?: number | string })?.code;
+        if (code !== 6 && code !== 'already-exists') throw e;
+    }
+}
+
 async function handleCheckoutCompleted(
     event: StripeEvent,
     stripe: InstanceType<typeof Stripe>,
@@ -352,6 +406,17 @@ async function handleCheckoutCompleted(
         await sendWelcomeEmail(email, customerName ?? undefined);
     }
 
+    // Coaching purchase → ensure the clients/{uid} record exists so the
+    // buyer lands on the onboarding form (not "Client record not found")
+    // and appears in the coach's roster. Community purchases never need
+    // this — their dashboard lives entirely on the users doc. Placed
+    // LAST + idempotent: if this throws, Stripe retries and re-runs it
+    // without re-sending the welcome email (isNewAccount is false on the
+    // retry once the Auth user already exists).
+    if (tier === 'client') {
+        await ensureClientDoc(uid, { name: customerName, email });
+    }
+
     // eslint-disable-next-line no-console
     console.log(`[stripeWebhook] checkout.session.completed — uid=${uid}, tier=${tier}, isNew=${isNewAccount}`);
 }
@@ -436,6 +501,20 @@ async function handleSubscriptionUpdated(event: StripeEvent): Promise<void> {
         cancelAtPeriodEnd: !!sub.cancel_at_period_end,
         updatedAt: FieldValue.serverTimestamp(),
     });
+
+    // If the effective role is now 'client' (e.g. a community member
+    // upgraded to coaching via the in-app Upgrade or the Customer
+    // Portal — both fire subscription.updated, NOT checkout.completed),
+    // ensure their coaching record exists. Idempotent: a no-op for
+    // users who already have one.
+    const effectiveRole = (roleUpdate.role as Tier | undefined) ?? currentRole;
+    if (effectiveRole === 'client') {
+        const d = userDocSnap.data();
+        await ensureClientDoc(userDocSnap.id, {
+            name: (d?.name as string | undefined) ?? null,
+            email: (d?.email as string | undefined) ?? null,
+        });
+    }
 
     // eslint-disable-next-line no-console
     console.log(`[stripeWebhook] subscription.updated — uid=${userRef.id}, status=${sub.status}`);
