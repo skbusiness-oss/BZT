@@ -24,11 +24,12 @@ import { defineSecret } from 'firebase-functions/params';
 export const RESEND_API_KEY = defineSecret('RESEND_API_KEY');
 
 /** What address shows up in the recipient's "From" line.
- *  noreply@ is the convention for transactional mail; replies are
- *  unlikely to be monitored. If the founder wants replies to land
- *  somewhere monitored, we set replyTo: support@biozackteam.com on
- *  every send below. */
-const FROM_ADDRESS = 'BioZackTeam <noreply@biozackteam.com>';
+ *  We send FROM a real, monitored mailbox (support@) rather than a
+ *  noreply@ — a reply-able sender scores better with spam filters and,
+ *  more importantly, replies are a strong positive reputation signal
+ *  that helps our (new, cold) domain land in the inbox. replyTo is the
+ *  same address so any reply naturally goes to a watched mailbox. */
+const FROM_ADDRESS = 'BioZackTeam <support@biozackteam.com>';
 const REPLY_TO     = 'support@biozackteam.com';
 
 export interface SendEmailInput {
