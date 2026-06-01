@@ -408,7 +408,19 @@ service cloud.firestore {
                     && request.resource.data.body.size() > 0
                     && request.resource.data.body.size() <= 1000
                     && request.resource.data.audience in ['all', 'community', 'coaching', 'both'];
-      allow update: if false;
+      // Coach can edit a broadcast AFTER sending — fixes a typo or
+      // retargets the audience. Only body/audience/editedAt may change;
+      // senderId, senderName, createdAt stay immutable so authorship +
+      // original send time can't be rewritten. Editing does NOT re-push
+      // (onBroadcastCreated triggers on create only), so this corrects
+      // the in-app inbox record without re-pinging phones.
+      allow update: if isCoach()
+                    && request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['body', 'audience', 'editedAt'])
+                    && request.resource.data.body is string
+                    && request.resource.data.body.size() > 0
+                    && request.resource.data.body.size() <= 1000
+                    && request.resource.data.audience in ['all', 'community', 'coaching', 'both'];
       allow delete: if isSignedIn() && isCoach();
     }
 

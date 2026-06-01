@@ -543,6 +543,9 @@ export interface Broadcast {
      *  sentinel; readers should tolerate both Timestamp and ISO string
      *  shapes (cache vs server snap). */
     createdAt: unknown;
+    /** Set when the coach edits the broadcast after sending. Presence
+     *  drives the "edited" tag in the recent list. */
+    editedAt?: unknown;
 }
 
 // --- Workout Wizard & Program Tracking ---
