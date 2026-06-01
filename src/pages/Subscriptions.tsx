@@ -24,7 +24,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { describePriceId, STRIPE_PRICE_META } from '../lib/stripePrices';
 import {
     CreditCard, ExternalLink, Lock, Unlock, Filter, Loader2,
-    Link as LinkIcon, X, Copy, Check, Calendar,
+    Link as LinkIcon, X, Copy, Check, Calendar, KeyRound, Mail,
 } from 'lucide-react';
 
 interface SubscriberRow {
@@ -54,6 +54,9 @@ export const Subscriptions = () => {
     const [filter, setFilter] = useState<StatusFilter>('all');
     const [pendingToggle, setPendingToggle] = useState<string | null>(null);
     const [showLinkModal, setShowLinkModal] = useState(false);
+    // Member whose set-password link the coach is recovering (the "didn't
+    // get the welcome email" rescue flow).
+    const [recoverRow, setRecoverRow] = useState<SubscriberRow | null>(null);
 
     // Coach-only gate. Non-coach hitting /subscriptions directly →
     // bounce home.
@@ -370,6 +373,15 @@ export const Subscriptions = () => {
                                     </a>
                                     <button
                                         type="button"
+                                        onClick={() => setRecoverRow(row)}
+                                        className="flex-1 md:flex-initial inline-flex items-center justify-center gap-1.5 px-3 py-2 md:py-1.5 rounded-lg text-[11px] font-label font-bold uppercase tracking-widest bg-primary/10 border border-primary/35 text-primary hover:bg-primary/20 transition-all"
+                                        title={t('subActionRecover')}
+                                    >
+                                        <KeyRound size={11} />
+                                        {t('subActionRecover')}
+                                    </button>
+                                    <button
+                                        type="button"
                                         onClick={() => handleToggleDisabled(row)}
                                         disabled={isToggling}
                                         className="flex-1 md:flex-initial inline-flex items-center justify-center gap-1.5 px-3 py-2 md:py-1.5 rounded-lg text-[11px] font-label font-bold uppercase tracking-widest border transition-all"
@@ -394,9 +406,172 @@ export const Subscriptions = () => {
                     existingSubscribers={rows}
                 />
             )}
+
+            {recoverRow && (
+                <RecoverAccessModal
+                    row={recoverRow}
+                    onClose={() => setRecoverRow(null)}
+                />
+            )}
         </div>
     );
 };
+
+// ─────────────────────────────────────────────────────────────────
+// RecoverAccessModal — coach rescue for a member who never received
+// their welcome / set-password email (deliverability/spam on a cold
+// domain). Calls generateSetPasswordLink to mint a real set-password
+// link, presents it for the coach to COPY + send directly
+// (WhatsApp / Discord), and optionally re-sends it as a branded email.
+// ─────────────────────────────────────────────────────────────────
+interface RecoverFnResult {
+    ok: boolean;
+    link: string;
+    email: string;
+    emailed: boolean;
+    emailError?: string;
+}
+
+function RecoverAccessModal({
+    row,
+    onClose,
+}: {
+    row: SubscriberRow;
+    onClose: () => void;
+}) {
+    const { t, isRTL } = useLanguage();
+    const [link, setLink] = useState<string | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [copied, setCopied] = useState(false);
+    const [emailing, setEmailing] = useState(false);
+    const [emailResult, setEmailResult] = useState<null | 'ok' | 'fail'>(null);
+
+    const genFn = useMemo(
+        () => httpsCallable<{ email: string; sendEmail?: boolean }, RecoverFnResult>(functions, 'generateSetPasswordLink'),
+        [],
+    );
+
+    // Generate the link as soon as the modal opens.
+    useEffect(() => {
+        let alive = true;
+        setLoading(true);
+        setError(null);
+        genFn({ email: row.email })
+            .then((res) => { if (alive) { setLink(res.data.link); setLoading(false); } })
+            .catch((e: unknown) => {
+                if (!alive) return;
+                const fe = e as FunctionsError;
+                setError(fe?.message || t('subRecoverError'));
+                setLoading(false);
+            });
+        return () => { alive = false; };
+    }, [genFn, row.email, t]);
+
+    const copyLink = async () => {
+        if (!link) return;
+        try {
+            await navigator.clipboard.writeText(link);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        } catch { /* clipboard blocked — coach can select the field manually */ }
+    };
+
+    const sendAsEmail = async () => {
+        setEmailing(true);
+        setEmailResult(null);
+        try {
+            const res = await genFn({ email: row.email, sendEmail: true });
+            setEmailResult(res.data.emailed ? 'ok' : 'fail');
+        } catch {
+            setEmailResult('fail');
+        } finally {
+            setEmailing(false);
+        }
+    };
+
+    return (
+        <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200"
+            onClick={onClose}
+            dir={isRTL ? 'rtl' : 'ltr'}
+        >
+            <div
+                className="w-full max-w-lg rounded-3xl p-6 md:p-7 animate-in zoom-in-95 duration-200"
+                style={{ background: 'rgb(var(--surface-container-low))', border: '1px solid rgb(var(--primary) / 0.28)', boxShadow: '0 24px 64px -24px rgb(0 0 0 / 0.7)' }}
+                onClick={(e) => e.stopPropagation()}
+            >
+                <div className="flex items-start justify-between gap-4 mb-5">
+                    <div className="flex items-center gap-3 min-w-0">
+                        <span className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgb(var(--primary) / 0.14)', color: 'rgb(var(--primary))' }}>
+                            <KeyRound size={18} />
+                        </span>
+                        <div className="min-w-0">
+                            <h3 className="font-headline font-extrabold text-lg text-on-surface leading-tight">{t('subRecoverTitle')}</h3>
+                            <p className="text-[12px] font-body text-on-surface/55 truncate" dir="ltr">{row.email}</p>
+                        </div>
+                    </div>
+                    <button type="button" onClick={onClose} className="p-1.5 rounded-lg text-on-surface/50 hover:text-on-surface hover:bg-surface-container transition-colors shrink-0">
+                        <X size={18} />
+                    </button>
+                </div>
+
+                <p className="text-[13px] font-body text-on-surface/65 leading-relaxed mb-5">{t('subRecoverSub')}</p>
+
+                {loading ? (
+                    <div className="flex items-center gap-2 text-on-surface/55 text-[13px] py-6 justify-center">
+                        <Loader2 size={16} className="animate-spin" /> {t('subRecoverGenerating')}
+                    </div>
+                ) : error ? (
+                    <div className="rounded-xl px-4 py-3 text-[13px] font-body" style={{ background: 'rgb(244 63 94 / 0.10)', color: '#fda4af', border: '1px solid rgb(244 63 94 / 0.30)' }}>
+                        {error}
+                    </div>
+                ) : (
+                    <>
+                        <label className="block text-[10px] uppercase tracking-[0.18em] font-extrabold text-on-surface/55 mb-2">{t('subRecoverLinkLabel')}</label>
+                        <div className="flex items-stretch gap-2 mb-2">
+                            <input
+                                readOnly
+                                value={link ?? ''}
+                                dir="ltr"
+                                onFocus={(e) => e.currentTarget.select()}
+                                className="flex-1 min-w-0 bg-surface-container-lowest border border-outline-variant/40 rounded-xl px-3 py-2.5 text-[12px] font-mono text-on-surface/80 outline-none focus:border-primary"
+                            />
+                            <button
+                                type="button"
+                                onClick={copyLink}
+                                className="shrink-0 inline-flex items-center gap-1.5 px-4 rounded-xl text-[12px] font-bold bg-primary text-on-primary"
+                            >
+                                {copied ? <Check size={14} /> : <Copy size={14} />}
+                                {copied ? t('subRecoverCopied') : t('subRecoverCopy')}
+                            </button>
+                        </div>
+                        <p className="text-[11px] font-body text-on-surface/40 leading-snug mb-5">{t('subRecoverHint')}</p>
+
+                        <div className="flex items-center justify-between gap-3 pt-4 border-t border-outline-variant/20">
+                            <span className="text-[12px] font-body text-on-surface/55 min-w-0">
+                                {emailResult === 'ok'
+                                    ? <span className="text-emerald-400 inline-flex items-center gap-1.5"><Check size={13} /> {t('subRecoverEmailSent')}</span>
+                                    : emailResult === 'fail'
+                                        ? <span className="text-rose-300">{t('subRecoverEmailFailed')}</span>
+                                        : t('subRecoverEmailHint')}
+                            </span>
+                            <button
+                                type="button"
+                                onClick={sendAsEmail}
+                                disabled={emailing || emailResult === 'ok'}
+                                className="shrink-0 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-[12px] font-bold bg-surface-container border border-outline-variant/40 text-on-surface/80 hover:bg-surface-container-high disabled:opacity-50 transition-all"
+                            >
+                                {emailing ? <Loader2 size={14} className="animate-spin" /> : <Mail size={14} />}
+                                {t('subRecoverSendEmail')}
+                            </button>
+                        </div>
+                    </>
+                )}
+            </div>
+        </div>
+    );
+}
 
 // ─────────────────────────────────────────────────────────────────
 // LinkCashClientModal — coach-only flow to migrate a cash-paying

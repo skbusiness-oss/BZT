@@ -24,3 +24,4 @@ export { createCustomerPortalSession } from './createCustomerPortalSession';
 export { createClientAccount } from './createClientAccount';
 export { linkClientToStripe } from './linkClientToStripe';
 export { sendPasswordResetEmail } from './sendPasswordResetEmail';
+export { generateSetPasswordLink } from './generateSetPasswordLink';
